@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
+import { getStorageRoot } from '@/lib/paths';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -12,11 +13,11 @@ export const maxDuration = 60;
  *
  * Two modes:
  * 1. File upload — multipart/form-data with field "file"
- *    Saves the file under /public/uploads/{transmittalId}/ and creates an Attachment record.
+ *    Saves the file to /home/z/my-project/storage/uploads/{transmittalId}/
+ *    (NOT in public/ — that doesn't work in standalone production mode).
+ *    Files are served via /api/files/{transmittalId}/{filename}.
  * 2. External link — application/json body { url, fileName, urlSource }
  *    Creates an Attachment record pointing to the external URL.
- *
- * Files are served statically from /uploads/... so they work in PWA / offline mode.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -89,7 +90,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .replace(/_+/g, '_')
     .slice(0, 100);
   const relDir = path.join('uploads', id);
-  const absDir = path.join(process.cwd(), 'public', relDir);
+  const absDir = path.join(getStorageRoot(), relDir);
   if (!existsSync(absDir)) await mkdir(absDir, { recursive: true });
 
   const fileName = `${Date.now()}-${safeName}`;
@@ -97,8 +98,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const bytes = new Uint8Array(await file.arrayBuffer());
   await writeFile(absPath, bytes);
 
-  // Public path served by Next.js static handler
-  const publicPath = `/${relDir.replace(/\\/g, '/')}/${fileName}`;
+  // Public URL — served via /api/files/{id}/{filename} (works in dev & standalone production)
+  const publicPath = `/api/files/${id}/${fileName}`;
 
   const att = await db.attachment.create({
     data: {

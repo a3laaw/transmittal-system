@@ -5,6 +5,7 @@ import { writeFile, readFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import os from 'os';
+import { findPython } from '@/lib/paths';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -126,21 +127,42 @@ export async function GET(req: NextRequest) {
 
   await writeFile(jsonPath, JSON.stringify(serializable, null, 2));
 
-  // Run Python script
-  const scriptPath = path.join(process.cwd(), 'scripts', 'gen_timeline_report.py');
+  // Run Python script — resolve script & python paths robustly (dev + standalone)
+  const scriptCandidates = [
+    path.join('/home/z/my-project', 'scripts', 'gen_timeline_report.py'),
+    path.join(process.cwd(), 'scripts', 'gen_timeline_report.py'),
+    path.join(process.cwd(), '..', '..', 'scripts', 'gen_timeline_report.py'),
+  ];
+  const scriptPath = scriptCandidates.find(p => existsSync(p)) || scriptCandidates[0];
+  const pythonBin = findPython();
+  if (!existsSync(scriptPath)) {
+    return NextResponse.json(
+      { error: `السكريبت غير موجود: ${scriptPath}` },
+      { status: 500 },
+    );
+  }
   try {
     await new Promise<void>((resolve, reject) => {
-      const py = spawn('/home/z/.venv/bin/python3', [scriptPath, jsonPath, outPath], { stdio: ['ignore', 'pipe', 'pipe'] });
+      const py = spawn(pythonBin, [scriptPath, jsonPath, outPath], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, PYTHONUNBUFFERED: '1' },
+      });
       let stderr = '';
-      py.stdout.on('data', d => process.stdout.write(d));
+      let stdout = '';
+      py.stdout.on('data', d => { stdout += d.toString(); process.stdout.write(d); });
       py.stderr.on('data', d => { stderr += d.toString(); process.stderr.write(d); });
+      py.on('error', err => reject(new Error(`فشل تشغيل Python: ${err.message}`)));
       py.on('close', code => {
-        if (code !== 0) reject(new Error(`Python failed: ${stderr}`));
+        if (code !== 0) reject(new Error(`Python failed (exit ${code}): ${stderr || stdout}`));
         else resolve();
       });
     });
   } catch (e: any) {
     return NextResponse.json({ error: `فشل توليد التقرير: ${e.message}` }, { status: 500 });
+  }
+
+  if (!existsSync(outPath)) {
+    return NextResponse.json({ error: 'لم يتم إنشاء ملف التقرير' }, { status: 500 });
   }
 
   const buffer = await readFile(outPath);

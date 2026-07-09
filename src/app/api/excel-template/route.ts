@@ -4,6 +4,7 @@ import { writeFile, readFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import os from 'os';
+import { findExcelScript, findExcelTemplate, findPython } from '@/lib/paths';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -13,7 +14,9 @@ export const maxDuration = 60;
  *
  * Uses the original Python script (openpyxl) to generate Excel from the template.
  * This preserves ALL formatting, merged cells, borders, and column widths.
- * Works on Z.ai platform (Python available).
+ *
+ * Path resolution is robust: works in both `next dev` and standalone production
+ * mode (where process.cwd() may differ from the project root).
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -25,36 +28,79 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'المرجع مطلوب' }, { status: 400 });
   }
 
-  const templatePath = path.join(process.cwd(), 'public', 'templates', 'TRANSIMITALS_template.xlsx');
+  const templatePath = findExcelTemplate();
+  const scriptPath = findExcelScript();
+  const pythonBin = findPython();
+
   if (!existsSync(templatePath)) {
-    return NextResponse.json({ error: 'القالب غير موجود' }, { status: 500 });
+    return NextResponse.json(
+      { error: `القالب غير موجود: ${templatePath}` },
+      { status: 500 },
+    );
+  }
+  if (!existsSync(scriptPath)) {
+    return NextResponse.json(
+      { error: `السكريبت غير موجود: ${scriptPath}` },
+      { status: 500 },
+    );
+  }
+  if (!existsSync(pythonBin)) {
+    return NextResponse.json(
+      { error: `Python غير موجود: ${pythonBin}` },
+      { status: 500 },
+    );
   }
 
   const tmpDir = path.join(os.tmpdir(), 'excel-gen');
   if (!existsSync(tmpDir)) await mkdir(tmpDir, { recursive: true });
   const outPath = path.join(tmpDir, `Transmittal-${reference}-${Date.now()}.xlsx`);
 
-  const scriptPath = path.join(process.cwd(), 'scripts', 'gen_excel_template.py');
   try {
     await new Promise<void>((resolve, reject) => {
-      const py = spawn('/home/z/.venv/bin/python3', [
+      const py = spawn(pythonBin, [
         scriptPath,
         templatePath,
         outPath,
         reference,
         date,
         description,
-      ], { stdio: ['ignore', 'pipe', 'pipe'] });
+      ], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          // Ensure Python can find its modules
+          PYTHONPATH: process.env.PYTHONPATH || '',
+          PYTHONUNBUFFERED: '1',
+        },
+      });
       let stderr = '';
-      py.stdout.on('data', d => process.stdout.write(d));
-      py.stderr.on('data', d => { stderr += d.toString(); process.stderr.write(d); });
-      py.on('close', code => {
-        if (code !== 0) reject(new Error(`Python failed: ${stderr}`));
-        else resolve();
+      let stdout = '';
+      py.stdout.on('data', (d) => { stdout += d.toString(); process.stdout.write(d); });
+      py.stderr.on('data', (d) => { stderr += d.toString(); process.stderr.write(d); });
+      py.on('error', (err) => {
+        reject(new Error(`فشل تشغيل Python: ${err.message}`));
+      });
+      py.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Python failed (exit ${code}): ${stderr || stdout}`));
+        } else {
+          resolve();
+        }
       });
     });
   } catch (e: any) {
-    return NextResponse.json({ error: `فشل توليد الملف: ${e.message}` }, { status: 500 });
+    return NextResponse.json(
+      { error: `فشل توليد الملف: ${e.message}` },
+      { status: 500 },
+    );
+  }
+
+  // Verify the output file exists
+  if (!existsSync(outPath)) {
+    return NextResponse.json(
+      { error: 'لم يتم إنشاء الملف' },
+      { status: 500 },
+    );
   }
 
   const buffer = await readFile(outPath);
@@ -65,6 +111,7 @@ export async function GET(req: NextRequest) {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="${filename}"`,
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
     },
   });
 }

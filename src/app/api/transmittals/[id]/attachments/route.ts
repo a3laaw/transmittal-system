@@ -3,11 +3,13 @@ import { db } from '@/lib/db';
 import { unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
+import { getStorageRoot, migrateLegacyFilePath } from '@/lib/paths';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/transmittals/[id]/attachments — list all attachments for a transmittal
+ * Migrates legacy filePaths (/uploads/...) to new format (/api/files/...) on the fly.
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -15,12 +17,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     where: { transmittalId: id },
     orderBy: { createdAt: 'desc' },
   });
-  return NextResponse.json({ items });
+  // Migrate legacy paths for backwards compatibility
+  const migrated = items.map((it) => ({
+    ...it,
+    filePath: it.filePath ? migrateLegacyFilePath(it.filePath) : it.filePath,
+  }));
+  return NextResponse.json({ items: migrated });
 }
 
 /**
  * DELETE /api/transmittals/[id]/attachments?attId=xxx — delete an attachment
- * Also removes the physical file from /public/uploads/... if it was an uploaded file.
+ * Also removes the physical file from storage if it was an uploaded file.
  */
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -39,9 +46,18 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   await db.attachment.delete({ where: { id: attId } });
 
   // Best-effort cleanup of the physical file
-  if (att.filePath && att.filePath.startsWith('/uploads/')) {
-    const absPath = path.join(process.cwd(), 'public', att.filePath);
-    if (existsSync(absPath)) {
+  if (att.filePath && att.filePath.startsWith('/api/files/')) {
+    // New format: /api/files/{transmittalId}/{filename}
+    const rel = att.filePath.replace(/^\/api\/files\//, '');
+    const absPath = path.join(getStorageRoot(), 'uploads', rel);
+    if (absPath.startsWith(getStorageRoot()) && existsSync(absPath)) {
+      try { await unlink(absPath); } catch { /* ignore */ }
+    }
+  } else if (att.filePath && att.filePath.startsWith('/uploads/')) {
+    // Legacy format: /uploads/{transmittalId}/{filename}
+    const rel = att.filePath.replace(/^\/uploads\//, '');
+    const absPath = path.join(getStorageRoot(), 'uploads', rel);
+    if (absPath.startsWith(getStorageRoot()) && existsSync(absPath)) {
       try { await unlink(absPath); } catch { /* ignore */ }
     }
   }
