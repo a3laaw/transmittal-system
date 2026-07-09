@@ -104,6 +104,28 @@ export function getStorageRoot(): string {
 }
 
 /**
+ * Get the IM gateway upload directory (/home/z/my-project/upload).
+ *
+ * This is where the IM gateway saves pasted images and dropped files
+ * (e.g. `pasted_image_1783626027762.png`). These files are NOT under our
+ * control — they exist on the server filesystem and may be referenced by
+ * users who copied the file_name from an IM message.
+ *
+ * Returns the absolute path if it exists, otherwise null.
+ */
+export function getImUploadDir(): string | null {
+  const candidates = [
+    path.join(PROJECT_ROOT, 'upload'),
+    path.join(process.cwd(), 'upload'),
+    path.join(process.cwd(), '..', '..', 'upload'),
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  return null;
+}
+
+/**
  * Get the uploads directory for a specific transmittal.
  * Creates it if it doesn't exist.
  */
