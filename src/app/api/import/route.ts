@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import * as XLSX from 'xlsx';
+import { spawn } from 'child_process';
 import { writeFile, readFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
@@ -11,9 +11,10 @@ export const maxDuration = 120;
 
 /**
  * POST /api/import
- * Body: FormData with file = LOG_Final.xlsm or TRANSIMITALS.xlsx
+ * Body: FormData with file = LOG_Final.xlsm
  *
- * Reads Excel using SheetJS (xlsx) — JavaScript, no Python needed.
+ * Uses the original Python script (openpyxl) to read the Excel file.
+ * Works on Z.ai platform (Python available).
  */
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
@@ -22,121 +23,52 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'لم يتم رفع ملف' }, { status: 400 });
   }
 
-  // Read file buffer
+  // Save uploaded file to temp
+  const tmpDir = path.join(os.tmpdir(), 'transmittal-import');
+  if (!existsSync(tmpDir)) await mkdir(tmpDir, { recursive: true });
+  const uploadPath = path.join(tmpDir, `upload-${Date.now()}.xlsm`);
   const buffer = Buffer.from(await file.arrayBuffer());
+  await writeFile(uploadPath, buffer);
 
-  // Parse Excel with SheetJS
-  const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
-  const sheetNames = workbook.SheetNames;
+  // Output JSON path
+  const outPath = path.join(tmpDir, `extracted-${Date.now()}.json`);
 
-  const DISCIPLINE_SHEETS = ['CIV', 'EL', 'PL', 'HVAC', 'FF', 'ELVE'];
-
-  const extracted: any[] = [];
-
-  for (const sn of sheetNames) {
-    const discCode = sn.trim().toUpperCase();
-    if (!DISCIPLINE_SHEETS.includes(discCode)) continue;
-
-    const ws = workbook.Sheets[sn];
-    if (!ws) continue;
-
-    // Convert to JSON array (header row at row 4, data starts at row 6)
-    // Columns: A=#, B=type, C=Reference, D=Description, E=SubmitDate, F=ReplyDate, G=Action
-    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, range: 5, defval: null });
-
-    for (const row of rows) {
-      const reference = String(row[2] || '').trim();
-      const description = String(row[3] || '').trim();
-      const typeVal = String(row[1] || '').trim();
-
-      if (!description && !reference) continue;
-      if (!description) continue;
-
-      // Build revisions
-      const revisions = [];
-      for (let revIdx = 0; revIdx < 8; revIdx++) {
-        const submitCol = 4 + revIdx * 3;
-        const replyCol = 5 + revIdx * 3;
-        const actionCol = 6 + revIdx * 3;
-
-        const submit = row[submitCol];
-        const reply = row[replyCol];
-        const actionRaw = String(row[actionCol] || '').toLowerCase().trim();
-
-        if (!submit && !actionRaw) continue;
-
-        let action = '';
-        let approvalType = '';
-        if (actionRaw.includes('approved') && actionRaw.includes('noted') && actionRaw.includes('resubmit')) {
-          action = 'approved'; approvalType = 'APPROVED_AS_NOTED_RESUBMIT';
-        } else if (actionRaw.includes('approved') && actionRaw.includes('noted')) {
-          action = 'approved'; approvalType = 'APPROVED_AS_NOTED';
-        } else if (actionRaw.includes('not approved') || actionRaw.includes('not_approve')) {
-          action = 'approved'; approvalType = 'NOT_APPROVED';
-        } else if (actionRaw.includes('for information') || actionRaw.includes('more info')) {
-          action = 'approved'; approvalType = 'FOR_INFORMATION';
-        } else if (actionRaw === 'approved' || actionRaw.includes('approved')) {
-          action = 'approved'; approvalType = 'APPROVED';
-        } else if (actionRaw.includes('reject')) {
-          action = 'rejected';
-        } else if (actionRaw.includes('withdrawn') || actionRaw.includes('withdraw')) {
-          action = 'withdrawn';
-        } else if (actionRaw.includes('pending')) {
-          action = ''; // don't store pending
-        } else if (actionRaw) {
-          action = actionRaw;
-        }
-
-        if (submit || action) {
-          revisions.push({
-            revNumber: revIdx,
-            submitDate: submit instanceof Date ? submit.toISOString() : (submit ? String(submit) : null),
-            replyDate: reply instanceof Date ? reply.toISOString() : (reply ? String(reply) : null),
-            action: action || null,
-            approvalType: action === 'approved' ? approvalType : null,
-          });
-        }
-      }
-
-      // Consultant status (column 29 = AC)
-      const consultantRaw = String(row[28] || '').trim();
-      const mohRaw = String(row[29] || '').trim();
-
-      const normStatus = (s: string) => {
-        if (!s) return '';
-        const sl = s.toLowerCase();
-        if (sl.includes('approved') && !sl.includes('overdue')) return 'Approved';
-        if (sl.includes('overdue')) return 'Overdue';
-        if (sl.includes('under review') || sl.includes('pending')) return 'Under Review';
-        if (sl.includes('cancelled')) return 'Cancelled';
-        if (sl.includes('submit') && sl.includes('rev')) return 'Submit Next Rev';
-        return s;
-      };
-
-      extracted.push({
-        reference,
-        discipline: discCode,
-        type: typeVal,
-        description,
-        revisions,
-        consultantStatus: normStatus(consultantRaw),
-        mohStatus: normStatus(mohRaw),
+  // Run Python extractor
+  const scriptPath = path.join(process.cwd(), 'scripts', 'import_log.py');
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const py = spawn('/home/z/.venv/bin/python3', [scriptPath, uploadPath, outPath], { stdio: ['ignore', 'pipe', 'pipe'] });
+      let stderr = '';
+      py.stdout.on('data', d => process.stdout.write(d));
+      py.stderr.on('data', d => { stderr += d.toString(); process.stderr.write(d); });
+      py.on('close', code => {
+        if (code !== 0) reject(new Error(`Python failed: ${stderr}`));
+        else resolve();
       });
-    }
+    });
+  } catch (e: any) {
+    return NextResponse.json({ error: `فشل الاستيراد: ${e.message}` }, { status: 500 });
   }
+
+  // Read extracted JSON
+  const extracted = JSON.parse(await readFile(outPath, 'utf-8'));
+
+  let imported = 0;
+  let skipped = 0;
+  const errors: string[] = [];
 
   // Clear DB
   await db.review.deleteMany();
   await db.revision.deleteMany();
   await db.transmittal.deleteMany();
 
-  // Insert
-  let imported = 0;
-  let skipped = 0;
-  const errors: string[] = [];
-
+  // Insert extracted records
   for (const item of extracted) {
     try {
+      if (!item.reference && !item.description) {
+        skipped++;
+        continue;
+      }
       if (!item.description || !item.description.trim()) {
         skipped++;
         continue;
@@ -161,8 +93,14 @@ export async function POST(req: NextRequest) {
           },
           reviews: {
             create: [
-              ...(item.consultantStatus ? [{ party: 'CONSULTANT', status: item.consultantStatus }] : []),
-              ...(item.mohStatus ? [{ party: 'MOH', status: item.mohStatus }] : []),
+              ...(item.consultantStatus ? [{
+                party: 'CONSULTANT',
+                status: item.consultantStatus,
+              }] : []),
+              ...(item.mohStatus ? [{
+                party: 'MOH',
+                status: item.mohStatus,
+              }] : []),
             ],
           },
         },
