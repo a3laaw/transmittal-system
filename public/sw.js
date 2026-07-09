@@ -1,5 +1,5 @@
 // Service Worker for PWA - offline caching
-const CACHE_NAME = 'transmittal-v2';
+const CACHE_NAME = 'transmittal-v3';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -13,6 +13,7 @@ const NO_CACHE_PATHS = [
   '/api/excel-template',
   '/api/reports/export',
   '/api/import',
+  '/api/files/',  // uploaded file serving — never cache (files may be replaced/deleted)
   '/api/transmittals/',  // includes /upload, /attachments — never cache mutations/uploads
 ];
 

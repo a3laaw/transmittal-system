@@ -98,6 +98,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const bytes = new Uint8Array(await file.arrayBuffer());
   await writeFile(absPath, bytes);
 
+  // Determine MIME type — use browser-provided type, fall back to extension
+  let fileType = file.type || '';
+  if (!fileType) {
+    const ext = path.extname(file.name || '').toLowerCase();
+    const extMimes: Record<string, string> = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.svg': 'image/svg+xml',
+      '.bmp': 'image/bmp',
+      '.pdf': 'application/pdf',
+      '.doc': 'application/msword',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      '.xls': 'application/vnd.ms-excel',
+      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      '.txt': 'text/plain',
+      '.csv': 'text/csv',
+      '.zip': 'application/zip',
+      '.mp4': 'video/mp4',
+      '.mp3': 'audio/mpeg',
+    };
+    if (extMimes[ext]) fileType = extMimes[ext];
+  }
+
   // Public URL — served via /api/files/{id}/{filename} (works in dev & standalone production)
   const publicPath = `/api/files/${id}/${fileName}`;
 
@@ -106,7 +132,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       transmittalId: id,
       fileName: file.name || fileName,
       filePath: publicPath,
-      fileType: file.type || '',
+      fileType: fileType,
       fileSize: file.size,
       url: null,
       urlSource: null,

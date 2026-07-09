@@ -1296,16 +1296,37 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
               {attachments.map((att) => {
                 const isUploaded = att.filePath && att.filePath.length > 0;
                 const isLink = att.url && att.url.length > 0;
-                const isImage = isUploaded && att.fileType && att.fileType.startsWith('image/');
+                // Detect image by MIME type OR by file extension (fallback)
+                const imgExts = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'];
+                const fileExt = (att.fileName || '').toLowerCase().match(/\.[a-z0-9]+$/)?.[0] || '';
+                const isImage = isUploaded && (
+                  (att.fileType && att.fileType.startsWith('image/')) ||
+                  imgExts.includes(fileExt)
+                );
                 const src = att.urlSource || 'link';
                 const sc = sourceConfig[src] || sourceConfig.link;
                 const openUrl = isLink ? att.url : att.filePath;
+                // Cache-busting query for image src to force reload after re-upload
+                const imgSrc = isImage ? `${att.filePath}${att.filePath.includes('?') ? '&' : '?'}t=${att.createdAt ? new Date(att.createdAt).getTime() : ''}` : att.filePath;
 
                 return (
                   <div key={att.id} className="border border-slate-200 rounded-lg p-3 flex flex-col gap-2">
                     {/* Preview */}
                     {isImage ? (
-                      <img src={att.filePath} alt={att.fileName} className="w-full h-32 object-cover rounded border border-slate-200" />
+                      <img
+                        src={imgSrc}
+                        alt={att.fileName}
+                        className="w-full h-32 object-cover rounded border border-slate-200 bg-slate-50"
+                        onError={(e) => {
+                          // If image fails to load, replace with file icon
+                          const t = e.currentTarget;
+                          t.style.display = 'none';
+                          const parent = t.parentElement;
+                          if (parent) {
+                            parent.innerHTML = '<div class="w-full h-32 flex items-center justify-center bg-slate-50 rounded border border-slate-200"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>';
+                          }
+                        }}
+                      />
                     ) : (
                       <div className="w-full h-32 flex items-center justify-center bg-slate-50 rounded border border-slate-200 relative">
                         {isLink && <span className="text-3xl">{sc.icon}</span>}
