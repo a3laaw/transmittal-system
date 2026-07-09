@@ -1,19 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { spawn } from 'child_process';
-import { writeFile, readFile, mkdir } from 'fs/promises';
-import { existsSync } from 'fs';
-import path from 'path';
-import os from 'os';
+import ExcelJS from 'exceljs';
+import { computeOverallStatus, computeConsultantStatus, computeMohStatus, getApprovalTypeLetter } from '@/lib/status';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 /**
- * GET /api/reports/export?category=...&discipline=...&type=...&from=...&to=...&q=...
+ * GET /api/reports/export?discipline=...&category=...&type=...&from=...&to=...&q=...
  *
- * Generates an Excel report with revisions pivoted horizontally.
- * Each transmittal = one row, each revision = column group (Submit / Reply / Action / Days).
+ * Generates an Excel timeline report using ExcelJS (JavaScript, Vercel-compatible).
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -45,13 +41,11 @@ export async function GET(req: NextRequest) {
     orderBy: { reference: 'asc' },
   });
 
-  // Build the timeline data
+  // Build timeline data
   const items = transmittals.map(t => {
     const consultant = t.reviews.find(r => r.party === 'CONSULTANT');
     const moh = t.reviews.find(r => r.party === 'MOH');
     const revsMap: Record<number, any> = {};
-    let lastSubmitDate: Date | null = null;
-    let lastReplyDate: Date | null = null;
     let totalDays = 0;
     for (const rev of t.revisions) {
       let daysOpen: number | null = null;
@@ -67,17 +61,7 @@ export async function GET(req: NextRequest) {
         approvalType: rev.approvalType,
         daysOpen,
       };
-      if (rev.submitDate && (!lastSubmitDate || new Date(rev.submitDate) > new Date(lastSubmitDate))) {
-        lastSubmitDate = new Date(rev.submitDate);
-      }
-      if (rev.replyDate && (!lastReplyDate || new Date(rev.replyDate) > new Date(lastReplyDate))) {
-        lastReplyDate = new Date(rev.replyDate);
-      }
     }
-    let inDateRange = true;
-    if (from && lastSubmitDate) inDateRange = inDateRange && new Date(lastSubmitDate) >= new Date(from);
-    if (to && lastSubmitDate) inDateRange = inDateRange && new Date(lastSubmitDate) <= new Date(to);
-    if ((from || to) && !lastSubmitDate) inDateRange = false;
     return {
       reference: t.reference,
       discipline: t.discipline,
@@ -87,68 +71,226 @@ export async function GET(req: NextRequest) {
       consultantStatus: consultant?.status || '',
       mohStatus: moh?.status || '',
       mohSubmitDate: moh?.submitDate,
-      mohSubmitRev: moh?.submitRev,
       mohReviewDate: moh?.reviewDate,
       revisions: revsMap,
-      revisionsCount: t.revisions.length,
-      lastSubmitDate,
-      lastReplyDate,
       totalDays,
-      _inDateRange: inDateRange,
     };
   });
 
-  const filtered = items.filter(i => i._inDateRange);
+  // Compute max rev number
+  let maxRev = 0;
+  for (const item of items) {
+    for (const k of Object.keys(item.revisions)) {
+      const n = parseInt(k);
+      if (n > maxRev) maxRev = n;
+    }
+  }
+  const NUM_REVS = maxRev + 1;
 
-  // Save filtered data to JSON for the python script to consume
-  const tmpDir = path.join(os.tmpdir(), 'reports-export');
-  if (!existsSync(tmpDir)) await mkdir(tmpDir, { recursive: true });
-  const jsonPath = path.join(tmpDir, `report-${Date.now()}.json`);
-  const outPath = path.join(tmpDir, `report-${Date.now()}.xlsx`);
+  // Create workbook
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet('Timeline Report', {
+    views: [{ rightToLeft: true }],
+  });
+  ws.views = [{ showGridLines: false, zoomScale: 100 }];
 
-  // Serialize dates as ISO strings
-  const serializable = filtered.map(i => ({
-    ...i,
-    lastSubmitDate: i.lastSubmitDate ? i.lastSubmitDate.toISOString() : null,
-    lastReplyDate: i.lastReplyDate ? i.lastReplyDate.toISOString() : null,
-    mohSubmitDate: i.mohSubmitDate ? i.mohSubmitDate.toISOString() : null,
-    mohReviewDate: i.mohReviewDate ? i.mohReviewDate.toISOString() : null,
-    revisions: Object.fromEntries(
-      Object.entries(i.revisions).map(([k, v]: [string, any]) => [k, {
-        submitDate: v.submitDate ? v.submitDate.toISOString() : null,
-        replyDate: v.replyDate ? v.replyDate.toISOString() : null,
-        action: v.action,
-        approvalType: v.approvalType || null,
-        daysOpen: v.daysOpen,
-      }])
-    ),
-  }));
+  // Column positions
+  const fixedCols = 5;
+  let colIdx = fixedCols + 1;
+  const revStartCols: number[] = [];
+  for (let r = 0; r < NUM_REVS; r++) {
+    revStartCols[r] = colIdx;
+    colIdx += 4;
+  }
+  const consultantCol = colIdx;
+  const mohSubmitCol = colIdx + 1;
+  const mohReplyCol = colIdx + 2;
+  const mohStatusCol = colIdx + 3;
+  const totalDaysCol = colIdx + 4;
 
-  await writeFile(jsonPath, JSON.stringify(serializable, null, 2));
+  // Title
+  ws.mergeCells(1, 1, 1, totalDaysCol);
+  const titleCell = ws.getCell(1, 1);
+  titleCell.value = `تقرير الجدول الزمني للترانسميتالات - Timeline Report (${items.length} عنصر · REV.0 - REV.${maxRev})`;
+  titleCell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: '1F4E78' } };
+  titleCell.alignment = { horizontal: 'center' };
+  ws.getRow(1).height = 30;
 
-  // Run python generator
-  const scriptPath = path.join(process.cwd(), 'scripts', 'gen_timeline_report.py');
-  // Use the venv python explicitly (where openpyxl is installed)
-  const pythonPath = '/home/z/.venv/bin/python3';
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const py = spawn(pythonPath, [scriptPath, jsonPath, outPath], { stdio: ['ignore', 'pipe', 'pipe'] });
-      let stderr = '';
-      py.stdout.on('data', d => process.stdout.write(d));
-      py.stderr.on('data', d => { stderr += d.toString(); process.stderr.write(d); });
-      py.on('close', code => {
-        if (code !== 0) reject(new Error(`Python failed: ${stderr}`));
-        else resolve();
-      });
-    });
-  } catch (e: any) {
-    return NextResponse.json({ error: `فشل توليد التقرير: ${e.message}` }, { status: 500 });
+  // Group headers (row 2)
+  const headers = ['المرجع', 'القسم الرئيسي', 'التخصص', 'النوع', 'الوصف'];
+  const groupFill = { type: 'pattern' as const, pattern: 'solid', fgColor: { argb: '2E75B6' } };
+  const headerFont = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFF' } };
+  const centerAlign = { horizontal: 'center' as const, vertical: 'middle' as const, wrapText: true };
+  const thinBorder = {
+    left: { style: 'thin' as const, color: { argb: 'B0B0B0' } },
+    right: { style: 'thin' as const, color: { argb: 'B0B0B0' } },
+    top: { style: 'thin' as const, color: { argb: 'B0B0B0' } },
+    bottom: { style: 'thin' as const, color: { argb: 'B0B0B0' } },
+  };
+
+  for (let i = 0; i < headers.length; i++) {
+    const cell = ws.getCell(2, i + 1);
+    cell.value = headers[i];
+    cell.font = headerFont;
+    cell.fill = groupFill;
+    cell.alignment = centerAlign;
+    cell.border = thinBorder;
   }
 
-  const buffer = await readFile(outPath);
+  for (let r = 0; r < NUM_REVS; r++) {
+    const start = revStartCols[r];
+    ws.mergeCells(2, start, 2, start + 3);
+    const cell = ws.getCell(2, start);
+    cell.value = `REV.${r}`;
+    cell.font = headerFont;
+    cell.fill = groupFill;
+    cell.alignment = centerAlign;
+    for (let c = start; c < start + 4; c++) {
+      ws.getCell(2, c).border = thinBorder;
+      ws.getCell(2, c).fill = groupFill;
+    }
+  }
+
+  ws.getCell(2, consultantCol).value = 'الاستشاري';
+  ws.getCell(2, mohSubmitCol).value = 'الوزارة';
+  ws.mergeCells(2, mohSubmitCol, 2, mohStatusCol);
+  ws.getCell(2, consultantCol).font = headerFont;
+  ws.getCell(2, consultantCol).fill = groupFill;
+  ws.getCell(2, consultantCol).alignment = centerAlign;
+  for (let c = mohSubmitCol; c <= mohStatusCol; c++) {
+    ws.getCell(2, c).font = headerFont;
+    ws.getCell(2, c).fill = groupFill;
+    ws.getCell(2, c).border = thinBorder;
+  }
+  ws.getCell(2, totalDaysCol).value = 'إجمالي الأيام';
+  ws.getCell(2, totalDaysCol).font = headerFont;
+  ws.getCell(2, totalDaysCol).fill = groupFill;
+  ws.getCell(2, totalDaysCol).alignment = centerAlign;
+  ws.getCell(2, totalDaysCol).border = thinBorder;
+
+  // Sub-headers (row 3)
+  const subFill = { type: 'pattern' as const, pattern: 'solid', fgColor: { argb: 'D6E4F0' } };
+  const subFont = { name: 'Calibri', size: 10, bold: true, color: { argb: '1F4E78' } };
+  const subLabels = ['تقديم', 'رد', 'إجراء', 'نوع'];
+  for (let r = 0; r < NUM_REVS; r++) {
+    const start = revStartCols[r];
+    for (let i = 0; i < subLabels.length; i++) {
+      const cell = ws.getCell(3, start + i);
+      cell.value = subLabels[i];
+      cell.font = subFont;
+      cell.fill = subFill;
+      cell.alignment = centerAlign;
+      cell.border = thinBorder;
+    }
+  }
+  ws.getCell(3, consultantCol).value = 'الحالة';
+  ws.getCell(3, consultantCol).font = subFont;
+  ws.getCell(3, consultantCol).fill = subFill;
+  ws.getCell(3, consultantCol).alignment = centerAlign;
+  ws.getCell(3, consultantCol).border = thinBorder;
+  const mohLabels = ['إرسال', 'رد', 'الحالة'];
+  for (let i = 0; i < mohLabels.length; i++) {
+    const cell = ws.getCell(3, mohSubmitCol + i);
+    cell.value = mohLabels[i];
+    cell.font = subFont;
+    cell.fill = subFill;
+    cell.alignment = centerAlign;
+    cell.border = thinBorder;
+  }
+  ws.getCell(3, totalDaysCol).value = 'يوم';
+  ws.getCell(3, totalDaysCol).font = subFont;
+  ws.getCell(3, totalDaysCol).fill = subFill;
+  ws.getCell(3, totalDaysCol).alignment = centerAlign;
+  ws.getCell(3, totalDaysCol).border = thinBorder;
+
+  // Data rows
+  const fmtDate = (d: Date | null | undefined) => {
+    if (!d) return '';
+    const dt = new Date(d);
+    return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
+  };
+
+  const dataFont = { name: 'Calibri', size: 10 };
+  const actionFills: Record<string, any> = {
+    approved: { type: 'pattern' as const, pattern: 'solid', fgColor: { argb: 'C6EFCE' } },
+    rejected: { type: 'pattern' as const, pattern: 'solid', fgColor: { argb: 'FFC7CE' } },
+    withdrawn: { type: 'pattern' as const, pattern: 'solid', fgColor: { argb: 'E7E6E6' } },
+    pending: { type: 'pattern' as const, pattern: 'solid', fgColor: { argb: 'FFEB9C' } },
+  };
+
+  items.forEach((item, idx) => {
+    const row = 4 + idx;
+    ws.getCell(row, 1).value = item.reference;
+    ws.getCell(row, 2).value = item.category;
+    ws.getCell(row, 3).value = item.discipline;
+    ws.getCell(row, 4).value = item.type;
+    ws.getCell(row, 5).value = item.description;
+
+    for (let r = 0; r < NUM_REVS; r++) {
+      const revData = item.revisions[r];
+      const start = revStartCols[r];
+      if (revData) {
+        ws.getCell(row, start).value = fmtDate(revData.submitDate);
+        ws.getCell(row, start + 1).value = fmtDate(revData.replyDate);
+        const action = revData.action || '';
+        ws.getCell(row, start + 2).value = action === 'approved' ? 'معتمد' : action === 'rejected' ? 'مرفوض' : action === 'withdrawn' ? 'مسحوب' : action;
+        const fill = actionFills[action.toLowerCase()];
+        if (fill) ws.getCell(row, start + 2).fill = fill;
+        ws.getCell(row, start + 3).value = action === 'approved' ? getApprovalTypeLetter(revData.approvalType) : '';
+      }
+    }
+
+    ws.getCell(row, consultantCol).value = item.consultantStatus;
+    ws.getCell(row, mohSubmitCol).value = fmtDate(item.mohSubmitDate);
+    ws.getCell(row, mohReplyCol).value = fmtDate(item.mohReviewDate);
+    ws.getCell(row, mohStatusCol).value = item.mohStatus;
+    ws.getCell(row, totalDaysCol).value = item.totalDays;
+
+    // Apply formatting
+    for (let c = 1; c <= totalDaysCol; c++) {
+      const cell = ws.getCell(row, c);
+      cell.font = dataFont;
+      cell.border = thinBorder;
+      if (c === 1) {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.font = { name: 'Calibri', size: 10, bold: true };
+      } else if (c === 5) {
+        cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+      } else {
+        cell.alignment = centerAlign;
+      }
+    }
+  });
+
+  // Column widths
+  ws.getColumn(1).width = 14;
+  ws.getColumn(2).width = 14;
+  ws.getColumn(3).width = 10;
+  ws.getColumn(4).width = 18;
+  ws.getColumn(5).width = 40;
+  for (let r = 0; r < NUM_REVS; r++) {
+    const start = revStartCols[r];
+    ws.getColumn(start).width = 12;
+    ws.getColumn(start + 1).width = 12;
+    ws.getColumn(start + 2).width = 10;
+    ws.getColumn(start + 3).width = 6;
+  }
+  ws.getColumn(consultantCol).width = 14;
+  ws.getColumn(mohSubmitCol).width = 12;
+  ws.getColumn(mohReplyCol).width = 12;
+  ws.getColumn(mohStatusCol).width = 14;
+  ws.getColumn(totalDaysCol).width = 10;
+
+  // Freeze panes
+  ws.views = [{ showGridLines: false, zoomScale: 100 }];
+  ws.views[0].state = 'frozen';
+  ws.views[0].xSplit = fixedCols;
+  ws.views[0].ySplit = 3;
+
+  const outputBuffer = await workbook.xlsx.writeBuffer();
   const filename = `Transmittal-Timeline-Report-${new Date().toISOString().slice(0, 10)}.xlsx`;
 
-  return new NextResponse(buffer, {
+  return new NextResponse(outputBuffer as ArrayBuffer, {
     status: 200,
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
