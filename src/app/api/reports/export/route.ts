@@ -184,8 +184,8 @@ export async function GET(req: NextRequest) {
   const subHeaderFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD6E4F0' } };
   const subHeaderFont = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF1F4E78' } };
   const dataFont = { name: 'Calibri', size: 10 };
-  const centerAlign: ExcelJS.Alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-  const leftAlign: ExcelJS.Alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+  const centerAlign: Partial<ExcelJS.Alignment> = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  const leftAlign: Partial<ExcelJS.Alignment> = { horizontal: 'left', vertical: 'middle', wrapText: true };
   const thinBorder: Partial<ExcelJS.Borders> = {
     top: { style: 'thin', color: { argb: 'FFB0B0B0' } },
     left: { style: 'thin', color: { argb: 'FFB0B0B0' } },
