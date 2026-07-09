@@ -21,7 +21,7 @@ export async function GET() {
   }
   try {
     const entries = await readdir(dir);
-    const items = [];
+    const items: Array<{ name: string; size: number; mtime: string; contentType: string }> = [];
     for (const name of entries) {
       const full = path.join(dir, name);
       try {
