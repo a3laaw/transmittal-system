@@ -433,10 +433,31 @@ export default function Home() {
     }
   };
 
-  const handleDownloadExcel = (reference: string, description: string) => {
+  const handleDownloadExcel = async (reference: string, description: string) => {
     const today = new Date().toISOString().slice(0, 10);
     toast({ title: 'جاري توليد ملف Excel', description: `سيتم تنزيل ${reference}.xlsx` });
-    window.location.href = `/api/excel-template?reference=${encodeURIComponent(reference)}&description=${encodeURIComponent(description)}&date=${today}`;
+    // Use fetch + blob instead of window.location.href so:
+    //  1) it works inside the PWA (installed desktop app) where navigation downloads can be blocked
+    //  2) repeated downloads for the same reference (e.g. after publishing a new revision) always re-trigger
+    const url = `/api/excel-template?reference=${encodeURIComponent(reference)}&description=${encodeURIComponent(description)}&date=${today}&_=${Date.now()}`;
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `فشل التوليد (${res.status})`);
+      }
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = `Transmittal-${reference}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
+    } catch (e: any) {
+      toast({ title: 'خطأ في التنزيل', description: e.message, variant: 'destructive' });
+    }
   };
 
   return (
@@ -506,7 +527,25 @@ export default function Home() {
               const desc = detail.description || '';
               const today = new Date().toISOString().slice(0, 10);
               toast({ title: 'جاري توليد الملف...', description: `Transmittal ${ref}` });
-              window.location.href = `/api/excel-template?reference=${encodeURIComponent(ref)}&description=${encodeURIComponent(desc)}&date=${today}`;
+              const url = `/api/excel-template?reference=${encodeURIComponent(ref)}&description=${encodeURIComponent(desc)}&date=${today}&_=${Date.now()}`;
+              try {
+                const res = await fetch(url, { cache: 'no-store' });
+                if (!res.ok) {
+                  const err = await res.json().catch(() => ({}));
+                  throw new Error(err.error || `فشل التوليد (${res.status})`);
+                }
+                const blob = await res.blob();
+                const objUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = objUrl;
+                a.download = `Transmittal-${ref}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
+              } catch (e: any) {
+                toast({ title: 'خطأ في التنزيل', description: e.message, variant: 'destructive' });
+              }
             }}
             onSendToMoh={() => handleSendToMoh(detail.id, detail.reference, detail.revisions.length > 0 ? detail.revisions[detail.revisions.length - 1].revNumber : 0)}
             onCopy={() => handleCopyTransmittal(detail.id, detail.reference, detail.description || '')}
@@ -521,7 +560,25 @@ export default function Home() {
             onDownloadTemplate={async (ref, discipline, desc) => {
               const today = new Date().toISOString().slice(0, 10);
               toast({ title: 'جاري توليد ملف Excel', description: `سيتم تنزيل ${ref}.xlsx` });
-              window.location.href = `/api/excel-template?reference=${encodeURIComponent(ref)}&discipline=${encodeURIComponent(discipline)}&description=${encodeURIComponent(desc)}&date=${today}`;
+              const url = `/api/excel-template?reference=${encodeURIComponent(ref)}&discipline=${encodeURIComponent(discipline)}&description=${encodeURIComponent(desc)}&date=${today}&_=${Date.now()}`;
+              try {
+                const res = await fetch(url, { cache: 'no-store' });
+                if (!res.ok) {
+                  const err = await res.json().catch(() => ({}));
+                  throw new Error(err.error || `فشل التوليد (${res.status})`);
+                }
+                const blob = await res.blob();
+                const objUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = objUrl;
+                a.download = `Transmittal-${ref}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
+              } catch (e: any) {
+                toast({ title: 'خطأ في التنزيل', description: e.message, variant: 'destructive' });
+              }
             }}
           />
         )}
@@ -1058,9 +1115,6 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
   };
 
   const sourceConfig: Record<string, { label: string; icon: string; color: string }> = {
-    github: { label: 'GitHub', icon: '🐙', color: 'bg-gray-800 text-white' },
-    supabase: { label: 'Supabase', icon: '⚡', color: 'bg-emerald-600 text-white' },
-    vercel: { label: 'Vercel', icon: '▲', color: 'bg-black text-white' },
     link: { label: 'رابط', icon: '🔗', color: 'bg-blue-600 text-white' },
   };
 
@@ -1198,7 +1252,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
             <CardTitle className="text-lg flex items-center gap-2">
               <FileDown className="w-5 h-5" /> المرفقات والصور ({attachments.length})
             </CardTitle>
-            <CardDescription>ارفع ملفات أو اربط روابط خارجية (GitHub / Supabase / Vercel)</CardDescription>
+            <CardDescription>ارفع ملفات أو اربط روابط خارجية</CardDescription>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -1303,24 +1357,14 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                 <FileDown className="w-5 h-5 text-blue-700" />
                 إضافة رابط خارجي
               </DialogTitle>
-              <DialogDescription>أضف رابطاً من GitHub أو Supabase أو Vercel أو أي رابط مباشر</DialogDescription>
+              <DialogDescription>أضف أي رابط مباشر لملف أو صورة خارجية</DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label className="text-sm font-semibold">المصدر</Label>
-                <div className="grid grid-cols-4 gap-2">
-                  {Object.entries(sourceConfig).map(([key, cfg]) => (
-                    <button
-                      key={key}
-                      onClick={() => setLinkSource(key)}
-                      className={`p-2 rounded-lg border-2 text-center text-xs transition-colors ${
-                        linkSource === key ? `${cfg.color} border-transparent` : 'border-slate-200 hover:border-slate-400'
-                      }`}
-                    >
-                      <div className="text-lg mb-0.5">{cfg.icon}</div>
-                      <div className="font-semibold">{cfg.label}</div>
-                    </button>
-                  ))}
+                <Label className="text-sm font-semibold">النوع</Label>
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white w-fit">
+                  <span className="text-lg">🔗</span>
+                  <span className="font-semibold text-sm">رابط خارجي</span>
                 </div>
               </div>
               <div className="space-y-1.5">
@@ -1338,10 +1382,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                   value={linkUrl}
                   onChange={(e) => setLinkUrl(e.target.value)}
                   className="font-mono text-sm"
-                  placeholder={linkSource === 'github' ? 'https://github.com/user/repo/...' :
-                               linkSource === 'supabase' ? 'https://xxx.supabase.co/storage/...' :
-                               linkSource === 'vercel' ? 'https://xxx.vercel.app/...' :
-                               'https://...'}
+                  placeholder="https://..."
                 />
               </div>
             </div>
@@ -1770,7 +1811,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
     fetchReport();
   }, [fetchReport]);
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     const params = new URLSearchParams();
     if (filterCategory !== 'all') params.set('category', filterCategory);
     if (filterDiscipline !== 'all') params.set('discipline', filterDiscipline);
@@ -1778,8 +1819,26 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
     if (filterType !== 'all') params.set('type', filterType);
     if (dateFrom) params.set('from', dateFrom);
     if (dateTo) params.set('to', dateTo);
+    params.set('_', String(Date.now())); // cache-buster
     toast({ title: 'جاري توليد التقرير', description: 'سيتم تنزيل ملف Excel خلال لحظات' });
-    window.location.href = `/api/reports/export?${params}`;
+    try {
+      const res = await fetch(`/api/reports/export?${params}`, { cache: 'no-store' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `فشل التوليد (${res.status})`);
+      }
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = `Transmittals-Report-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
+    } catch (e: any) {
+      toast({ title: 'خطأ في التنزيل', description: e.message, variant: 'destructive' });
+    }
   };
 
   const availableDisciplines = filterCategory !== 'all'

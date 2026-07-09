@@ -1,10 +1,19 @@
 // Service Worker for PWA - offline caching
-const CACHE_NAME = 'transmittal-v1';
+const CACHE_NAME = 'transmittal-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
+];
+
+// Paths that must NEVER be cached (file downloads, streaming, dynamic blobs).
+// These always go straight to the network.
+const NO_CACHE_PATHS = [
+  '/api/excel-template',
+  '/api/reports/export',
+  '/api/import',
+  '/api/transmittals/',  // includes /upload, /attachments — never cache mutations/uploads
 ];
 
 self.addEventListener('install', (event) => {
@@ -29,7 +38,6 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Network-first strategy for API, cache-first for static assets
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   
@@ -40,8 +48,14 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== location.origin) return;
   
-  // Network-first for API and pages
-  if (url.pathname.startsWith('/api/') || url.pathname === '/' || request.mode === 'navigate') {
+  // NEVER cache download / upload / mutation endpoints — always go to network
+  if (NO_CACHE_PATHS.some((p) => url.pathname.startsWith(p))) {
+    event.respondWith(fetch(request));
+    return;
+  }
+  
+  // Network-first for navigations and the root page
+  if (url.pathname === '/' || request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then((response) => {
@@ -60,7 +74,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   
-  // Cache-first for static assets
+  // Cache-first for other static assets (JS, CSS, images, fonts)
   event.respondWith(
     caches.match(request).then((cached) => {
       return cached || fetch(request).then((response) => {
