@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Cairo } from "next/font/google";
+import { PWARegister } from "@/components/pwa-register";
 
 const cairo = Cairo({
   subsets: ["arabic", "latin"],
@@ -10,8 +11,36 @@ const cairo = Cairo({
 });
 
 export const metadata: Metadata = {
-  title: "نظام إدارة الترانسميتالات - Sabah Al Salem South Health Center",
-  description: "نظام متابعة المستندات والمراجعات لحساب الاستشاري ووزارة الصحة",
+  title: "نظام إدارة الترانسميتالات",
+  description: "نظام متابعة المستندات والمراجعات - Sabah Al Salem South Health Center",
+  applicationName: "نظام إدارة الترانسميتالات",
+  manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    shortcut: ["/icons/icon-192.png"],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "ترانسميتالات",
+    statusBarStyle: "default",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#059669",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
@@ -21,12 +50,20 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="ترانسميتالات" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+      </head>
       <body
         className={`${cairo.variable} font-sans antialiased bg-slate-50 text-slate-900 min-h-screen`}
         style={{ fontFamily: 'var(--font-cairo), system-ui, sans-serif' }}
       >
         {children}
         <Toaster />
+        <PWARegister />
       </body>
     </html>
   );
