@@ -1,0 +1,2002 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useCallback } from 'react';
+     4→import { Button } from '@/components/ui/button';
+     5→import { Input } from '@/components/ui/input';
+     6→import { Label } from '@/components/ui/label';
+     7→import { Textarea } from '@/components/ui/textarea';
+     8→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+     9→import { Badge } from '@/components/ui/badge';
+    10→import {
+    11→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    12→} from '@/components/ui/table';
+    13→import {
+    14→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    15→} from '@/components/ui/select';
+    16→import {
+    17→  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+    18→} from '@/components/ui/dialog';
+    19→import { Skeleton } from '@/components/ui/skeleton';
+    20→import { useToast } from '@/hooks/use-toast';
+    21→import {
+    22→  computeOverallStatus, computeConsultantStatus, computeMohStatus,
+    23→  DEFAULT_DISCIPLINES, getDisciplineLabel, getDisciplineColor,
+    24→  CATEGORIES, getCategoryLabel, getCategoryColor, getCategoryIcon,
+    25→  APPROVAL_TYPES, getApprovalTypeLetter, getApprovalTypeLabel,
+    26→} from '@/lib/status';
+    27→import {
+    28→  FileText, Search, Plus, Download, Upload, AlertCircle,
+    29→  CheckCircle2, Clock, XCircle, Bell, LayoutDashboard, FileSpreadsheet,
+    30→  ArrowLeft, RefreshCw, FilePlus, History, Send, Settings, Building2,
+    31→  Trash2, Pencil, Hospital, Building, Copy, MoreVertical, Eye, FileDown,
+    32→  FolderPlus, Folder, BarChart3, Calendar,
+    33→} from 'lucide-react';
+    34→import {
+    35→  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+    36→  DropdownMenuSeparator, DropdownMenuTrigger,
+    37→} from '@/components/ui/dropdown-menu';
+    38→
+    39→type Discipline = { code: string; label: string; color: string; prefix: string; categoryCode?: string; category?: string; transmittalsCount?: number };
+    40→type Category = { id?: string; code: string; label: string; icon: string; color: string; disciplinesCount?: number; transmittalsCount?: number };
+    41→
+    42→type Transmittal = {
+    43→  id: string;
+    44→  reference: string;
+    45→  discipline: string;
+    46→  category?: string;
+    47→  type: string | null;
+    48→  description: string | null;
+    49→  createdAt: string;
+    50→  revisionsCount: number;
+    51→  lastSubmitDate: string | null;
+    52→  lastReplyDate: string | null;
+    53→  computedStatus: { status: string; label: string; color: string; emoji: string };
+    54→  consultantStatus: { status: string; label: string; color: string; emoji: string };
+    55→  mohStatus: { status: string; label: string; color: string; emoji: string };
+    56→  mohSubmitDate: string | null;
+    57→  mohSubmitRev: number | null;
+    58→  mohReviewDate: string | null;
+    59→};
+    60→
+    61→type TransmittalDetail = Transmittal & {
+    62→  revisions: {
+    63→    id: string;
+    64→    revNumber: number;
+    65→    submitDate: string | null;
+    66→    replyDate: string | null;
+    67→    action: string | null;
+    68→    approvalType?: string | null;
+    69→    notes: string | null;
+    70→  }[];
+    71→  reviews: {
+    72→    id: string;
+    73→    party: string;
+    74→    status: string | null;
+    75→    submitDate: string | null;
+    76→    submitRev: number | null;
+    77→    reviewDate: string | null;
+    78→    notes: string | null;
+    79→  }[];
+    80→};
+    81→
+    82→type Dashboard = {
+    83→  kpis: { total: number; approved: number; pending: number; overdue: number; cancelled: number; resubmit: number };
+    84→  mohKpis: { sent: number; approved: number; overdue: number; underReview: number };
+    85→  perCategory: Array<{
+    86→    code: string; label: string; icon: string; color: string;
+    87→    total: number; approved: number; pending: number; overdue: number;
+    88→    cancelled: number; resubmit: number;
+    89→    mohSent: number; mohApproved: number; mohOverdue: number;
+    90→    disciplinesCount: number; lastReference: string | null;
+    91→  }>;
+    92→  perDiscipline: Array<{
+    93→    code: string; label: string; color: string; category: string;
+    94→    total: number; approved: number; pending: number; overdue: number;
+    95→    cancelled: number; resubmit: number;
+    96→    mohSent: number; mohApproved: number; mohOverdue: number;
+    97→    lastReference: string | null;
+    98→  }>;
+    99→  disciplines: Discipline[];
+   100→  recent: Array<{ id: string; reference: string; discipline: string; description: string | null; status: any; mohStatus: any }>;
+   101→  consultantOverdueList: Array<{ id: string; reference: string; discipline: string; description: string | null; status: any; party: string }>;
+   102→  mohOverdueList: Array<{ id: string; reference: string; discipline: string; description: string | null; status: any; party: string }>;
+   103→};
+   104→
+   105→const fmtDate = (s: string | null) => {
+   106→  if (!s) return '—';
+   107→  try {
+   108→    // Use 'en-GB' to get DD/MM/YYYY with English numerals (instead of Arabic-Indic ٠١٢٣)
+   109→    return new Date(s).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' });
+   110→  } catch { return s; }
+   111→};
+   112→
+   113→export default function Home() {
+   114→  const [view, setView] = useState<'dashboard' | 'list' | 'detail' | 'new' | 'import' | 'settings' | 'reports'>('dashboard');
+   115→  const [selectedId, setSelectedId] = useState<string | null>(null);
+   116→  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+   117→  const [transmittals, setTransmittals] = useState<Transmittal[]>([]);
+   118→  const [detail, setDetail] = useState<TransmittalDetail | null>(null);
+   119→  const [disciplines, setDisciplines] = useState<Discipline[]>(DEFAULT_DISCIPLINES as any);
+   120→  const [categories, setCategories] = useState<Category[]>(CATEGORIES as any);
+   121→  const [loading, setLoading] = useState(false);
+   122→  const [search, setSearch] = useState('');
+   123→  const [filterDiscipline, setFilterDiscipline] = useState('all');
+   124→  const [filterStatus, setFilterStatus] = useState('all');
+   125→  const [filterType, setFilterType] = useState('all');
+   126→  const [filterCategory, setFilterCategory] = useState('all');
+   127→  const [types, setTypes] = useState<string[]>([]);
+   128→  const { toast } = useToast();
+   129→
+   130→  const fetchCategories = useCallback(async () => {
+   131→    try {
+   132→      const r = await fetch('/api/categories');
+   133→      if (r.ok) {
+   134→        const data = await r.json();
+   135→        if (data.items && data.items.length > 0) setCategories(data.items);
+   136→      }
+   137→    } catch {}
+   138→  }, []);
+   139→
+   140→  const fetchDisciplines = useCallback(async () => {
+   141→    try {
+   142→      const r = await fetch('/api/disciplines');
+   143→      if (r.ok) {
+   144→        const data = await r.json();
+   145→        if (data.items && data.items.length > 0) setDisciplines(data.items);
+   146→      }
+   147→    } catch {}
+   148→  }, []);
+   149→
+   150→  const fetchTypes = useCallback(async () => {
+   151→    try {
+   152→      const r = await fetch('/api/types');
+   153→      if (r.ok) {
+   154→        const data = await r.json();
+   155→        setTypes(data.items || []);
+   156→      }
+   157→    } catch {}
+   158→  }, []);
+   159→
+   160→  const fetchDashboard = useCallback(async () => {
+   161→    setLoading(true);
+   162→    try {
+   163→      const r = await fetch('/api/dashboard');
+   164→      if (!r.ok) throw new Error('فشل تحميل البيانات');
+   165→      const d = await r.json();
+   166→      setDashboard(d);
+   167→      if (d.disciplines && d.disciplines.length > 0) setDisciplines(d.disciplines);
+   168→    } catch (e: any) {
+   169→      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+   170→    } finally {
+   171→      setLoading(false);
+   172→    }
+   173→  }, [toast]);
+   174→
+   175→  const fetchList = useCallback(async () => {
+   176→    setLoading(true);
+   177→    try {
+   178→      const params = new URLSearchParams();
+   179→      if (filterCategory !== 'all') params.set('category', filterCategory);
+   180→      if (filterDiscipline !== 'all') params.set('discipline', filterDiscipline);
+   181→      if (search) params.set('q', search);
+   182→      if (filterStatus !== 'all') params.set('status', filterStatus);
+   183→      if (filterType !== 'all') params.set('type', filterType);
+   184→      const r = await fetch(`/api/transmittals?${params}`);
+   185→      if (!r.ok) throw new Error('فشل تحميل القائمة');
+   186→      const data = await r.json();
+   187→      setTransmittals(data.items);
+   188→    } catch (e: any) {
+   189→      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+   190→    } finally {
+   191→      setLoading(false);
+   192→    }
+   193→  }, [filterCategory, filterDiscipline, search, filterStatus, filterType, toast]);
+   194→
+   195→  const fetchDetail = useCallback(async (id: string) => {
+   196→    setLoading(true);
+   197→    try {
+   198→      const r = await fetch(`/api/transmittals/${id}`);
+   199→      if (!r.ok) throw new Error('فشل تحميل التفاصيل');
+   200→      const d = await r.json();
+   201→      // Compute statuses for detail view
+   202→      const consultant = d.reviews.find((r: any) => r.party === 'CONSULTANT');
+   203→      const moh = d.reviews.find((r: any) => r.party === 'MOH');
+   204→      const overall = computeOverallStatus(
+   205→        d.revisions.map((r: any) => ({ submitDate: r.submitDate, replyDate: r.replyDate, action: r.action })),
+   206→        consultant, moh,
+   207→      );
+   208→      const consultantStatus = computeConsultantStatus(
+   209→        d.revisions.map((r: any) => ({ submitDate: r.submitDate, replyDate: r.replyDate, action: r.action })),
+   210→        consultant,
+   211→      );
+   212→      const mohStatus = computeMohStatus(moh);
+   213→      setDetail({ ...d, computedStatus: overall, consultantStatus, mohStatus } as TransmittalDetail);
+   214→    } catch (e: any) {
+   215→      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+   216→    } finally {
+   217→      setLoading(false);
+   218→    }
+   219→  }, [toast]);
+   220→
+   221→  useEffect(() => {
+   222→    fetchDisciplines();
+   223→    fetchTypes();
+   224→    fetchCategories();
+   225→  }, [fetchDisciplines, fetchTypes, fetchCategories]);
+   226→
+   227→  useEffect(() => {
+   228→    if (view === 'dashboard') fetchDashboard();
+   229→    else if (view === 'list') fetchList();
+   230→    else if (view === 'detail' && selectedId) fetchDetail(selectedId);
+   231→  }, [view, selectedId, fetchDashboard, fetchList, fetchDetail]);
+   232→
+   233→  const [sendToMohTarget, setSendToMohTarget] = useState<{ id: string; reference: string; latestRev: number } | null>(null);
+   234→  const [registerRevTarget, setRegisterRevTarget] = useState<{ id: string; reference: string; nextRev: number } | null>(null);
+   235→  const [consultantReplyTarget, setConsultantReplyTarget] = useState<{ id: string; reference: string } | null>(null);
+   236→  const [mohReplyTarget, setMohReplyTarget] = useState<{ id: string; reference: string } | null>(null);
+   237→  const [copyTarget, setCopyTarget] = useState<{ id: string; reference: string; description: string } | null>(null);
+   238→
+   239→  const handleSendToMoh = (id: string, reference?: string, latestRev?: number) => {
+   240→    setSendToMohTarget({ id, reference: reference || '', latestRev: latestRev ?? 0 });
+   241→  };
+   242→
+   243→  const confirmSendToMoh = async (submitDate: string, submitRev: number, notes: string) => {
+   244→    if (!sendToMohTarget) return;
+   245→    const { id } = sendToMohTarget;
+   246→    try {
+   247→      // Note: submitRev is now ignored by API - latest rev is used automatically
+   248→      const r = await fetch(`/api/transmittals/${id}/send-to-moh`, {
+   249→        method: 'POST',
+   250→        headers: { 'Content-Type': 'application/json' },
+   251→        body: JSON.stringify({ submitDate, notes: notes || null }),
+   252→      });
+   253→      if (!r.ok) {
+   254→        const err = await r.json();
+   255→        throw new Error(err.error || 'فشل الإرسال');
+   256→      }
+   257→      const data = await r.json();
+   258→      toast({ title: 'تم الإرسال للوزارة', description: `REV.${data.sentRev} · بتاريخ ${fmtDate(data.sentDate)}` });
+   259→      setSendToMohTarget(null);
+   260→      if (view === 'detail' && selectedId === id) fetchDetail(id);
+   261→      else if (view === 'list') fetchList();
+   262→      else fetchDashboard();
+   263→    } catch (e: any) {
+   264→      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+   265→    }
+   266→  };
+   267→
+   268→  const handleCopyTransmittal = (id: string, reference: string, description?: string) => {
+   269→    setCopyTarget({ id, reference, description: description || '' });
+   270→  };
+   271→
+   272→  const confirmCopyTransmittal = async (editedDescription: string) => {
+   273→    if (!copyTarget) return;
+   274→    const { id, reference } = copyTarget;
+   275→    try {
+   276→      const r = await fetch(`/api/transmittals/${id}/copy`, {
+   277→        method: 'POST',
+   278→        headers: { 'Content-Type': 'application/json' },
+   279→        body: JSON.stringify({ description: editedDescription }),
+   280→      });
+   281→      if (!r.ok) {
+   282→        const err = await r.json();
+   283→        throw new Error(err.error || 'فشل النسخ');
+   284→      }
+   285→      const data = await r.json();
+   286→      toast({
+   287→        title: 'تم نسخ البيانات',
+   288→        description: `${data.sourceReference} → ${data.newReference}`,
+   289→      });
+   290→      setCopyTarget(null);
+   291→      // Open the new transmittal's detail
+   292→      setSelectedId(data.newTransmittal.id);
+   293→      setView('detail');
+   294→    } catch (e: any) {
+   295→      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+   296→    }
+   297→  };
+   298→
+   299→  const handleRegisterRevision = (id: string, reference: string, nextRev: number) => {
+   300→    setRegisterRevTarget({ id, reference, nextRev });
+   301→  };
+   302→
+   303→  const confirmRegisterRevision = async (submitDate: string, replyDate: string, action: string, approvalType: string, notes: string) => {
+   304→    if (!registerRevTarget) return;
+   305→    const { id, nextRev } = registerRevTarget;
+   306→    try {
+   307→      const r = await fetch(`/api/transmittals/${id}/revisions`, {
+   308→        method: 'POST',
+   309→        headers: { 'Content-Type': 'application/json' },
+   310→        body: JSON.stringify({
+   311→          revNumber: nextRev,
+   312→          submitDate: submitDate || null,
+   313→          replyDate: replyDate || null,
+   314→          action: action || null,
+   315→          approvalType: action === 'approved' ? (approvalType || null) : null,
+   316→          notes: notes || null,
+   317→        }),
+   318→      });
+   319→      if (!r.ok) {
+   320→        const err = await r.json();
+   321→        throw new Error(err.error || 'فشل تسجيل الريفجن');
+   322→      }
+   323→      const actionLabel = action === 'approved' && approvalType
+   324→        ? `${getApprovalTypeLetter(approvalType)} - ${getApprovalTypeLabel(approvalType)}`
+   325→        : action || '';
+   326→      toast({ title: 'تم تسجيل الريفجن', description: `REV.${nextRev} · ${actionLabel}` });
+   327→      setRegisterRevTarget(null);
+   328→      if (view === 'list') fetchList();
+   329→      else fetchDashboard();
+   330→    } catch (e: any) {
+   331→      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+   332→    }
+   333→  };
+   334→
+   335→  const handleRegisterConsultantReply = (id: string, reference: string) => {
+   336→    setConsultantReplyTarget({ id, reference });
+   337→  };
+   338→
+   339→  const confirmRegisterConsultantReply = async (replyDate: string, action: string, approvalType: string, notes: string) => {
+   340→    if (!consultantReplyTarget) return;
+   341→    const { id } = consultantReplyTarget;
+   342→    try {
+   343→      // First fetch the transmittal to get the latest rev number
+   344→      const detailR = await fetch(`/api/transmittals/${id}`);
+   345→      if (!detailR.ok) throw new Error('فشل تحميل الترانسميتال');
+   346→      const detail = await detailR.json();
+   347→      const latestRev = detail.revisions && detail.revisions.length > 0
+   348→        ? detail.revisions[detail.revisions.length - 1].revNumber
+   349→        : 0;
+   350→      // Update the latest revision with the reply date, action, and approval type
+   351→      const r = await fetch(`/api/transmittals/${id}/revisions`, {
+   352→        method: 'POST',
+   353→        headers: { 'Content-Type': 'application/json' },
+   354→        body: JSON.stringify({
+   355→          revNumber: latestRev,
+   356→          replyDate: replyDate || null,
+   357→          action: action || null,
+   358→          approvalType: action === 'approved' ? (approvalType || null) : null,
+   359→          notes: notes || null,
+   360→        }),
+   361→      });
+   362→      if (!r.ok) {
+   363→        const err = await r.json();
+   364→        throw new Error(err.error || 'فشل تسجيل رد الاستشاري');
+   365→      }
+   366→      // Also update the consultant review status
+   367→      // Map approval types to consultant statuses: NOT_APPROVED(D) → Submit Next Rev, FOR_INFORMATION(E) → Under Review
+   368→      const actionToStatus: Record<string, string> = {
+   369→        approved: (approvalType === 'NOT_APPROVED' ? 'Submit Next Rev' :
+   370→                   approvalType === 'FOR_INFORMATION' ? 'Under Review' :
+   371→                   approvalType === 'APPROVED_AS_NOTED_RESUBMIT' ? 'Submit Next Rev' : 'Approved'),
+   372→        rejected: 'Submit Next Rev',
+   373→        withdrawn: 'Cancelled',
+   374→      };
+   375→      const status = actionToStatus[action] || 'Under Review';
+   376→      await fetch(`/api/transmittals/${id}/reviews`, {
+   377→        method: 'POST',
+   378→        headers: { 'Content-Type': 'application/json' },
+   379→        body: JSON.stringify({ party: 'CONSULTANT', status, reviewDate: replyDate || null, notes: notes || null }),
+   380→      });
+   381→      const actionLabel = action === 'approved' && approvalType
+   382→        ? `${getApprovalTypeLetter(approvalType)} - ${getApprovalTypeLabel(approvalType)}`
+   383→        : action || '';
+   384→      toast({ title: 'تم تسجيل رد الاستشاري', description: `REV.${latestRev} · ${actionLabel}` });
+   385→      setConsultantReplyTarget(null);
+   386→      if (view === 'list') fetchList();
+   387→      else fetchDashboard();
+   388→    } catch (e: any) {
+   389→      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+   390→    }
+   391→  };
+   392→
+   393→  const handleRegisterMohReply = (id: string, reference: string) => {
+   394→    setMohReplyTarget({ id, reference });
+   395→  };
+   396→
+   397→  const confirmRegisterMohReply = async (reviewDate: string, status: string, notes: string) => {
+   398→    if (!mohReplyTarget) return;
+   399→    const { id } = mohReplyTarget;
+   400→    try {
+   401→      const r = await fetch(`/api/transmittals/${id}/reviews`, {
+   402→        method: 'POST',
+   403→        headers: { 'Content-Type': 'application/json' },
+   404→        body: JSON.stringify({
+   405→          party: 'MOH',
+   406→          status: status || null,
+   407→          reviewDate: reviewDate || null,
+   408→          notes: notes || null,
+   409→        }),
+   410→      });
+   411→      if (!r.ok) {
+   412→        const err = await r.json();
+   413→        throw new Error(err.error || 'فشل تسجيل رد الوزارة');
+   414→      }
+   415→      toast({ title: 'تم تسجيل رد الوزارة', description: `${status} · ${fmtDate(reviewDate)}` });
+   416→      setMohReplyTarget(null);
+   417→      if (view === 'list') fetchList();
+   418→      else fetchDashboard();
+   419→    } catch (e: any) {
+   420→      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+   421→    }
+   422→  };
+   423→
+   424→  const handleDownloadExcel = (reference: string, description: string) => {
+   425→    const today = new Date().toISOString().slice(0, 10);
+   426→    toast({ title: 'جاري توليد ملف Excel', description: `سيتم تنزيل ${reference}.xlsx` });
+   427→    window.location.href = `/api/excel-template?reference=${encodeURIComponent(reference)}&description=${encodeURIComponent(description)}&date=${today}`;
+   428→  };
+   429→
+   430→  return (
+   431→    <div className="min-h-screen flex flex-col bg-slate-50">
+   432→      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+   433→        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+   434→          <div className="flex flex-wrap items-center justify-between h-16 gap-2">
+   435→            <div className="flex items-center gap-3">
+   436→              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white shadow-md">
+   437→                <FileText className="w-6 h-6" />
+   438→              </div>
+   439→              <div>
+   440→                <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">نظام إدارة الترانسميتالات</h1>
+   441→                <p className="text-xs text-slate-500 hidden sm:block">Sabah Al Salem South Health Center</p>
+   442→              </div>
+   443→            </div>
+   444→            <nav className="flex items-center gap-1 sm:gap-2 flex-wrap">
+   445→              <NavButton active={view === 'dashboard'} onClick={() => setView('dashboard')} icon={<LayoutDashboard className="w-4 h-4" />} label="الرئيسية" />
+   446→              <NavButton active={view === 'list'} onClick={() => setView('list')} icon={<FileSpreadsheet className="w-4 h-4" />} label="القائمة" />
+   447→              <NavButton active={view === 'new'} onClick={() => setView('new')} icon={<FilePlus className="w-4 h-4" />} label="جديد" />
+   448→              <NavButton active={view === 'reports'} onClick={() => setView('reports')} icon={<BarChart3 className="w-4 h-4" />} label="تقارير" />
+   449→              <NavButton active={view === 'settings'} onClick={() => setView('settings')} icon={<Settings className="w-4 h-4" />} label="الإعدادات" />
+   450→              <NavButton active={view === 'import'} onClick={() => setView('import')} icon={<Upload className="w-4 h-4" />} label="استيراد" />
+   451→            </nav>
+   452→          </div>
+   453→        </div>
+   454→      </header>
+   455→
+   456→      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+   457→        {view === 'dashboard' && <DashboardView data={dashboard} loading={loading} disciplines={disciplines} categories={categories} onOpenDetail={(id) => { setSelectedId(id); setView('detail'); }} onRefresh={fetchDashboard} onSendToMoh={handleSendToMoh} onCopy={handleCopyTransmittal} onDownloadExcel={handleDownloadExcel} />}
+   458→        {view === 'list' && (
+   459→          <ListView
+   460→            items={transmittals}
+   461→            loading={loading}
+   462→            search={search}
+   463→            onSearch={setSearch}
+   464→            filterCategory={filterCategory}
+   465→            onFilterCategory={setFilterCategory}
+   466→            filterDiscipline={filterDiscipline}
+   467→            onFilterDiscipline={setFilterDiscipline}
+   468→            filterStatus={filterStatus}
+   469→            onFilterStatus={setFilterStatus}
+   470→            filterType={filterType}
+   471→            onFilterType={setFilterType}
+   472→            types={types}
+   473→            disciplines={disciplines}
+   474→            categories={categories}
+   475→            onOpenDetail={(id) => { setSelectedId(id); setView('detail'); }}
+   476→            onRefresh={fetchList}
+   477→            onSendToMoh={handleSendToMoh}
+   478→            onCopy={handleCopyTransmittal}
+   479→            onDownloadExcel={handleDownloadExcel}
+   480→            onRegisterRevision={handleRegisterRevision}
+   481→            onRegisterConsultantReply={handleRegisterConsultantReply}
+   482→            onRegisterMohReply={handleRegisterMohReply}
+   483→          />
+   484→        )}
+   485→        {view === 'detail' && detail && (
+   486→          <DetailView
+   487→            detail={detail}
+   488→            loading={loading}
+   489→            disciplines={disciplines}
+   490→            onBack={() => setView('list')}
+   491→            onRefresh={() => selectedId && fetchDetail(selectedId)}
+   492→            onDownloadExcel={async () => {
+   493→              const ref = detail.reference;
+   494→              const desc = detail.description || '';
+   495→              const today = new Date().toISOString().slice(0, 10);
+   496→              toast({ title: 'جاري توليد الملف...', description: `Transmittal ${ref}` });
+   497→              window.location.href = `/api/excel-template?reference=${encodeURIComponent(ref)}&description=${encodeURIComponent(desc)}&date=${today}`;
+   498→            }}
+   499→            onSendToMoh={() => handleSendToMoh(detail.id, detail.reference, detail.revisions.length > 0 ? detail.revisions[detail.revisions.length - 1].revNumber : 0)}
+   500→            onCopy={() => handleCopyTransmittal(detail.id, detail.reference, detail.description || '')}
+   501→          />
+   502→        )}
+   503→        {view === 'detail' && !detail && !loading && <div className="text-center py-20 text-slate-500">لا توجد بيانات</div>}
+   504→        {view === 'new' && (
+   505→          <NewTransmittalView
+   506→            disciplines={disciplines}
+   507→            categories={categories}
+   508→            onCreated={(t) => { toast({ title: 'تم إنشاء الترانسميتال', description: t.reference }); setSelectedId(t.id); setView('detail'); }}
+   509→            onDownloadTemplate={async (ref, discipline, desc) => {
+   510→              const today = new Date().toISOString().slice(0, 10);
+   511→              toast({ title: 'جاري توليد ملف Excel', description: `سيتم تنزيل ${ref}.xlsx` });
+   512→              window.location.href = `/api/excel-template?reference=${encodeURIComponent(ref)}&discipline=${encodeURIComponent(discipline)}&description=${encodeURIComponent(desc)}&date=${today}`;
+   513→            }}
+   514→          />
+   515→        )}
+   516→        {view === 'import' && <ImportView onDone={() => { setView('dashboard'); fetchDashboard(); }} />}
+   517→        {view === 'reports' && <ReportsView disciplines={disciplines} categories={categories} onOpenDetail={(id) => { setSelectedId(id); setView('detail'); }} />}
+   518→        {view === 'settings' && <SettingsView disciplines={disciplines} categories={categories} onRefreshDisciplines={fetchDisciplines} onRefreshCategories={fetchCategories} />}
+   519→      </main>
+   520→
+   521→      <footer className="bg-white border-t border-slate-200 mt-auto">
+   522→        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 text-center text-xs text-slate-500">
+   523→          نظام إدارة الترانسميتالات · Sabah Al Salem South Health Center · {new Date().getFullYear()}
+   524→        </div>
+   525→      </footer>
+   526→
+   527→      {sendToMohTarget && (
+   528→        <SendToMohDialog
+   529→          target={sendToMohTarget}
+   530→          onClose={() => setSendToMohTarget(null)}
+   531→          onConfirm={confirmSendToMoh}
+   532→        />
+   533→      )}
+   534→      {registerRevTarget && (
+   535→        <RegisterRevisionDialog
+   536→          target={registerRevTarget}
+   537→          onClose={() => setRegisterRevTarget(null)}
+   538→          onConfirm={confirmRegisterRevision}
+   539→        />
+   540→      )}
+   541→      {consultantReplyTarget && (
+   542→        <ConsultantReplyDialog
+   543→          target={consultantReplyTarget}
+   544→          onClose={() => setConsultantReplyTarget(null)}
+   545→          onConfirm={confirmRegisterConsultantReply}
+   546→        />
+   547→      )}
+   548→      {mohReplyTarget && (
+   549→        <MohReplyDialog
+   550→          target={mohReplyTarget}
+   551→          onClose={() => setMohReplyTarget(null)}
+   552→          onConfirm={confirmRegisterMohReply}
+   553→        />
+   554→      )}
+   555→      {copyTarget && (
+   556→        <CopyTransmittalDialog
+   557→          target={copyTarget}
+   558→          onClose={() => setCopyTarget(null)}
+   559→          onConfirm={confirmCopyTransmittal}
+   560→        />
+   561→      )}
+   562→    </div>
+   563→  );
+   564→}
+   565→
+   566→function NavButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+   567→  return (
+   568→    <Button onClick={onClick} variant={active ? 'default' : 'ghost'} size="sm"
+   569→      className={`gap-1.5 ${active ? 'bg-emerald-700 hover:bg-emerald-800 text-white' : 'text-slate-700 hover:bg-slate-100'}`}>
+   570→      {icon}<span className="hidden sm:inline">{label}</span>
+   571→    </Button>
+   572→  );
+   573→}
+   574→
+   575→/* ============ DASHBOARD VIEW ============ */
+   576→function DashboardView({ data, loading, disciplines, categories, onOpenDetail, onRefresh, onSendToMoh, onCopy, onDownloadExcel }: {
+   577→  data: Dashboard | null; loading: boolean; disciplines: Discipline[]; categories: Category[];
+   578→  onOpenDetail: (id: string) => void; onRefresh: () => void; onSendToMoh: (id: string, reference?: string, latestRev?: number) => void;
+   579→  onCopy: (id: string, reference: string, description?: string) => void;
+   580→  onDownloadExcel: (reference: string, description: string) => void;
+   581→}) {
+   582→  if (loading && !data) return <div className="space-y-4"><Skeleton className="h-24 w-full" /><Skeleton className="h-64 w-full" /></div>;
+   583→  if (!data) return <div className="text-center py-20 text-slate-500">لا توجد بيانات. قم باستيراد ملف Excel أولاً.</div>;
+   584→
+   585→  const kpis = [
+   586→    { label: 'إجمالي', value: data.kpis.total, color: 'bg-slate-700', icon: <FileText className="w-5 h-5" /> },
+   587→    { label: 'معتمد', value: data.kpis.approved, color: 'bg-emerald-600', icon: <CheckCircle2 className="w-5 h-5" /> },
+   588→    { label: 'بانتظار', value: data.kpis.pending, color: 'bg-yellow-500', icon: <Clock className="w-5 h-5" /> },
+   589→    { label: 'متأخر استشاري', value: data.kpis.overdue, color: 'bg-red-600', icon: <AlertCircle className="w-5 h-5" /> },
+   590→    { label: 'إعادة إرسال', value: data.kpis.resubmit, color: 'bg-orange-500', icon: <RefreshCw className="w-5 h-5" /> },
+   591→    { label: 'ملغى', value: data.kpis.cancelled, color: 'bg-gray-500', icon: <XCircle className="w-5 h-5" /> },
+   592→  ];
+   593→  const mohKpis = [
+   594→    { label: 'مُرسل للوزارة', value: data.mohKpis.sent, color: 'bg-blue-600', icon: <Send className="w-5 h-5" /> },
+   595→    { label: 'معتمد بالوزارة', value: data.mohKpis.approved, color: 'bg-emerald-600', icon: <CheckCircle2 className="w-5 h-5" /> },
+   596→    { label: 'قيد المراجعة', value: data.mohKpis.underReview, color: 'bg-yellow-500', icon: <Clock className="w-5 h-5" /> },
+   597→    { label: 'متأخر بالوزارة', value: data.mohKpis.overdue, color: 'bg-red-600', icon: <AlertCircle className="w-5 h-5" /> },
+   598→  ];
+   599→
+   600→  return (
+   601→    <div className="space-y-6">
+   602→      <div className="flex items-center justify-between">
+   603→        <div>
+   604→          <h2 className="text-2xl font-bold text-slate-900">لوحة المعلومات</h2>
+   605→          <p className="text-sm text-slate-500 mt-1">نظرة عامة على حالة كل الترانسميتالات</p>
+   606→        </div>
+   607→        <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
+   608→          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> تحديث
+   609→        </Button>
+   610→      </div>
+   611→
+   612→      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+   613→        {kpis.map((k) => (
+   614→          <Card key={k.label} className="border-0 shadow-sm"><CardContent className="p-4">
+   615→            <div className="flex items-center justify-between">
+   616→              <div><p className="text-xs text-slate-500 mb-1">{k.label}</p><p className="text-2xl font-bold text-slate-900">{k.value}</p></div>
+   617→              <div className={`w-10 h-10 rounded-lg ${k.color} text-white flex items-center justify-center`}>{k.icon}</div>
+   618→            </div>
+   619→          </CardContent></Card>
+   620→        ))}
+   621→      </div>
+   622→
+   623→      {/* MOH KPIs */}
+   624→      <Card className="border-blue-200 bg-blue-50/30">
+   625→        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Hospital className="w-5 h-5 text-blue-700" /> حالة الإرسال لوزارة الصحة</CardTitle></CardHeader>
+   626→        <CardContent>
+   627→          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   628→            {mohKpis.map((k) => (
+   629→              <div key={k.label} className="bg-white rounded-lg p-3 border border-slate-200">
+   630→                <div className="flex items-center justify-between">
+   631→                  <div><p className="text-xs text-slate-500 mb-1">{k.label}</p><p className="text-xl font-bold text-slate-900">{k.value}</p></div>
+   632→                  <div className={`w-8 h-8 rounded ${k.color} text-white flex items-center justify-center`}>{k.icon}</div>
+   633→                </div>
+   634→              </div>
+   635→            ))}
+   636→          </div>
+   637→        </CardContent>
+   638→      </Card>
+   639→
+   640→      {/* Per-Category Cards */}
+   641→      <Card className="border-0 shadow-sm">
+   642→        <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Folder className="w-5 h-5" /> تفصيل حسب القسم الرئيسي</CardTitle>
+   643→          <CardDescription>توزيع الترانسميتالات على الأقسام الرئيسية (ترانسميتال/MIR/RFI/كتب)</CardDescription></CardHeader>
+   644→        <CardContent>
+   645→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+   646→            {(data.perCategory || []).map((cat) => {
+   647→              const pct = cat.total > 0 ? Math.round((cat.approved / cat.total) * 100) : 0;
+   648→              return (
+   649→                <div key={cat.code} className="border border-slate-200 rounded-lg p-4 bg-slate-50/50">
+   650→                  <div className="flex items-center justify-between mb-3">
+   651→                    <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+   652→                      <span className="text-xl">{cat.icon}</span>
+   653→                      <Badge className={`${cat.color} border-0`}>{cat.label}</Badge>
+   654→                    </h3>
+   655→                    <span className="text-2xl font-bold text-slate-900">{cat.total}</span>
+   656→                  </div>
+   657→                  <div className="grid grid-cols-2 gap-2 text-xs">
+   658→                    <div className="text-emerald-700">معتمد: <strong>{cat.approved}</strong></div>
+   659→                    <div className="text-yellow-700">بانتظار: <strong>{cat.pending}</strong></div>
+   660→                    <div className="text-red-700">متأخر: <strong>{cat.overdue}</strong></div>
+   661→                    <div className="text-blue-700">للوزارة: <strong>{cat.mohSent}</strong></div>
+   662→                  </div>
+   663→                  <div className="mt-3 flex items-center gap-2">
+   664→                    <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+   665→                      <div className="h-full bg-emerald-600 rounded-full" style={{ width: `${pct}%` }} />
+   666→                    </div>
+   667→                    <span className="text-xs font-semibold">{pct}%</span>
+   668→                  </div>
+   669→                  <div className="mt-2 text-xs text-slate-500">{cat.disciplinesCount} تخصص فرعي · آخر: {cat.lastReference || '—'}</div>
+   670→                </div>
+   671→              );
+   672→            })}
+   673→          </div>
+   674→        </CardContent>
+   675→      </Card>
+   676→
+   677→      <Card className="border-0 shadow-sm">
+   678→        <CardHeader><CardTitle className="text-lg">تفصيل حسب التخصص الفرعي</CardTitle>
+   679→          <CardDescription>توزيع الترانسميتالات على التخصصات داخل كل قسم رئيسي</CardDescription></CardHeader>
+   680→        <CardContent className="p-0">
+   681→          <Table>
+   682→            <TableHeader><TableRow>
+   683→              <TableHead className="text-right">التخصص</TableHead>
+   684→              <TableHead className="text-right">القسم الرئيسي</TableHead>
+   685→              <TableHead className="text-center">الإجمالي</TableHead>
+   686→              <TableHead className="text-center">معتمد</TableHead>
+   687→              <TableHead className="text-center">بانتظار</TableHead>
+   688→              <TableHead className="text-center">متأخر</TableHead>
+   689→              <TableHead className="text-center">للوزارة</TableHead>
+   690→              <TableHead className="text-center">معتمد وزارة</TableHead>
+   691→              <TableHead className="text-center">% الإنجاز</TableHead>
+   692→              <TableHead className="text-center">آخر مرجع</TableHead>
+   693→            </TableRow></TableHeader>
+   694→            <TableBody>
+   695→              {data.perDiscipline.map((d) => {
+   696→                const pct = d.total > 0 ? Math.round((d.approved / d.total) * 100) : 0;
+   697→                const cat = categories.find(c => c.code === d.category);
+   698→                return (
+   699→                  <TableRow key={d.code} className="hover:bg-slate-50">
+   700→                    <TableCell><Badge className={`${d.color} border-0`} variant="secondary">{d.label} · {d.code}</Badge></TableCell>
+   701→                    <TableCell>
+   702→                      {cat && <Badge variant="outline" className={`${cat.color} border-0 text-xs`}>{cat.icon} {cat.label}</Badge>}
+   703→                    </TableCell>
+   704→                    <TableCell className="text-center font-semibold">{d.total}</TableCell>
+   705→                    <TableCell className="text-center text-emerald-700 font-semibold">{d.approved}</TableCell>
+   706→                    <TableCell className="text-center text-yellow-700">{d.pending}</TableCell>
+   707→                    <TableCell className="text-center text-red-700 font-semibold">{d.overdue}</TableCell>
+   708→                    <TableCell className="text-center text-blue-700">{d.mohSent}</TableCell>
+   709→                    <TableCell className="text-center text-emerald-700">{d.mohApproved}</TableCell>
+   710→                    <TableCell className="text-center">
+   711→                      <div className="flex items-center justify-center gap-2">
+   712→                        <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-emerald-600 rounded-full" style={{ width: `${pct}%` }} /></div>
+   713→                        <span className="text-xs font-semibold">{pct}%</span>
+   714→                      </div>
+   715→                    </TableCell>
+   716→                    <TableCell className="text-center text-xs text-slate-600">{d.lastReference || '—'}</TableCell>
+   717→                  </TableRow>
+   718→                );
+   719→              })}
+   720→            </TableBody>
+   721→          </Table>
+   722→        </CardContent>
+   723→      </Card>
+   724→
+   725→      {data.consultantOverdueList.length > 0 && (
+   726→        <Card className="border-red-200 bg-red-50/30">
+   727→          <CardHeader><CardTitle className="text-lg flex items-center gap-2 text-red-800"><AlertCircle className="w-5 h-5" /> تنبيهات تأخر الاستشاري ({data.consultantOverdueList.length})</CardTitle></CardHeader>
+   728→          <CardContent className="p-0">
+   729→            <Table>
+   730→              <TableHeader><TableRow>
+   731→                <TableHead className="text-right">المرجع</TableHead><TableHead className="text-right">التخصص</TableHead>
+   732→                <TableHead className="text-right">الوصف</TableHead><TableHead className="text-center">الحالة</TableHead>
+   733→              </TableRow></TableHeader>
+   734→              <TableBody>
+   735→                {data.consultantOverdueList.map((t) => (
+   736→                  <TableRow key={t.id} className="cursor-pointer hover:bg-red-50" onClick={() => onOpenDetail(t.id)}>
+   737→                    <TableCell className="font-mono font-semibold">{t.reference}</TableCell>
+   738→                    <TableCell><Badge variant="secondary" className={getDisciplineColor(t.discipline, disciplines)}>{getDisciplineLabel(t.discipline, disciplines)}</Badge></TableCell>
+   739→                    <TableCell className="text-sm text-slate-700 max-w-md truncate">{t.description || '—'}</TableCell>
+   740→                    <TableCell className="text-center"><Badge variant="outline" className={t.status.color}>{t.status.emoji} {t.status.label}</Badge></TableCell>
+   741→                  </TableRow>
+   742→                ))}
+   743→              </TableBody>
+   744→            </Table>
+   745→          </CardContent>
+   746→        </Card>
+   747→      )}
+   748→
+   749→      {data.mohOverdueList.length > 0 && (
+   750→        <Card className="border-purple-200 bg-purple-50/30">
+   751→          <CardHeader><CardTitle className="text-lg flex items-center gap-2 text-purple-800"><Hospital className="w-5 h-5" /> تنبيهات تأخر الوزارة ({data.mohOverdueList.length})</CardTitle></CardHeader>
+   752→          <CardContent className="p-0">
+   753→            <Table>
+   754→              <TableHeader><TableRow>
+   755→                <TableHead className="text-right">المرجع</TableHead><TableHead className="text-right">التخصص</TableHead>
+   756→                <TableHead className="text-right">الوصف</TableHead><TableHead className="text-center">الحالة</TableHead>
+   757→                <TableHead className="text-center">إجراء</TableHead>
+   758→              </TableRow></TableHeader>
+   759→              <TableBody>
+   760→                {data.mohOverdueList.map((t) => (
+   761→                  <TableRow key={t.id} className="cursor-pointer hover:bg-purple-50" onClick={() => onOpenDetail(t.id)}>
+   762→                    <TableCell className="font-mono font-semibold">{t.reference}</TableCell>
+   763→                    <TableCell><Badge variant="secondary" className={getDisciplineColor(t.discipline, disciplines)}>{getDisciplineLabel(t.discipline, disciplines)}</Badge></TableCell>
+   764→                    <TableCell className="text-sm text-slate-700 max-w-md truncate">{t.description || '—'}</TableCell>
+   765→                    <TableCell className="text-center"><Badge variant="outline" className={t.status.color}>{t.status.emoji} {t.status.label}</Badge></TableCell>
+   766→                    <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+   767→                      <Button size="sm" variant="outline" onClick={() => onSendToMoh(t.id, t.reference, t.revisionsCount > 0 ? undefined : undefined)}><Send className="w-3 h-3" /></Button>
+   768→                    </TableCell>
+   769→                  </TableRow>
+   770→                ))}
+   771→              </TableBody>
+   772→            </Table>
+   773→          </CardContent>
+   774→        </Card>
+   775→      )}
+   776→    </div>
+   777→  );
+   778→}
+   779→
+   780→/* ============ LIST VIEW ============ */
+   781→function ListView({ items, loading, search, onSearch, filterCategory, onFilterCategory, filterDiscipline, onFilterDiscipline, filterStatus, onFilterStatus, filterType, onFilterType, types, disciplines, categories, onOpenDetail, onRefresh, onSendToMoh, onCopy, onDownloadExcel, onRegisterRevision, onRegisterConsultantReply, onRegisterMohReply }: {
+   782→  items: Transmittal[]; loading: boolean; search: string; onSearch: (s: string) => void;
+   783→  filterCategory: string; onFilterCategory: (s: string) => void;
+   784→  filterDiscipline: string; onFilterDiscipline: (s: string) => void;
+   785→  filterStatus: string; onFilterStatus: (s: string) => void;
+   786→  filterType: string; onFilterType: (s: string) => void;
+   787→  types: string[]; disciplines: Discipline[]; categories: Category[];
+   788→  onOpenDetail: (id: string) => void; onRefresh: () => void; onSendToMoh: (id: string, reference?: string, latestRev?: number) => void;
+   789→  onCopy: (id: string, reference: string, description?: string) => void;
+   790→  onDownloadExcel: (reference: string, description: string) => void;
+   791→  onRegisterRevision: (id: string, reference: string, nextRev: number) => void;
+   792→  onRegisterConsultantReply: (id: string, reference: string) => void;
+   793→  onRegisterMohReply: (id: string, reference: string) => void;
+   794→}) {
+   795→  // Filter disciplines based on selected category (cascading)
+   796→  const availableDisciplines = filterCategory !== 'all'
+   797→    ? disciplines.filter(d => (d.categoryCode || d.category || 'TRANSMITTAL') === filterCategory)
+   798→    : disciplines;
+   799→
+   800→  return (
+   801→    <div className="space-y-4">
+   802→      <div className="flex flex-wrap items-center justify-between gap-2">
+   803→        <div><h2 className="text-2xl font-bold text-slate-900">قائمة الترانسميتالات</h2>
+   804→          <p className="text-sm text-slate-500 mt-1">{items.length} نتيجة</p></div>
+   805→        <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
+   806→          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> تحديث
+   807→        </Button>
+   808→      </div>
+   809→
+   810→      <Card className="border-0 shadow-sm"><CardContent className="p-4">
+   811→        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+   812→          <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
+   813→            <Label className="text-xs">بحث</Label>
+   814→            <div className="relative">
+   815→              <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+   816→              <Input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="ابحث بالمرجع أو الوصف..." className="pr-8" />
+   817→            </div>
+   818→          </div>
+   819→          <div className="space-y-1.5">
+   820→            <Label className="text-xs">القسم الرئيسي</Label>
+   821→            <Select value={filterCategory} onValueChange={(v) => { onFilterCategory(v); onFilterDiscipline('all'); }}>
+   822→              <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
+   823→              <SelectContent>
+   824→                <SelectItem value="all">كل الأقسام</SelectItem>
+   825→                {categories.map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {c.label}</SelectItem>)}
+   826→              </SelectContent>
+   827→            </Select>
+   828→          </div>
+   829→          <div className="space-y-1.5">
+   830→            <Label className="text-xs">التخصص الفرعي</Label>
+   831→            <Select value={filterDiscipline} onValueChange={onFilterDiscipline}>
+   832→              <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
+   833→              <SelectContent>
+   834→                <SelectItem value="all">كل التخصصات</SelectItem>
+   835→                {availableDisciplines.map(d => <SelectItem key={d.code} value={d.code}>{d.label} ({d.code})</SelectItem>)}
+   836→              </SelectContent>
+   837→            </Select>
+   838→          </div>
+   839→          <div className="space-y-1.5">
+   840→            <Label className="text-xs">النوع</Label>
+   841→            <Select value={filterType} onValueChange={onFilterType}>
+   842→              <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
+   843→              <SelectContent>
+   844→                <SelectItem value="all">كل الأنواع</SelectItem>
+   845→                {types.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+   846→              </SelectContent>
+   847→            </Select>
+   848→          </div>
+   849→          <div className="space-y-1.5">
+   850→            <Label className="text-xs">الحالة</Label>
+   851→            <Select value={filterStatus} onValueChange={onFilterStatus}>
+   852→              <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
+   853→              <SelectContent>
+   854→                <SelectItem value="all">كل الحالات</SelectItem>
+   855→                <SelectItem value="approved">✅ معتمد</SelectItem>
+   856→                <SelectItem value="pending">⏳ بانتظار الرد</SelectItem>
+   857→                <SelectItem value="overdue">🔴 متأخر</SelectItem>
+   858→                <SelectItem value="resubmit">🔔 إعادة إرسال</SelectItem>
+   859→                <SelectItem value="cancelled">🚫 ملغى</SelectItem>
+   860→                <SelectItem value="draft">📝 مسودة</SelectItem>
+   861→              </SelectContent>
+   862→            </Select>
+   863→          </div>
+   864→        </div>
+   865→      </CardContent></Card>
+   866→
+   867→      <Card className="border-0 shadow-sm"><CardContent className="p-0">
+   868→        {loading && items.length === 0 ? (
+   869→          <div className="p-4 space-y-2">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+   870→        ) : items.length === 0 ? (
+   871→          <div className="text-center py-16 text-slate-500">
+   872→            <FileSpreadsheet className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>لا توجد نتائج مطابقة</p>
+   873→          </div>
+   874→        ) : (
+   875→          <div className="max-h-[70vh] overflow-y-auto">
+   876→            <Table>
+   877→              <TableHeader className="sticky top-0 bg-white z-10"><TableRow>
+   878→                <TableHead className="text-right">المرجع</TableHead>
+   879→                <TableHead className="text-right">القسم</TableHead>
+   880→                <TableHead className="text-right">النوع</TableHead>
+   881→                <TableHead className="text-right">الوصف</TableHead>
+   882→                <TableHead className="text-center">المراجعات</TableHead>
+   883→                <TableHead className="text-center">الاستشاري</TableHead>
+   884→                <TableHead className="text-center">الوزارة</TableHead>
+   885→                <TableHead className="text-center">إجراءات</TableHead>
+   886→              </TableRow></TableHeader>
+   887→              <TableBody>
+   888→                {items.map((t) => (
+   889→                  <TableRow key={t.id} className="cursor-pointer hover:bg-slate-50" onClick={() => onOpenDetail(t.id)}>
+   890→                    <TableCell className="font-mono font-semibold whitespace-nowrap">{t.reference}</TableCell>
+   891→                    <TableCell><Badge variant="secondary" className={getDisciplineColor(t.discipline, disciplines)}>{getDisciplineLabel(t.discipline, disciplines)}</Badge></TableCell>
+   892→                    <TableCell className="text-xs text-slate-600 whitespace-nowrap">{t.type || '—'}</TableCell>
+   893→                    <TableCell className="text-sm text-slate-700 max-w-xs truncate">{t.description || '—'}</TableCell>
+   894→                    <TableCell className="text-center font-semibold">{t.revisionsCount}</TableCell>
+   895→                    <TableCell className="text-center"><Badge variant="outline" className={t.consultantStatus.color}>{t.consultantStatus.emoji}</Badge></TableCell>
+   896→                    <TableCell className="text-center"><Badge variant="outline" className={t.mohStatus.color}>{t.mohStatus.emoji}</Badge></TableCell>
+   897→                    <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+   898→                      <DropdownMenu>
+   899→                        <DropdownMenuTrigger asChild>
+   900→                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+   901→                            <MoreVertical className="w-4 h-4" />
+   902→                          </Button>
+   903→                        </DropdownMenuTrigger>
+   904→                        <DropdownMenuContent align="end" className="w-48">
+   905→                          <DropdownMenuLabel>إجراءات</DropdownMenuLabel>
+   906→                          <DropdownMenuSeparator />
+   907→                          <DropdownMenuItem onClick={() => onOpenDetail(t.id)}>
+   908→                            <Eye className="w-4 h-4 ml-2" /> عرض التفاصيل
+   909→                          </DropdownMenuItem>
+   910→                          <DropdownMenuItem onClick={() => onRegisterRevision(t.id, t.reference, t.revisionsCount)}>
+   911→                            <History className="w-4 h-4 ml-2" /> تسجيل ريفجن (REV.{t.revisionsCount})
+   912→                          </DropdownMenuItem>
+   913→                          <DropdownMenuItem onClick={() => onRegisterConsultantReply(t.id, t.reference)}>
+   914→                            <Building2 className="w-4 h-4 ml-2" /> تسجيل رد الاستشاري
+   915→                          </DropdownMenuItem>
+   916→                          <DropdownMenuItem
+   917→                            onClick={() => onRegisterMohReply(t.id, t.reference)}
+   918→                            disabled={t.mohStatus.status === 'not_sent'}
+   919→                          >
+   920→                            <Hospital className="w-4 h-4 ml-2" /> تسجيل رد الوزارة
+   921→                            {t.mohStatus.status === 'not_sent' && <span className="text-[10px] text-slate-400 mr-1">(لم يُرسل)</span>}
+   922→                          </DropdownMenuItem>
+   923→                          <DropdownMenuSeparator />
+   924→                          <DropdownMenuItem
+   925→                            onClick={() => onSendToMoh(t.id, t.reference)}
+   926→                            disabled={t.mohStatus.status !== 'not_sent' && t.mohStatus.status !== 'reviewed'}
+   927→                          >
+   928→                            <Send className="w-4 h-4 ml-2" /> إرسال REV.{t.revisionsCount > 0 ? (t.revisionsCount - 1) : 0} للوزارة
+   929→                          </DropdownMenuItem>
+   930→                          <DropdownMenuItem onClick={() => onCopy(t.id, t.reference, t.description || '')}>
+   931→                            <Copy className="w-4 h-4 ml-2" /> نسخ برقم جديد
+   932→                          </DropdownMenuItem>
+   933→                          <DropdownMenuItem onClick={() => onDownloadExcel(t.reference, t.description || '')}>
+   934→                            <FileDown className="w-4 h-4 ml-2" /> تنزيل Excel
+   935→                          </DropdownMenuItem>
+   936→                        </DropdownMenuContent>
+   937→                      </DropdownMenu>
+   938→                    </TableCell>
+   939→                  </TableRow>
+   940→                ))}
+   941→              </TableBody>
+   942→            </Table>
+   943→          </div>
+   944→        )}
+   945→      </CardContent></Card>
+   946→    </div>
+   947→  );
+   948→}
+   949→
+   950→/* ============ DETAIL VIEW ============ */
+   951→function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloadExcel, onSendToMoh, onCopy }: {
+   952→  detail: TransmittalDetail; loading: boolean; disciplines: Discipline[];
+   953→  onBack: () => void; onRefresh: () => void; onDownloadExcel: () => void; onSendToMoh: () => void;
+   954→  onCopy: () => void;
+   955→}) {
+   956→  const [showRevDialog, setShowRevDialog] = useState(false);
+   957→  const { toast } = useToast();
+   958→
+   959→  const mohReview = detail.reviews.find(r => r.party === 'MOH');
+   960→  const latestRevNumber = detail.revisions.length > 0 ? detail.revisions[detail.revisions.length - 1].revNumber : 0;
+   961→
+   962→  return (
+   963→    <div className="space-y-4">
+   964→      <div className="flex items-center justify-between gap-2 flex-wrap">
+   965→        <Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft className="w-4 h-4" /> رجوع للقائمة</Button>
+   966→        <div className="flex gap-2 flex-wrap">
+   967→          <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
+   968→            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> تحديث
+   969→          </Button>
+   970→          <Button variant="outline" size="sm" onClick={onCopy} className="gap-1.5">
+   971→            <Copy className="w-4 h-4" /> نسخ برقم جديد
+   972→          </Button>
+   973→          <Button variant="outline" size="sm" onClick={onSendToMoh}
+   974→            disabled={detail.mohStatus.status !== 'not_sent' && detail.mohStatus.status !== 'reviewed'}
+   975→            className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50">
+   976→            <Send className="w-4 h-4" /> إرسال REV.{latestRevNumber} للوزارة
+   977→          </Button>
+   978→          <Button size="sm" onClick={onDownloadExcel} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
+   979→            <Download className="w-4 h-4" /> تنزيل ملف Excel
+   980→          </Button>
+   981→        </div>
+   982→      </div>
+   983→
+   984→      <Card className="border-0 shadow-sm"><CardContent className="p-6">
+   985→        <div className="space-y-2 flex-1 min-w-0">
+   986→          <div className="flex items-center gap-2 flex-wrap">
+   987→            <h2 className="text-2xl font-bold text-slate-900 font-mono">{detail.reference}</h2>
+   988→            <Badge variant="secondary" className={getDisciplineColor(detail.discipline, disciplines)}>{getDisciplineLabel(detail.discipline, disciplines)} · {detail.discipline}</Badge>
+   989→            <Badge variant="outline" className={detail.computedStatus.color}>{detail.computedStatus.emoji} {detail.computedStatus.label}</Badge>
+   990→          </div>
+   991→          {detail.type && <p className="text-sm text-slate-600">النوع: {detail.type}</p>}
+   992→          {detail.description && (
+   993→            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mt-2">
+   994→              <p className="text-sm text-slate-800 whitespace-pre-wrap">{detail.description}</p>
+   995→            </div>
+   996→          )}
+   997→        </div>
+   998→      </CardContent></Card>
+   999→
+  1000→      {/* Reviews Summary Cards */}
+  1001→      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1002→        <Card className="border-0 shadow-sm"><CardContent className="p-4">
+  1003→          <div className="flex items-center justify-between mb-2">
+  1004→            <h3 className="font-semibold text-slate-800 flex items-center gap-2"><Building2 className="w-5 h-5" /> الاستشاري</h3>
+  1005→            <Badge variant="outline" className={detail.consultantStatus.color}>{detail.consultantStatus.emoji} {detail.consultantStatus.label}</Badge>
+  1006→          </div>
+  1007→          <dl className="space-y-1 text-sm">
+  1008→            <div className="flex justify-between"><dt className="text-slate-500">آخر إرسال:</dt><dd>{fmtDate(detail.lastSubmitDate)}</dd></div>
+  1009→            <div className="flex justify-between"><dt className="text-slate-500">آخر رد:</dt><dd>{fmtDate(detail.lastReplyDate)}</dd></div>
+  1010→          </dl>
+  1011→        </CardContent></Card>
+  1012→        <Card className="border-0 shadow-sm"><CardContent className="p-4">
+  1013→          <div className="flex items-center justify-between mb-2">
+  1014→            <h3 className="font-semibold text-slate-800 flex items-center gap-2"><Hospital className="w-5 h-5 text-blue-700" /> وزارة الصحة</h3>
+  1015→            <Badge variant="outline" className={detail.mohStatus.color}>{detail.mohStatus.emoji} {detail.mohStatus.label}</Badge>
+  1016→          </div>
+  1017→          <dl className="space-y-1 text-sm">
+  1018→            <div className="flex justify-between"><dt className="text-slate-500">إرسال للوزارة:</dt><dd>{fmtDate(detail.mohSubmitDate)}</dd></div>
+  1019→            <div className="flex justify-between"><dt className="text-slate-500">الريفجن المُرسل:</dt><dd>{detail.mohSubmitRev !== null ? `REV.${detail.mohSubmitRev}` : '—'}</dd></div>
+  1020→            <div className="flex justify-between"><dt className="text-slate-500">رد الوزارة:</dt><dd>{fmtDate(detail.mohReviewDate)}</dd></div>
+  1021→          </dl>
+  1022→        </CardContent></Card>
+  1023→      </div>
+  1024→
+  1025→      {/* Revisions */}
+  1026→      <Card className="border-0 shadow-sm">
+  1027→        <CardHeader className="flex-row items-center justify-between">
+  1028→          <div><CardTitle className="text-lg flex items-center gap-2"><History className="w-5 h-5" /> سجل المراجعات ({detail.revisions.length})</CardTitle>
+  1029→            <CardDescription>سيتم اقتراح REV.{detail.revisions.length} تلقائياً عند الإضافة</CardDescription></div>
+  1030→          <Button size="sm" onClick={() => setShowRevDialog(true)} className="gap-1.5">
+  1031→            <Plus className="w-4 h-4" /> إضافة مراجعة (REV.{detail.revisions.length})
+  1032→          </Button>
+  1033→        </CardHeader>
+  1034→        <CardContent className="p-0">
+  1035→          {detail.revisions.length === 0 ? (
+  1036→            <div className="text-center py-8 text-slate-500">لا توجد مراجعات بعد</div>
+  1037→          ) : (
+  1038→            <Table>
+  1039→              <TableHeader><TableRow>
+  1040→                <TableHead className="text-center">المراجعة</TableHead>
+  1041→                <TableHead className="text-center">تاريخ الإرسال</TableHead>
+  1042→                <TableHead className="text-center">تاريخ الرد</TableHead>
+  1043→                <TableHead className="text-center">الإجراء</TableHead>
+  1044→                <TableHead className="text-right">ملاحظات</TableHead>
+  1045→              </TableRow></TableHeader>
+  1046→              <TableBody>
+  1047→                {detail.revisions.map((r) => {
+  1048→                  let actionLabel: string;
+  1049→                  let actionColor: string;
+  1050→                  const act = (r.action || '').toLowerCase().trim();
+  1051→                  if (act === 'approved') {
+  1052→                    if (r.approvalType === 'NOT_APPROVED') { actionLabel = '(D) NOT APPROVED — غير معتمد'; actionColor = 'text-red-700'; }
+  1053→                    else if (r.approvalType === 'FOR_INFORMATION') { actionLabel = '(E) FOR INFORMATION — للمعلومات'; actionColor = 'text-orange-700'; }
+  1054→                    else if (r.approvalType === 'APPROVED_AS_NOTED_RESUBMIT') { actionLabel = '(C) APPROVED AS NOTED & RESUBMIT — معتمد بملاحظات وإعادة'; actionColor = 'text-orange-700'; }
+  1055→                    else if (r.approvalType === 'APPROVED_AS_NOTED') { actionLabel = '(B) APPROVED AS NOTED — معتمد بملاحظات'; actionColor = 'text-emerald-700'; }
+  1056→                    else if (r.approvalType === 'APPROVED') { actionLabel = '(A) APPROVED — معتمد'; actionColor = 'text-emerald-700'; }
+  1057→                    else { actionLabel = '✅ معتمد'; actionColor = 'text-emerald-700'; } // old data without approvalType
+  1058→                  } else if (act === 'rejected') {
+  1059→                    actionLabel = '❌ مرفوض'; actionColor = 'text-red-700';
+  1060→                  } else if (act === 'withdrawn') {
+  1061→                    actionLabel = '🚫 مسحوب'; actionColor = 'text-gray-600';
+  1062→                  } else if (act === 'pending') {
+  1063→                    actionLabel = '⏳ بانتظار الرد'; actionColor = 'text-yellow-700'; // backward compat with old data
+  1064→                  } else {
+  1065→                    actionLabel = r.action || '—'; actionColor = 'text-yellow-700';
+  1066→                  }
+  1067→                  return (
+  1068→                    <TableRow key={r.id}>
+  1069→                      <TableCell className="text-center font-bold">REV.{r.revNumber}</TableCell>
+  1070→                      <TableCell className="text-center text-sm">{fmtDate(r.submitDate)}</TableCell>
+  1071→                      <TableCell className="text-center text-sm">{fmtDate(r.replyDate)}</TableCell>
+  1072→                      <TableCell className={`text-center font-semibold ${actionColor}`}>{actionLabel}</TableCell>
+  1073→                      <TableCell className="text-sm text-slate-600">{r.notes || '—'}</TableCell>
+  1074→                    </TableRow>
+  1075→                  );
+  1076→                })}
+  1077→              </TableBody>
+  1078→            </Table>
+  1079→          )}
+  1080→        </CardContent>
+  1081→      </Card>
+  1082→
+  1083→      <AddRevisionDialog
+  1084→        open={showRevDialog} onOpenChange={setShowRevDialog}
+  1085→        transmittalId={detail.id} nextRevNumber={detail.revisions.length}
+  1086→        onSaved={() => { setShowRevDialog(false); onRefresh(); toast({ title: 'تم حفظ المراجعة' }); }}
+  1087→      />
+  1088→    </div>
+  1089→  );
+  1090→}
+  1091→
+  1092→function AddRevisionDialog({ open, onOpenChange, transmittalId, nextRevNumber, onSaved }: {
+  1093→  open: boolean; onOpenChange: (v: boolean) => void;
+  1094→  transmittalId: string; nextRevNumber: number; onSaved: () => void;
+  1095→}) {
+  1096→  const [submitDate, setSubmitDate] = useState('');
+  1097→  const [replyDate, setReplyDate] = useState('');
+  1098→  const [action, setAction] = useState('');
+  1099→  const [approvalType, setApprovalType] = useState('');
+  1100→  const [notes, setNotes] = useState('');
+  1101→  const [saving, setSaving] = useState(false);
+  1102→
+  1103→  // Auto-set submit date to today when dialog opens
+  1104→  useEffect(() => {
+  1105→    if (open) {
+  1106→      setSubmitDate(new Date().toISOString().slice(0, 10));
+  1107→      setReplyDate(''); setAction(''); setApprovalType(''); setNotes('');
+  1108→    }
+  1109→  }, [open]);
+  1110→
+  1111→  const handleSave = async () => {
+  1112→    setSaving(true);
+  1113→    try {
+  1114→      const r = await fetch(`/api/transmittals/${transmittalId}/revisions`, {
+  1115→        method: 'POST', headers: { 'Content-Type': 'application/json' },
+  1116→        body: JSON.stringify({
+  1117→          revNumber: nextRevNumber,
+  1118→          submitDate: submitDate || null,
+  1119→          replyDate: replyDate || null,
+  1120→          action: action || null,
+  1121→          approvalType: action === 'approved' ? (approvalType || null) : null,
+  1122→          notes: notes || null,
+  1123→        }),
+  1124→      });
+  1125→      if (!r.ok) throw new Error('فشل الحفظ');
+  1126→      onSaved();
+  1127→    } catch (e: any) { alert(e.message); }
+  1128→    finally { setSaving(false); }
+  1129→  };
+  1130→
+  1131→  const handleActionChange = (v: string) => {
+  1132→    setAction(v);
+  1133→    if (v !== 'approved') setApprovalType('');
+  1134→  };
+  1135→
+  1136→  return (
+  1137→    <Dialog open={open} onOpenChange={onOpenChange}>
+  1138→      <DialogContent>
+  1139→        <DialogHeader>
+  1140→          <DialogTitle>إضافة مراجعة جديدة - REV.{nextRevNumber}</DialogTitle>
+  1141→          <DialogDescription>رقم المراجعة مقترح تلقائياً (آخر رقم + 1). سجّل تاريخ الإرسال والرد والإجراء.</DialogDescription>
+  1142→        </DialogHeader>
+  1143→        <div className="space-y-3">
+  1144→          <div className="bg-emerald-50 border border-emerald-200 rounded p-2 text-sm">
+  1145→            <strong>رقم المراجعة:</strong> REV.{nextRevNumber} (تلقائي)
+  1146→          </div>
+  1147→          <div className="grid grid-cols-2 gap-3">
+  1148→            <div className="space-y-1.5">
+  1149→              <Label className="text-sm">تاريخ الإرسال</Label>
+  1150→              <Input type="date" value={submitDate} onChange={(e) => setSubmitDate(e.target.value)} />
+  1151→            </div>
+  1152→            <div className="space-y-1.5">
+  1153→              <Label className="text-sm">تاريخ الرد</Label>
+  1154→              <Input type="date" value={replyDate} onChange={(e) => setReplyDate(e.target.value)} />
+  1155→            </div>
+  1156→          </div>
+  1157→          <div className="space-y-1.5">
+  1158→            <Label className="text-sm">الإجراء</Label>
+  1159→            <Select value={action} onValueChange={handleActionChange}>
+  1160→              <SelectTrigger><SelectValue placeholder="اختر الإجراء" /></SelectTrigger>
+  1161→              <SelectContent>
+  1162→                <SelectItem value="approved">✅ مقبول</SelectItem>
+  1163→                <SelectItem value="rejected">❌ مرفوض</SelectItem>
+  1164→                <SelectItem value="withdrawn">🚫 مسحوب</SelectItem>
+  1165→              </SelectContent>
+  1166→            </Select>
+  1167→          </div>
+  1168→          {action === 'approved' && (
+  1169→            <div className="space-y-1.5 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+  1170→              <Label className="text-sm font-semibold text-emerald-800">نوع القبول *</Label>
+  1171→              <Select value={approvalType} onValueChange={setApprovalType}>
+  1172→                <SelectTrigger className="!w-full !h-auto !min-h-[36px] !whitespace-normal !break-words text-left [&_[data-slot=select-value]]:!line-clamp-none [&_[data-slot=select-value]]:!whitespace-normal [&_[data-slot=select-value]]:!break-words"><SelectValue placeholder="اختر نوع القبول" className="whitespace-normal break-words leading-snug" /></SelectTrigger>
+  1173→                <SelectContent>
+  1174→                  {APPROVAL_TYPES.map(at => (
+  1175→                    <SelectItem key={at.code} value={at.code} className="whitespace-normal break-words leading-snug py-2">
+  1176→                      <span className="font-bold">({at.letter})</span> {at.label}
+  1177→                      <br />
+  1178→                      <span className="text-xs text-slate-500">{at.description}</span>
+  1179→                    </SelectItem>
+  1180→                  ))}
+  1181→                </SelectContent>
+  1182→              </Select>
+  1183→            </div>
+  1184→          )}
+  1185→          <div className="space-y-1.5">
+  1186→            <Label className="text-sm">ملاحظات</Label>
+  1187→            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="ملاحظات إضافية..." />
+  1188→          </div>
+  1189→        </div>
+  1190→        <DialogFooter>
+  1191→          <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
+  1192→          <Button onClick={handleSave} disabled={saving || (action === 'approved' && !approvalType)} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'حفظ REV.' + nextRevNumber}</Button>
+  1193→        </DialogFooter>
+  1194→      </DialogContent>
+  1195→    </Dialog>
+  1196→  );
+  1197→}
+  1198→
+  1199→/* ============ NEW TRANSMITTAL VIEW ============ */
+  1200→function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemplate }: {
+  1201→  disciplines: Discipline[];
+  1202→  categories: Category[];
+  1203→  onCreated: (t: any) => void;
+  1204→  onDownloadTemplate: (ref: string, discipline: string, desc: string) => void;
+  1205→}) {
+  1206→  const [reference, setReference] = useState('');
+  1207→  const [category, setCategory] = useState('');
+  1208→  const [discipline, setDiscipline] = useState('');
+  1209→  const [type, setType] = useState('');
+  1210→  const [description, setDescription] = useState('');
+  1211→  const [submitDate, setSubmitDate] = useState(new Date().toISOString().slice(0, 10));
+  1212→  const [saving, setSaving] = useState(false);
+  1213→  const [refInfo, setRefInfo] = useState<{ lastGlobalMax: number; totalAllDisciplines: number; recentAllDisciplines: string[] } | null>(null);
+  1214→  const [loadingRef, setLoadingRef] = useState(false);
+  1215→  const { toast } = useToast();
+  1216→
+  1217→  const fetchNextReference = async (d: string) => {
+  1218→    if (!d) return;
+  1219→    setLoadingRef(true);
+  1220→    try {
+  1221→      const r = await fetch(`/api/transmittals/next-ref?discipline=${encodeURIComponent(d)}`);
+  1222→      if (!r.ok) throw new Error('فشل جلب الرقم التالي');
+  1223→      const data = await r.json();
+  1224→      setReference(data.nextReference);
+  1225→      setRefInfo({
+  1226→        lastGlobalMax: data.lastGlobalMax,
+  1227→        totalAllDisciplines: data.totalAllDisciplines,
+  1228→        recentAllDisciplines: data.recentAllDisciplines || [],
+  1229→      });
+  1230→    } catch {
+  1231→      setReference(''); setRefInfo(null);
+  1232→    } finally { setLoadingRef(false); }
+  1233→  };
+  1234→
+  1235→  const handleCreate = async () => {
+  1236→    if (!reference || !discipline) {
+  1237→      toast({ title: 'خطأ', description: 'المرجع والتخصص مطلوبان', variant: 'destructive' }); return;
+  1238→    }
+  1239→    setSaving(true);
+  1240→    try {
+  1241→      const r = await fetch('/api/transmittals', {
+  1242→        method: 'POST', headers: { 'Content-Type': 'application/json' },
+  1243→        body: JSON.stringify({ reference, discipline, type: type || undefined, description: description || undefined }),
+  1244→      });
+  1245→      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الإنشاء'); }
+  1246→      const created = await r.json();
+  1247→      if (submitDate) {
+  1248→        await fetch(`/api/transmittals/${created.id}/revisions`, {
+  1249→          method: 'POST', headers: { 'Content-Type': 'application/json' },
+  1250→          body: JSON.stringify({ revNumber: 0, submitDate, action: 'pending' }),
+  1251→        });
+  1252→      }
+  1253→      onCreated(created);
+  1254→    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+  1255→    finally { setSaving(false); }
+  1256→  };
+  1257→
+  1258→  return (
+  1259→    <div className="max-w-2xl mx-auto space-y-4">
+  1260→      <div>
+  1261→        <h2 className="text-2xl font-bold text-slate-900">إنشاء ترانسميتال جديد</h2>
+  1262→        <p className="text-sm text-slate-500 mt-1">
+  1263→          سيتم اقتراح المرجع تلقائياً (الرقم التسلسلي الموحد + كود القسم). مثال: {`{CIV-171, EL-172, PL-173, ...}`}
+  1264→        </p>
+  1265→      </div>
+  1266→
+  1267→      <Card className="border-0 shadow-sm"><CardContent className="p-6 space-y-4">
+  1268→        {/* Step 1: Main Category */}
+  1269→        <div className="space-y-1.5">
+  1270→          <Label>القسم الرئيسي * <span className="text-xs text-slate-500">(ترانسميتال / MIR / RFI / كتب / ...)</span></Label>
+  1271→          <Select value={category} onValueChange={(v) => { setCategory(v); setDiscipline(''); setReference(''); setRefInfo(null); }}>
+  1272→            <SelectTrigger><SelectValue placeholder="اختر القسم الرئيسي أولاً" /></SelectTrigger>
+  1273→            <SelectContent>
+  1274→              {categories.map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {c.label}</SelectItem>)}
+  1275→            </SelectContent>
+  1276→          </Select>
+  1277→        </div>
+  1278→
+  1279→        {/* Step 2: Discipline (filtered by category) */}
+  1280→        {category && (
+  1281→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1282→            <div className="space-y-1.5">
+  1283→              <Label>التخصص الفرعي *</Label>
+  1284→              <Select value={discipline} onValueChange={(v) => { setDiscipline(v); fetchNextReference(v); }}>
+  1285→                <SelectTrigger><SelectValue placeholder="اختر التخصص" /></SelectTrigger>
+  1286→                <SelectContent>
+  1287→                  {disciplines.filter(d => (d.categoryCode || d.category || 'TRANSMITTAL') === category).map(d => <SelectItem key={d.code} value={d.code}>{d.label} ({d.code})</SelectItem>)}
+  1288→                </SelectContent>
+  1289→              </Select>
+  1290→              {disciplines.filter(d => (d.categoryCode || d.category || 'TRANSMITTAL') === category).length === 0 && (
+  1291→                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+  1292→                  لا توجد تخصصات تحت هذا القسم بعد. أضف تخصصاً من صفحة الإعدادات.
+  1293→                </p>
+  1294→              )}
+  1295→            </div>
+  1296→            <div className="space-y-1.5">
+  1297→              <Label>المرجع * {loadingRef && <span className="text-xs text-slate-500">(جاري الحساب...)</span>}</Label>
+  1298→              <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="سيتم اقتراحه تلقائياً" className="font-mono" />
+  1299→              {refInfo && (
+  1300→                <p className="text-xs text-slate-500">
+  1301→                  التالي تلقائياً: آخر رقم في القسم = {refInfo.lastGlobalMax} · إجمالي {refInfo.totalAllDisciplines} في هذا القسم
+  1302→                </p>
+  1303→              )}
+  1304→            </div>
+  1305→          </div>
+  1306→        )}
+  1307→
+  1308→        {/* Step 3: Other fields (only show after discipline is selected) */}
+  1309→        {discipline && (
+  1310→          <>
+  1311→            <div className="space-y-1.5">
+  1312→              <Label>النوع</Label>
+  1313→          <Select value={type} onValueChange={setType}>
+  1314→            <SelectTrigger><SelectValue placeholder="اختر النوع" /></SelectTrigger>
+  1315→            <SelectContent>
+  1316→              <SelectItem value="SHOP DRAWINGS">رسم تنفيذي (Shop Drawings)</SelectItem>
+  1317→              <SelectItem value="SAMPLE">عينة (Sample)</SelectItem>
+  1318→              <SelectItem value="SOURCE APPROVAL">اعتماد مصدر (Source Approval)</SelectItem>
+  1319→              <SelectItem value="COMPANY PROFILE">ملف شركة (Company Profile)</SelectItem>
+  1320→              <SelectItem value="TEST REPORT">تقرير اختبار (Test Report)</SelectItem>
+  1321→              <SelectItem value="SUBMITTAL">طلب اعتماد (Submittal)</SelectItem>
+  1322→              <SelectItem value="MATERIAL APPROVAL">اعتماد مادة (Material Approval)</SelectItem>
+  1323→              <SelectItem value="METHOD STATEMENT">طريقة تنفيذ (Method Statement)</SelectItem>
+  1324→              <SelectItem value="CALCULATION">حسابات (Calculation)</SelectItem>
+  1325→            </SelectContent>
+  1326→          </Select>
+  1327→        </div>
+  1328→
+  1329→        <div className="space-y-1.5">
+  1330→          <Label>الوصف</Label>
+  1331→          <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="مثال: Excavation Plan & Excavation Section" />
+  1332→        </div>
+  1333→
+  1334→        <div className="space-y-1.5">
+  1335→          <Label>تاريخ إرسال REV.0</Label>
+  1336→          <Input type="date" value={submitDate} onChange={(e) => setSubmitDate(e.target.value)} />
+  1337→        </div>
+  1338→          </>
+  1339→        )}
+  1340→      </CardContent></Card>
+  1341→
+  1342→      <div className="flex flex-wrap gap-2 justify-end">
+  1343→        <Button variant="outline" onClick={() => onDownloadTemplate(reference, discipline, description)} disabled={!reference}>
+  1344→          <Download className="w-4 h-4" /> تنزيل ملف Excel جاهز
+  1345→        </Button>
+  1346→        <Button onClick={handleCreate} disabled={saving || !reference || !discipline} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
+  1347→          <Plus className="w-4 h-4" /> {saving ? 'جاري الإنشاء...' : 'إنشاء الترانسميتال'}
+  1348→        </Button>
+  1349→      </div>
+  1350→
+  1351→      {refInfo && refInfo.recentAllDisciplines.length > 0 && (
+  1352→        <Card className="bg-blue-50 border-blue-200"><CardContent className="p-4">
+  1353→          <p className="text-sm font-semibold text-blue-900 mb-2">آخر 5 مراجع مُنشأة:</p>
+  1354→          <div className="flex flex-wrap gap-2">
+  1355→            {refInfo.recentAllDisciplines.map((r, i) => (
+  1356→              <Badge key={i} variant="outline" className="font-mono">{r}</Badge>
+  1357→            ))}
+  1358→          </div>
+  1359→        </CardContent></Card>
+  1360→      )}
+  1361→    </div>
+  1362→  );
+  1363→}
+  1364→
+  1365→/* ============ IMPORT VIEW ============ */
+  1366→function ImportView({ onDone }: { onDone: () => void }) {
+  1367→  const [file, setFile] = useState<File | null>(null);
+  1368→  const [importing, setImporting] = useState(false);
+  1369→  const [result, setResult] = useState<any>(null);
+  1370→  const { toast } = useToast();
+  1371→
+  1372→  const handleImport = async () => {
+  1373→    if (!file) return;
+  1374→    setImporting(true); setResult(null);
+  1375→    try {
+  1376→      const fd = new FormData(); fd.append('file', file);
+  1377→      const r = await fetch('/api/import', { method: 'POST', body: fd });
+  1378→      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الاستيراد'); }
+  1379→      const data = await r.json();
+  1380→      setResult(data);
+  1381→      toast({ title: 'تم الاستيراد بنجاح', description: `تم استيراد ${data.imported} سجل، تخطّي ${data.skipped}` });
+  1382→    } catch (e: any) { toast({ title: 'فشل الاستيراد', description: e.message, variant: 'destructive' }); }
+  1383→    finally { setImporting(false); }
+  1384→  };
+  1385→
+  1386→  return (
+  1387→    <div className="max-w-2xl mx-auto space-y-4">
+  1388→      <div>
+  1389→        <h2 className="text-2xl font-bold text-slate-900">استيراد البيانات من Excel</h2>
+  1390→        <p className="text-sm text-slate-500 mt-1">ارفع ملف LOG_Final.xlsm لاستيراد كل الترانسميتالات. سيتم تخطّي الصفوف بدون وصف.</p>
+  1391→      </div>
+  1392→
+  1393→      <Card className="border-0 shadow-sm"><CardContent className="p-6 space-y-4">
+  1394→        <div className="space-y-1.5">
+  1395→          <Label>الملف (LOG_Final.xlsm)</Label>
+  1396→          <Input type="file" accept=".xlsm,.xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+  1397→        </div>
+  1398→        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+  1399→          <p className="text-sm text-amber-900"><strong>⚠️ تنبيه:</strong> سيتم حذف كل البيانات الحالية في قاعدة البيانات واستبدالها بالبيانات الجديدة.</p>
+  1400→        </div>
+  1401→        <Button onClick={handleImport} disabled={!file || importing} className="w-full bg-emerald-700 hover:bg-emerald-800 gap-1.5">
+  1402→          {importing ? (<><RefreshCw className="w-4 h-4 animate-spin" /> جاري الاستيراد... قد يستغرق دقيقة</>) : (<><Upload className="w-4 h-4" /> بدء الاستيراد</>)}
+  1403→        </Button>
+  1404→      </CardContent></Card>
+  1405→
+  1406→      {result && (
+  1407→        <Card className="border-emerald-200 bg-emerald-50">
+  1408→          <CardHeader><CardTitle className="text-lg text-emerald-800">نتيجة الاستيراد</CardTitle></CardHeader>
+  1409→          <CardContent className="space-y-3">
+  1410→            <div className="grid grid-cols-3 gap-3 text-center">
+  1411→              <div><p className="text-3xl font-bold text-emerald-700">{result.imported}</p><p className="text-xs text-slate-600">مستورد</p></div>
+  1412→              <div><p className="text-3xl font-bold text-slate-600">{result.skipped}</p><p className="text-xs text-slate-600">متخطّى (فارغ)</p></div>
+  1413→              <div><p className="text-3xl font-bold text-slate-600">{result.totalExtracted}</p><p className="text-xs text-slate-600">إجمالي مستخرج</p></div>
+  1414→            </div>
+  1415→            {result.errors?.length > 0 && (
+  1416→              <div className="bg-red-50 border border-red-200 rounded p-3 text-xs text-red-700 max-h-32 overflow-y-auto">
+  1417→                <p className="font-semibold mb-1">أخطاء:</p>
+  1418→                <ul className="list-disc list-inside space-y-0.5">{result.errors.map((e: string, i: number) => <li key={i}>{e}</li>)}</ul>
+  1419→              </div>
+  1420→            )}
+  1421→            <Button onClick={onDone} className="w-full bg-emerald-700 hover:bg-emerald-800">عرض لوحة المعلومات</Button>
+  1422→          </CardContent>
+  1423→        </Card>
+  1424→      )}
+  1425→    </div>
+  1426→  );
+  1427→}
+  1428→
+  1429→/* ============ REPORTS VIEW (Horizontal Timeline) ============ */
+  1430→type TimelineItem = {
+  1431→  id: string;
+  1432→  reference: string;
+  1433→  discipline: string;
+  1434→  category: string;
+  1435→  type: string | null;
+  1436→  description: string | null;
+  1437→  consultantStatus: string | null;
+  1438→  mohStatus: string | null;
+  1439→  mohSubmitDate: string | null;
+  1440→  mohSubmitRev: number | null;
+  1441→  mohReviewDate: string | null;
+  1442→  revisions: Record<number, {
+  1443→    submitDate: string | null;
+  1444→    replyDate: string | null;
+  1445→    action: string | null;
+  1446→    approvalType?: string | null;
+  1447→    daysOpen: number | null;
+  1448→  }>;
+  1449→  revisionsCount: number;
+  1450→  lastSubmitDate: string | null;
+  1451→  lastReplyDate: string | null;
+  1452→  totalDays: number;
+  1453→};
+  1454→
+  1455→function ReportsView({ disciplines, categories, onOpenDetail }: {
+  1456→  disciplines: Discipline[];
+  1457→  categories: Category[];
+  1458→  onOpenDetail: (id: string) => void;
+  1459→}) {
+  1460→  const [items, setItems] = useState<TimelineItem[]>([]);
+  1461→  const [loading, setLoading] = useState(false);
+  1462→  const [search, setSearch] = useState('');
+  1463→  const [filterCategory, setFilterCategory] = useState('all');
+  1464→  const [filterDiscipline, setFilterDiscipline] = useState('all');
+  1465→  const [filterType, setFilterType] = useState('all');
+  1466→  const [dateFrom, setDateFrom] = useState('');
+  1467→  const [dateTo, setDateTo] = useState('');
+  1468→  const [types, setTypes] = useState<string[]>([]);
+  1469→  const { toast } = useToast();
+  1470→
+  1471→  useEffect(() => {
+  1472→    fetch('/api/types').then(r => r.json()).then(d => setTypes(d.items || [])).catch(() => {});
+  1473→  }, []);
+  1474→
+  1475→  const fetchReport = useCallback(async () => {
+  1476→    setLoading(true);
+  1477→    try {
+  1478→      const params = new URLSearchParams();
+  1479→      if (filterCategory !== 'all') params.set('category', filterCategory);
+  1480→      if (filterDiscipline !== 'all') params.set('discipline', filterDiscipline);
+  1481→      if (search) params.set('q', search);
+  1482→      if (filterType !== 'all') params.set('type', filterType);
+  1483→      if (dateFrom) params.set('from', dateFrom);
+  1484→      if (dateTo) params.set('to', dateTo);
+  1485→      const r = await fetch(`/api/reports/timeline?${params}`);
+  1486→      if (!r.ok) throw new Error('فشل تحميل التقرير');
+  1487→      const data = await r.json();
+  1488→      setItems(data.items);
+  1489→    } catch (e: any) {
+  1490→      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+  1491→    } finally {
+  1492→      setLoading(false);
+  1493→    }
+  1494→  }, [filterCategory, filterDiscipline, search, filterType, dateFrom, dateTo, toast]);
+  1495→
+  1496→  useEffect(() => {
+  1497→    fetchReport();
+  1498→  }, [fetchReport]);
+  1499→
+  1500→  const handleExportExcel = () => {
+  1501→    const params = new URLSearchParams();
+  1502→    if (filterCategory !== 'all') params.set('category', filterCategory);
+  1503→    if (filterDiscipline !== 'all') params.set('discipline', filterDiscipline);
+  1504→    if (search) params.set('q', search);
+  1505→    if (filterType !== 'all') params.set('type', filterType);
+  1506→    if (dateFrom) params.set('from', dateFrom);
+  1507→    if (dateTo) params.set('to', dateTo);
+  1508→    toast({ title: 'جاري توليد التقرير', description: 'سيتم تنزيل ملف Excel خلال لحظات' });
+  1509→    window.location.href = `/api/reports/export?${params}`;
+  1510→  };
+  1511→
+  1512→  const availableDisciplines = filterCategory !== 'all'
+  1513→    ? disciplines.filter(d => (d.categoryCode || d.category || 'TRANSMITTAL') === filterCategory)
+  1514→    : disciplines;
+  1515→
+  1516→  // Compute the maximum rev number across all visible items.
+  1517→  // The table will only show columns REV.0..REV.{maxRev} (dynamic — grows when more revs are added).
+  1518→  // Default to REV.0 (so the table shows at least one column even when no revs exist yet).
+  1519→  const maxRevNumber = items.reduce((max, item) => {
+  1520→    const revKeys = Object.keys(item.revisions || {}).map(k => parseInt(k, 10)).filter(k => !isNaN(k));
+  1521→    const itemMax = revKeys.length > 0 ? Math.max(...revKeys) : 0;
+  1522→    return Math.max(max, itemMax);
+  1523→  }, 0);
+  1524→  const revColumns = Array.from({ length: maxRevNumber + 1 }, (_, i) => i); // [0, 1, 2, ..., maxRevNumber]
+  1525→
+  1526→  const actionLabel = (a: string | null, approvalType?: string | null) => {
+  1527→    if (!a) return '—';
+  1528→    const s = a.toLowerCase().trim();
+  1529→    if (s === 'approved') {
+  1530→      if (approvalType) {
+  1531→        const letter = getApprovalTypeLetter(approvalType);
+  1532→        return letter || '✅';
+  1533→      }
+  1534→      return '✅'; // old data without approvalType — just show checkmark
+  1535→    }
+  1536→    if (s === 'rejected') return '❌';
+  1537→    if (s === 'withdrawn') return '🚫';
+  1538→    if (s === 'pending') return '⏳'; // backward compat with old imported data
+  1539→    return a;
+  1540→  };
+  1541→
+  1542→  const actionColor = (a: string | null, approvalType?: string | null) => {
+  1543→    if (!a) return 'text-slate-400';
+  1544→    const s = a.toLowerCase().trim();
+  1545→    if (s === 'approved') {
+  1546→      if (approvalType === 'NOT_APPROVED') return 'text-red-700 bg-red-50';
+  1547→      if (approvalType === 'FOR_INFORMATION') return 'text-orange-700 bg-orange-50';
+  1548→      if (approvalType === 'APPROVED_AS_NOTED_RESUBMIT') return 'text-orange-700 bg-orange-50';
+  1549→      return 'text-emerald-700 bg-emerald-50';
+  1550→    }
+  1551→    if (s === 'rejected') return 'text-red-700 bg-red-50';
+  1552→    if (s === 'withdrawn') return 'text-gray-700 bg-gray-100';
+  1553→    if (s === 'pending') return 'text-yellow-700 bg-yellow-50'; // backward compat
+  1554→    return 'text-slate-700';
+  1555→  };
+  1556→
+  1557→  return (
+  1558→    <div className="space-y-4">
+  1559→      <div className="flex flex-wrap items-center justify-between gap-2">
+  1560→        <div>
+  1561→          <h2 className="text-2xl font-bold text-slate-900">تقارير الجدول الزمني</h2>
+  1562→          <p className="text-sm text-slate-500 mt-1">
+  1563→            {items.length} ترانسميتال · {revColumns.length} مراجعة (REV.0 - REV.{maxRevNumber}) · كل ريفجن في جدول منفصل بفواصل رأسية
+  1564→          </p>
+  1565→        </div>
+  1566→        <div className="flex gap-2">
+  1567→          <Button variant="outline" size="sm" onClick={fetchReport} disabled={loading}>
+  1568→            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> تحديث
+  1569→          </Button>
+  1570→          <Button size="sm" onClick={handleExportExcel} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
+  1571→            <FileDown className="w-4 h-4" /> تنزيل Excel
+  1572→          </Button>
+  1573→        </div>
+  1574→      </div>
+  1575→
+  1576→      {/* Filters */}
+  1577→      <Card className="border-0 shadow-sm"><CardContent className="p-4">
+  1578→        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+  1579→          <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
+  1580→            <Label className="text-xs">بحث</Label>
+  1581→            <div className="relative">
+  1582→              <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+  1583→              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="مرجع أو وصف..." className="pr-8" />
+  1584→            </div>
+  1585→          </div>
+  1586→          <div className="space-y-1.5">
+  1587→            <Label className="text-xs">القسم الرئيسي</Label>
+  1588→            <Select value={filterCategory} onValueChange={(v) => { setFilterCategory(v); setFilterDiscipline('all'); }}>
+  1589→              <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
+  1590→              <SelectContent>
+  1591→                <SelectItem value="all">الكل</SelectItem>
+  1592→                {categories.map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {c.label}</SelectItem>)}
+  1593→              </SelectContent>
+  1594→            </Select>
+  1595→          </div>
+  1596→          <div className="space-y-1.5">
+  1597→            <Label className="text-xs">التخصص</Label>
+  1598→            <Select value={filterDiscipline} onValueChange={setFilterDiscipline}>
+  1599→              <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
+  1600→              <SelectContent>
+  1601→                <SelectItem value="all">الكل</SelectItem>
+  1602→                {availableDisciplines.map(d => <SelectItem key={d.code} value={d.code}>{d.label} ({d.code})</SelectItem>)}
+  1603→              </SelectContent>
+  1604→            </Select>
+  1605→          </div>
+  1606→          <div className="space-y-1.5">
+  1607→            <Label className="text-xs">النوع</Label>
+  1608→            <Select value={filterType} onValueChange={setFilterType}>
+  1609→              <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
+  1610→              <SelectContent>
+  1611→                <SelectItem value="all">الكل</SelectItem>
+  1612→                {types.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+  1613→              </SelectContent>
+  1614→            </Select>
+  1615→          </div>
+  1616→          <div className="space-y-1.5">
+  1617→            <Label className="text-xs">من تاريخ</Label>
+  1618→            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+  1619→          </div>
+  1620→          <div className="space-y-1.5">
+  1621→            <Label className="text-xs">إلى تاريخ</Label>
+  1622→            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+  1623→          </div>
+  1624→        </div>
+  1625→      </CardContent></Card>
+  1626→
+  1627→      {/* Horizontal Timeline Table — each REV group is visually separated by thick vertical borders
+  1628→          so each REV looks like its own standalone table within the same row */}
+  1629→      <Card className="border-0 shadow-sm">
+  1630→        <CardContent className="p-0">
+  1631→          {loading && items.length === 0 ? (
+  1632→            <div className="p-4 space-y-2">
+  1633→              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+  1634→            </div>
+  1635→          ) : items.length === 0 ? (
+  1636→            <div className="text-center py-16 text-slate-500">
+  1637→              <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-30" />
+  1638→              <p>لا توجد بيانات مطابقة للفلاتر</p>
+  1639→            </div>
+  1640→          ) : (
+  1641→            <div className="overflow-x-auto">
+  1642→              <Table className="border-collapse">
+  1643→                <TableHeader className="sticky top-0 bg-white z-10">
+  1644→                  <TableRow>
+  1645→                    <TableHead className="text-right sticky right-0 bg-white z-20 min-w-[120px] border-l-2 border-slate-300">المرجع</TableHead>
+  1646→                    <TableHead className="text-right min-w-[180px] border-l-2 border-slate-300">الوصف</TableHead>
+  1647→                    {revColumns.map((rev, revIdx) => (
+  1648→                      <TableHead
+  1649→                        key={rev}
+  1650→                        className={`text-center min-w-[260px] p-0 border-l-4 ${revIdx === 0 ? 'border-l-2 border-slate-400' : 'border-l-4 border-blue-500'}`}
+  1651→                      >
+  1652→                        {/* REV group header — colored band on top */}
+  1653→                        <div className="bg-blue-700 text-white py-1.5 px-2 font-bold text-sm">REV.{rev}</div>
+  1654→                        <div className="flex text-xs font-normal mt-0 bg-blue-50">
+  1655→                          <div className="flex-1 py-1 border-l border-blue-200">تقديم</div>
+  1656→                          <div className="flex-1 py-1 border-l border-blue-200">رد</div>
+  1657→                          <div className="flex-1 py-1 border-l border-blue-200">إجراء</div>
+  1658→                        </div>
+  1659→                      </TableHead>
+  1660→                    ))}
+  1661→                    <TableHead className="text-center min-w-[100px] border-l-4 border-emerald-500 bg-emerald-50">الاستشاري</TableHead>
+  1662→                    <TableHead className="text-center min-w-[100px] border-l-2 border-purple-500 bg-purple-50">الوزارة</TableHead>
+  1663→                  </TableRow>
+  1664→                </TableHeader>
+  1665→                <TableBody>
+  1666→                  {items.map((item) => (
+  1667→                    <TableRow key={item.id} className="cursor-pointer hover:bg-slate-50">
+  1668→                      <TableCell className="font-mono font-semibold whitespace-nowrap sticky right-0 bg-white z-10 border-l-2 border-slate-300">
+  1669→                        {item.reference || '—'}
+  1670→                      </TableCell>
+  1671→                      <TableCell className="text-sm text-slate-700 max-w-[200px] truncate border-l-2 border-slate-300">
+  1672→                        {item.description || '—'}
+  1673→                      </TableCell>
+  1674→                      {revColumns.map((rev, revIdx) => {
+  1675→                        const r = item.revisions[rev];
+  1676→                        if (!r || (!r.submitDate && !r.action)) {
+  1677→                          return (
+  1678→                            <TableCell key={rev} className={`p-0 border-l-4 ${revIdx === 0 ? 'border-l-2 border-slate-400' : 'border-l-4 border-blue-500'}`}>
+  1679→                              <div className="flex text-xs min-h-[44px] items-center">
+  1680→                                <div className="flex-1 p-2 border-l border-slate-200 text-center text-slate-300">—</div>
+  1681→                                <div className="flex-1 p-2 border-l border-slate-200 text-center text-slate-300">—</div>
+  1682→                                <div className="flex-1 p-2 border-l border-slate-200 text-center text-slate-300">—</div>
+  1683→                              </div>
+  1684→                            </TableCell>
+  1685→                          );
+  1686→                        }
+  1687→                        return (
+  1688→                          <TableCell key={rev} className={`p-0 border-l-4 ${revIdx === 0 ? 'border-l-2 border-slate-400' : 'border-l-4 border-blue-500'}`}>
+  1689→                            <div className="flex text-xs min-h-[44px]">
+  1690→                              <div className="flex-1 p-2 border-l border-slate-200 text-center">
+  1691→                                {r.submitDate ? (
+  1692→                                  <div>
+  1693→                                    <div className="font-medium text-slate-700">{fmtDate(r.submitDate)}</div>
+  1694→                                    {r.daysOpen !== null && (
+  1695→                                      <div className={`text-[10px] mt-0.5 font-semibold ${r.daysOpen > 30 ? 'text-red-700' : r.daysOpen > 14 ? 'text-yellow-700' : 'text-emerald-700'}`}>
+  1696→                                        {r.daysOpen}ي
+  1697→                                      </div>
+  1698→                                    )}
+  1699→                                  </div>
+  1700→                                ) : <span className="text-slate-300">—</span>}
+  1701→                              </div>
+  1702→                              <div className="flex-1 p-2 border-l border-slate-200 text-center">
+  1703→                                {r.replyDate ? (
+  1704→                                  <div className="font-medium text-slate-700">{fmtDate(r.replyDate)}</div>
+  1705→                                ) : <span className="text-slate-300">—</span>}
+  1706→                              </div>
+  1707→                              <div className={`flex-1 p-2 border-l border-slate-200 text-center font-bold ${actionColor(r.action, r.approvalType)}`}>
+  1708→                                {actionLabel(r.action, r.approvalType)}
+  1709→                              </div>
+  1710→                            </div>
+  1711→                          </TableCell>
+  1712→                        );
+  1713→                      })}
+  1714→                      <TableCell className="text-center text-xs border-l-4 border-emerald-500 bg-emerald-50/30">
+  1715→                        {item.consultantStatus ? (
+  1716→                          <Badge variant="outline" className="text-[10px]">
+  1717→                            {item.consultantStatus === 'Approved' ? '✅' :
+  1718→                             item.consultantStatus === 'Overdue' ? '🔴' :
+  1719→                             item.consultantStatus === 'Under Review' ? '⏳' :
+  1720→                             item.consultantStatus === 'Cancelled' ? '🚫' : item.consultantStatus}
+  1721→                          </Badge>
+  1722→                        ) : '—'}
+  1723→                      </TableCell>
+  1724→                      <TableCell className="text-center text-xs border-l-2 border-purple-500 bg-purple-50/30">
+  1725→                        {item.mohStatus ? (
+  1726→                          <div>
+  1727→                            <Badge variant="outline" className="text-[10px]">
+  1728→                              {item.mohStatus === 'Approved' ? '✅' :
+  1729→                               item.mohStatus === 'Under Review' ? '⏳' :
+  1730→                               item.mohStatus === 'Overdue' ? '🔴' :
+  1731→                               item.mohStatus === 'Rejected' ? '❌' : item.mohStatus}
+  1732→                            </Badge>
+  1733→                            {item.mohSubmitDate && (
+  1734→                              <div className="text-[10px] text-slate-500 mt-1">{fmtDate(item.mohSubmitDate)}</div>
+  1735→                            )}
+  1736→                          </div>
+  1737→                        ) : <span className="text-slate-300">—</span>}
+  1738→                      </TableCell>
+  1739→                    </TableRow>
+  1740→                  ))}
+  1741→                </TableBody>
+  1742→              </Table>
+  1743→            </div>
+  1744→          )}
+  1745→        </CardContent>
+  1746→      </Card>
+  1747→
+  1748→      {/* Legend */}
+  1749→      <Card className="bg-slate-50 border-slate-200">
+  1750→        <CardContent className="p-4">
+  1751→          <div className="flex flex-wrap items-center gap-4 text-xs">
+  1752→            <span className="font-semibold">دليل الألوان والإجراءات:</span>
+  1753→            <span className="flex items-center gap-1"><span className="w-3 h-3 bg-emerald-50 border border-emerald-300 inline-block"></span> A: APPROVED</span>
+  1754→            <span className="flex items-center gap-1"><span className="w-3 h-3 bg-emerald-50 border border-emerald-300 inline-block"></span> B: APPROVED AS NOTED</span>
+  1755→            <span className="flex items-center gap-1"><span className="w-3 h-3 bg-orange-50 border border-orange-300 inline-block"></span> C: APPROVED AS NOTED & RESUBMIT</span>
+  1756→            <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-50 border border-red-300 inline-block"></span> D: NOT APPROVED</span>
+  1757→            <span className="flex items-center gap-1"><span className="w-3 h-3 bg-orange-50 border border-orange-300 inline-block"></span> E: FOR INFORMATION</span>
+  1758→            <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-50 border border-red-300 inline-block"></span> ❌ مرفوض</span>
+  1759→            <span className="flex items-center gap-1"><span className="w-3 h-3 bg-gray-100 border border-gray-300 inline-block"></span> 🚫 مسحوب</span>
+  1760→            <span className="text-slate-500">·</span>
+  1761→            <span className="text-slate-600">Xي = عدد الأيام من التقديم حتى الرد</span>
+  1762→            <span className="text-slate-500">·</span>
+  1763→            <span className="text-slate-600">إجمالي الأيام: مجموع كل الفترات (أخضر &lt;14ي · أصفر 14-30ي · أحمر &gt;30ي)</span>
+  1764→          </div>
+  1765→        </CardContent>
+  1766→      </Card>
+  1767→    </div>
+  1768→  );
+  1769→}
+  1770→
+  1771→/* ============ SETTINGS VIEW ============ */
+  1772→function SettingsView({ disciplines, categories, onRefreshDisciplines, onRefreshCategories }: {
+  1773→  disciplines: Discipline[];
+  1774→  categories: Category[];
+  1775→  onRefreshDisciplines: () => void;
+  1776→  onRefreshCategories: () => void;
+  1777→}) {
+  1778→  const [showAdd, setShowAdd] = useState(false);
+  1779→  const [showAddCategory, setShowAddCategory] = useState(false);
+  1780→  const [editing, setEditing] = useState<Discipline | null>(null);
+  1781→  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  1782→  const { toast } = useToast();
+  1783→
+  1784→  // Always fetch fresh data when SettingsView mounts
+  1785→  useEffect(() => {
+  1786→    onRefreshDisciplines();
+  1787→    onRefreshCategories();
+  1788→  }, []);
+  1789→
+  1790→  const handleDelete = async (code: string) => {
+  1791→    if (!confirm(`هل أنت متأكد من حذف القسم ${code}؟`)) return;
+  1792→    try {
+  1793→      const r = await fetch(`/api/disciplines/${code}`, { method: 'DELETE' });
+  1794→      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الحذف'); }
+  1795→      toast({ title: 'تم حذف القسم', description: code });
+  1796→      onRefreshDisciplines();
+  1797→    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+  1798→  };
+  1799→
+  1800→  const handleDeleteCategory = async (code: string) => {
+  1801→    if (!confirm(`هل أنت متأكد من حذف القسم الرئيسي ${code}؟`)) return;
+  1802→    try {
+  1803→      const r = await fetch(`/api/categories/${code}`, { method: 'DELETE' });
+  1804→      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الحذف'); }
+  1805→      toast({ title: 'تم حذف القسم الرئيسي', description: code });
+  1806→      onRefreshCategories();
+  1807→    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+  1808→  };
+  1809→
+  1810→  return (
+  1811→    <div className="max-w-4xl mx-auto space-y-4">
+  1812→      <div className="flex items-center justify-between">
+  1813→        <div>
+  1814→          <h2 className="text-2xl font-bold text-slate-900">إعدادات الأقسام</h2>
+  1815→          <p className="text-sm text-slate-500 mt-1">الأقسام الرئيسية والتخصصات الفرعية تحتها</p>
+  1816→        </div>
+  1817→        <div className="flex gap-2">
+  1818→          <Button onClick={() => setShowAddCategory(true)} variant="outline" className="gap-1.5">
+  1819→            <FolderPlus className="w-4 h-4" /> إضافة قسم رئيسي
+  1820→          </Button>
+  1821→          <Button onClick={() => setShowAdd(true)} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
+  1822→            <Plus className="w-4 h-4" /> إضافة تخصص
+  1823→          </Button>
+  1824→        </div>
+  1825→      </div>
+  1826→
+  1827→      {/* Categories Management Section */}
+  1828→      <Card className="border-0 shadow-sm">
+  1829→        <CardHeader className="border-b bg-slate-50">
+  1830→          <CardTitle className="text-base flex items-center gap-2">
+  1831→            <Folder className="w-5 h-5" /> الأقسام الرئيسية ({categories.length})
+  1832→          </CardTitle>
+  1833→          <CardDescription>الأقسام الرئيسية القابلة للإضافة (ترانسميتال، MIR، RFI، كتب، وأي قسم آخر)</CardDescription>
+  1834→        </CardHeader>
+  1835→        <CardContent className="p-0">
+  1836→          <Table>
+  1837→            <TableHeader><TableRow>
+  1838→              <TableHead className="text-right">الأيقونة</TableHead>
+  1839→              <TableHead className="text-right">الكود</TableHead>
+  1840→              <TableHead className="text-right">الاسم</TableHead>
+  1841→              <TableHead className="text-center">عدد التخصصات</TableHead>
+  1842→              <TableHead className="text-center">عدد الترانسميتالات</TableHead>
+  1843→              <TableHead className="text-center">اللون</TableHead>
+  1844→              <TableHead className="text-center">إجراءات</TableHead>
+  1845→            </TableRow></TableHeader>
+  1846→            <TableBody>
+  1847→              {categories.map((c) => (
+  1848→                <TableRow key={c.code}>
+  1849→                  <TableCell className="text-2xl">{c.icon}</TableCell>
+  1850→                  <TableCell className="font-mono font-bold">{c.code}</TableCell>
+  1851→                  <TableCell>{c.label}</TableCell>
+  1852→                  <TableCell className="text-center font-semibold">{c.disciplinesCount || 0}</TableCell>
+  1853→                  <TableCell className="text-center font-semibold">{c.transmittalsCount || 0}</TableCell>
+  1854→                  <TableCell className="text-center"><div className={`inline-block px-2 py-1 rounded text-xs ${c.color}`}>عينة</div></TableCell>
+  1855→                  <TableCell className="text-center">
+  1856→                    <div className="flex justify-center gap-1">
+  1857→                      <Button size="sm" variant="ghost" onClick={() => setEditingCategory(c)}><Pencil className="w-4 h-4" /></Button>
+  1858→                      <Button size="sm" variant="ghost" onClick={() => handleDeleteCategory(c.code)}><Trash2 className="w-4 h-4 text-red-600" /></Button>
+  1859→                    </div>
+  1860→                  </TableCell>
+  1861→                </TableRow>
+  1862→              ))}
+  1863→            </TableBody>
+  1864→          </Table>
+  1865→        </CardContent>
+  1866→      </Card>
+  1867→
+  1868→      <h3 className="text-lg font-semibold text-slate-700 pt-2">التخصصات الفرعية حسب القسم الرئيسي</h3>
+  1869→
+  1870→      {/* Render disciplines grouped by category */}
+  1871→      {categories.map((cat) => {
+  1872→        const catDisciplines = disciplines.filter(d => (d.categoryCode || d.category || 'TRANSMITTAL') === cat.code);
+  1873→        if (catDisciplines.length === 0) return null;
+  1874→        return (
+  1875→          <Card key={cat.code} className="border-0 shadow-sm">
+  1876→            <CardHeader className="border-b bg-slate-50">
+  1877→              <CardTitle className="text-base flex items-center gap-2">
+  1878→                <span className="text-xl">{cat.icon}</span>
+  1879→                <Badge className={`${cat.color} border-0`}>{cat.label}</Badge>
+  1880→                <span className="text-xs text-slate-500">({catDisciplines.length} تخصص)</span>
+  1881→              </CardTitle>
+  1882→            </CardHeader>
+  1883→            <CardContent className="p-0">
+  1884→              <Table>
+  1885→                <TableHeader><TableRow>
+  1886→                  <TableHead className="text-right">الكود</TableHead>
+  1887→                  <TableHead className="text-right">الاسم</TableHead>
+  1888→                  <TableHead className="text-right">البادئة</TableHead>
+  1889→                  <TableHead className="text-center">اللون</TableHead>
+  1890→                  <TableHead className="text-center">عدد الترانسميتالات</TableHead>
+  1891→                  <TableHead className="text-center">إجراءات</TableHead>
+  1892→                </TableRow></TableHeader>
+  1893→                <TableBody>
+  1894→                  {catDisciplines.map((d) => (
+  1895→                    <TableRow key={d.code}>
+  1896→                      <TableCell className="font-mono font-bold">{d.code}</TableCell>
+  1897→                      <TableCell>{d.label}</TableCell>
+  1898→                      <TableCell className="font-mono text-sm">{d.prefix}</TableCell>
+  1899→                      <TableCell className="text-center"><div className={`inline-block px-2 py-1 rounded text-xs ${d.color}`}>عينة</div></TableCell>
+  1900→                      <TableCell className="text-center font-semibold">{d.transmittalsCount || 0}</TableCell>
+  1901→                      <TableCell className="text-center">
+  1902→                        <div className="flex justify-center gap-1">
+  1903→                          <Button size="sm" variant="ghost" onClick={() => setEditing(d)}><Pencil className="w-4 h-4" /></Button>
+  1904→                          <Button size="sm" variant="ghost" onClick={() => handleDelete(d.code)}><Trash2 className="w-4 h-4 text-red-600" /></Button>
+  1905→                        </div>
+  1906→                      </TableCell>
+  1907→                    </TableRow>
+  1908→                  ))}
+  1909→                </TableBody>
+  1910→              </Table>
+  1911→            </CardContent>
+  1912→          </Card>
+  1913→        );
+  1914→      })}
+  1915→
+  1916→      {/* Empty categories hint */}
+  1917→      {(() => {
+  1918→        const emptyCats = categories.filter(cat => disciplines.filter(d => (d.categoryCode || d.category || 'TRANSMITTAL') === cat.code).length === 0);
+  1919→        if (emptyCats.length === 0) return null;
+  1920→        return (
+  1921→          <Card className="bg-slate-50 border-slate-200"><CardContent className="p-4">
+  1922→            <p className="text-sm text-slate-700 mb-2"><strong>أقسام رئيسية بدون تخصصات بعد:</strong></p>
+  1923→            <div className="flex flex-wrap gap-2">
+  1924→              {emptyCats.map(c => (
+  1925→                <Badge key={c.code} variant="outline" className="text-sm">{c.icon} {c.label}</Badge>
+  1926→              ))}
+  1927→            </div>
+  1928→            <p className="text-xs text-slate-500 mt-2">أضف تخصصاً جديداً واختر القسم المناسب له.</p>
+  1929→          </CardContent></Card>
+  1930→        );
+  1931→      })()}
+  1932→
+  1933→      <Card className="bg-blue-50 border-blue-200"><CardContent className="p-4">
+  1934→        <p className="text-sm text-blue-900">
+  1935→          <strong>💡 ملاحظات:</strong><br />
+  1936→          • الأقسام الرئيسية: ترانسميتال، MIR، RFI، كتب — قابلة للإضافة والحذف<br />
+  1937→          • كل قسم رئيسي له تسلسل ترقيم مستقل خاص به<br />
+  1938→          • البادئة تُستخدم في تكوين رقم المرجع (مثال: <code className="bg-white px-1 rounded">CIV-</code> + <code className="bg-white px-1 rounded">171</code> = <code className="bg-white px-1 rounded">CIV-171</code>)<br />
+  1939→          • لا يمكن حذف قسم مرتبط بترانسميتالات (احذف الترانسميتالات أولاً)
+  1940→        </p>
+  1941→      </CardContent></Card>
+  1942→
+  1943→      <AddDisciplineDialog open={showAdd} onOpenChange={setShowAdd} onSaved={() => { setShowAdd(false); onRefreshDisciplines(); }} categories={categories} />
+  1944→      <AddCategoryDialog open={showAddCategory} onOpenChange={setShowAddCategory} onSaved={() => { setShowAddCategory(false); onRefreshCategories(); }} />
+  1945→      {editingCategory && <EditCategoryDialog category={editingCategory} onOpenChange={(v) => !v && setEditingCategory(null)} onSaved={() => { setEditingCategory(null); onRefreshCategories(); }} />}
+  1946→      {editing && <EditDisciplineDialog discipline={editing} onOpenChange={(v) => !v && setEditing(null)} onSaved={() => { setEditing(null); onRefreshDisciplines(); }} categories={categories} />}
+  1947→    </div>
+  1948→  );
+  1949→}
+  1950→
+  1951→function AddDisciplineDialog({ open, onOpenChange, onSaved, categories }: { open: boolean; onOpenChange: (v: boolean) => void; onSaved: () => void; categories?: Category[] }) {
+  1952→  const [code, setCode] = useState('');
+  1953→  const [label, setLabel] = useState('');
+  1954→  const [prefix, setPrefix] = useState('');
+  1955→  const [color, setColor] = useState('bg-gray-100 text-gray-700');
+  1956→  const [category, setCategory] = useState('TRANSMITTAL');
+  1957→  const [saving, setSaving] = useState(false);
+  1958→  const { toast } = useToast();
+  1959→
+  1960→  useEffect(() => {
+  1961→    if (open) { setCode(''); setLabel(''); setPrefix(''); setColor('bg-gray-100 text-gray-700'); setCategory('TRANSMITTAL'); }
+  1962→  }, [open]);
+  1963→
+  1964→  const colorOptions = [
+  1965→    { value: 'bg-gray-100 text-gray-700', label: 'رمادي' },
+  1966→    { value: 'bg-amber-100 text-amber-700', label: 'كهرماني' },
+  1967→    { value: 'bg-purple-100 text-purple-700', label: 'بنفسجي' },
+  1968→    { value: 'bg-cyan-100 text-cyan-700', label: 'سماوي' },
+  1969→    { value: 'bg-rose-100 text-rose-700', label: 'وردي' },
+  1970→    { value: 'bg-red-100 text-red-700', label: 'أحمر' },
+  1971→    { value: 'bg-emerald-100 text-emerald-700', label: 'أخضر' },
+  1972→    { value: 'bg-blue-100 text-blue-700', label: 'أزرق' },
+  1973→    { value: 'bg-indigo-100 text-indigo-700', label: 'نيلي' },
+  1974→    { value: 'bg-orange-100 text-orange-700', label: 'برتقالي' },
+  1975→  ];
+  1976→
+  1977→  const handleSave = async () => {
+  1978→    if (!code || !label || !prefix) {
+  1979→      toast({ title: 'خطأ', description: 'كل الحقول مطلوبة', variant: 'destructive' }); return;
+  1980→    }
+  1981→    setSaving(true);
+  1982→    try {
+  1983→      const r = await fetch('/api/disciplines', {
+  1984→        method: 'POST', headers: { 'Content-Type': 'application/json' },
+  1985→        body: JSON.stringify({ code: code.toUpperCase(), label, prefix, color, category }),
+  1986→      });
+  1987→      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الحفظ'); }
+  1988→      toast({ title: 'تم إضافة القسم', description: `${code.toUpperCase()} - ${label} (${getCategoryLabel(category)})` });
+  1989→      onSaved();
+  1990→    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+  1991→    finally { setSaving(false); }
+  1992→  };
+  1993→
+  1994→  // Auto-suggest prefix based on code
+  1995→  useEffect(() => {
+  1996→    if (code && !prefix) {
+  1997→      setPrefix(`${code.toUpperCase()}-`);
+  1998→    }
+  1999→  }, [code, prefix]);
+  2000→
+
+[showing lines 1-2000 of 2722; use offset=2001 with limit to continue reading]

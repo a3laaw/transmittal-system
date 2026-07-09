@@ -1,0 +1,124 @@
+// Prisma schema for Transmittal Management System
+// Supports both SQLite (development) and PostgreSQL (Supabase production)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = postgresql
+  url      = env("DATABASE_URL")
+  // For local SQLite development, use: provider = "sqlite"
+}
+
+// Top-level categories (Transmittal, MIR, RFI, Books, etc.) — user-editable
+model Category {
+  id        String   @id @default(cuid())
+  code      String   @unique // e.g. "TRANSMITTAL", "MIR", "RFI", "BOOKS"
+  label     String   // Arabic label: "ترانسميتال"
+  icon      String   @default("📄") // emoji icon
+  color     String   @default("bg-blue-100 text-blue-700") // tailwind classes
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  disciplines  Discipline[]
+  transmittals Transmittal[]
+}
+
+// Document types (SHOP DRAWINGS, SAMPLE, SOURCE APPROVAL, etc.) — user-editable
+model DocType {
+  id        String   @id @default(cuid())
+  code      String   @unique // e.g. "SHOP_DRAWINGS", "SAMPLE"
+  label     String   // Arabic label: "رسم تنفيذي"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Discipline {
+  id         String   @id @default(cuid())
+  code       String   @unique // e.g. "CIV", "EL", "PL", "HVAC", "FF", "ELVE"
+  label      String   // Arabic label: "المدنية"
+  color      String   // tailwind classes: "bg-amber-100 text-amber-700"
+  prefix     String   // prefix used in references: "CIV-", "ELEV "
+  categoryCode String? // links to Category.code (nullable for migration)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  category   Category? @relation(fields: [categoryCode], references: [code], onDelete: Restrict)
+}
+
+model Transmittal {
+  id          String   @id @default(cuid())
+  reference   String   @unique // e.g. "CIV-001", "EL-018"
+  discipline  String   // CIV, EL, PL, HVAC, FF, ELVE (legacy field, kept for compatibility)
+  disciplineCode String? // links to Discipline.code (nullable for migration)
+  category    String   @default("TRANSMITTAL") // category code (mirrors discipline's category)
+  type        String?  // SHOP DRAWINGS, SAMPLE, SOURCE APPROVAL, etc.
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  categoryRef Category?   @relation(fields: [category], references: [code], onDelete: Restrict)
+  revisions   Revision[]
+  reviews     Review[]
+  attachments Attachment[]
+
+  @@index([discipline])
+  @@index([disciplineCode])
+  @@index([category])
+  @@index([reference])
+}
+
+model Revision {
+  id            String   @id @default(cuid())
+  transmittalId String
+  revNumber     Int      // 0, 1, 2, ... 7
+  submitDate    DateTime?
+  replyDate     DateTime?
+  action        String?  // approved, rejected, withdrawn (3 main actions only)
+  approvalType  String?  // when action=approved: APPROVED(A), APPROVED_AS_NOTED(B), APPROVED_AS_NOTED_RESUBMIT(C), NOT_APPROVED(D), FOR_INFORMATION(E)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  transmittal   Transmittal @relation(fields: [transmittalId], references: [id], onDelete: Cascade)
+
+  @@unique([transmittalId, revNumber])
+  @@index([transmittalId])
+}
+
+// Reviews per party (Consultant / MOH)
+model Review {
+  id            String   @id @default(cuid())
+  transmittalId String
+  party         String   // "CONSULTANT" or "MOH"
+  status        String?  // "Approved", "Rejected", "Pending", "Overdue", "Under Review", "Cancelled"
+  submitDate    DateTime? // when submitted to this party (for MOH: when "Send to MOH" was clicked)
+  submitRev     Int?      // which rev was sent to this party (for MOH)
+  reviewDate    DateTime? // when this party replied
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  transmittal   Transmittal @relation(fields: [transmittalId], references: [id], onDelete: Cascade)
+
+  @@unique([transmittalId, party])
+  @@index([transmittalId])
+}
+
+// Attachments (images/files) linked to a transmittal
+model Attachment {
+  id            String   @id @default(cuid())
+  transmittalId String
+  fileName      String   // display name
+  filePath      String   @default("") // relative path for uploaded files
+  fileType      String   @default("") // MIME type
+  fileSize      Int      @default(0)  // bytes
+  url           String?  // external URL (GitHub, Supabase, Vercel, direct link)
+  urlSource     String?  // "github" | "supabase" | "vercel" | "link"
+  createdAt     DateTime @default(now())
+
+  transmittal   Transmittal @relation(fields: [transmittalId], references: [id], onDelete: Cascade)
+
+  @@index([transmittalId])
+}
