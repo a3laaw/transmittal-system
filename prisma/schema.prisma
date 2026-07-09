@@ -6,9 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider = postgresql
+  provider = "postgresql"
   url      = env("DATABASE_URL")
-  // For local SQLite development, use: provider = "sqlite"
 }
 
 // Top-level categories (Transmittal, MIR, RFI, Books, etc.) — user-editable
