@@ -1,5 +1,8 @@
 // Service Worker for PWA - offline caching
-const CACHE_NAME = 'transmittal-v3';
+// Strategy: network-first for EVERYTHING (always get latest code),
+// fall back to cache only when offline.
+// This ensures users never get stuck with old cached JS that has bugs.
+const CACHE_NAME = 'transmittal-v5';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -8,13 +11,12 @@ const STATIC_ASSETS = [
 ];
 
 // Paths that must NEVER be cached (file downloads, streaming, dynamic blobs).
-// These always go straight to the network.
 const NO_CACHE_PATHS = [
   '/api/excel-template',
   '/api/reports/export',
   '/api/import',
-  '/api/files/',  // uploaded file serving — never cache (files may be replaced/deleted)
-  '/api/transmittals/',  // includes /upload, /attachments — never cache mutations/uploads
+  '/api/files/',
+  '/api/transmittals/',
 ];
 
 self.addEventListener('install', (event) => {
@@ -23,6 +25,7 @@ self.addEventListener('install', (event) => {
       return cache.addAll(STATIC_ASSETS).catch(() => {});
     })
   );
+  // Force the new SW to take over immediately
   self.skipWaiting();
 });
 
@@ -34,9 +37,11 @@ self.addEventListener('activate', (event) => {
           .filter((name) => name !== CACHE_NAME)
           .map((name) => caches.delete(name))
       );
+    }).then(() => {
+      // Take control of all clients immediately
+      return self.clients.claim();
     })
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
@@ -49,42 +54,43 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== location.origin) return;
   
-  // NEVER cache download / upload / mutation endpoints — always go to network
+  // NEVER cache download / upload / mutation endpoints
   if (NO_CACHE_PATHS.some((p) => url.pathname.startsWith(p))) {
     event.respondWith(fetch(request));
     return;
   }
   
-  // Network-first for navigations and the root page
-  if (url.pathname === '/' || request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
+  // Network-first for ALL requests (JS, CSS, HTML, images, etc.)
+  // This ensures the browser always gets the latest code.
+  // Cache is only used as a fallback when offline.
+  event.respondWith(
+    fetch(request)
+      .then((response) => {
+        // Only cache successful responses
+        if (response.ok && response.status === 200) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(request, responseClone);
           });
-          return response;
-        })
-        .catch(() => {
-          return caches.match(request).then((cached) => {
-            return cached || caches.match('/');
-          });
-        })
-    );
-    return;
-  }
-  
-  // Cache-first for other static assets (JS, CSS, images, fonts)
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      return cached || fetch(request).then((response) => {
-        const responseClone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(request, responseClone);
-        });
+        }
         return response;
-      });
-    })
+      })
+      .catch(() => {
+        // Network failed — try cache
+        return caches.match(request).then((cached) => {
+          return cached || caches.match('/');
+        });
+      })
   );
+});
+
+// Listen for messages from the page — allow manual cache clear
+self.addEventListener('message', (event) => {
+  if (event.data === 'CLEAR_CACHE') {
+    caches.keys().then((names) => {
+      return Promise.all(names.map((n) => caches.delete(n)));
+    }).then(() => {
+      event.ports[0].postMessage({ ok: true });
+    });
+  }
 });
