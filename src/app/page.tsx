@@ -29,7 +29,7 @@ import {
   CheckCircle2, Clock, XCircle, Bell, LayoutDashboard, FileSpreadsheet,
   ArrowLeft, RefreshCw, FilePlus, History, Send, Settings, Building2,
   Trash2, Pencil, Hospital, Building, Copy, MoreVertical, Eye, FileDown,
-  FolderPlus, Folder, BarChart3, Calendar, Printer,
+  FolderPlus, Folder, BarChart3, Calendar, Printer, Link,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -519,6 +519,7 @@ export default function Home() {
             loading={loading}
             disciplines={disciplines}
             onBack={() => setView('list')}
+            onOpenDetail={(id) => { setSelectedId(id); }}
             onRefresh={() => selectedId && fetchDetail(selectedId)}
             onDownloadExcel={async () => {
               const ref = detail.reference;
@@ -1027,10 +1028,10 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
 }
 
 /* ============ DETAIL VIEW ============ */
-function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloadExcel, onSendToMoh, onCopy }: {
+function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloadExcel, onSendToMoh, onCopy, onOpenDetail }: {
   detail: TransmittalDetail; loading: boolean; disciplines: Discipline[];
   onBack: () => void; onRefresh: () => void; onDownloadExcel: () => void; onSendToMoh: () => void;
-  onCopy: () => void;
+  onCopy: () => void; onOpenDetail: (id: string) => void;
 }) {
   const [showRevDialog, setShowRevDialog] = useState(false);
   const { toast } = useToast();
@@ -1204,6 +1205,44 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
           {detail.description && (
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mt-2">
               <p className="text-sm text-slate-800 whitespace-pre-wrap">{detail.description}</p>
+            </div>
+          )}
+
+          {/* Linked Transmittals (parent + children) */}
+          {((detail as any).parent || (detail as any).children?.length > 0) && (
+            <div className="mt-4 space-y-2">
+              {(detail as any).parent && (
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-blue-50 border border-blue-200">
+                  <span className="text-xs text-slate-500">📚 مرتبط بـ:</span>
+                  <button
+                    onClick={() => onOpenDetail((detail as any).parent.id)}
+                    className="text-sm text-blue-700 hover:text-blue-900 hover:underline font-medium flex items-center gap-1"
+                  >
+                    <Link className="w-3 h-3" />
+                    {(detail as any).parent.reference}
+                    {(detail as any).parent.description && (
+                      <span className="text-slate-500 font-normal">— {(detail as any).parent.description.slice(0, 50)}</span>
+                    )}
+                  </button>
+                </div>
+              )}
+              {(detail as any).children?.length > 0 && (
+                <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <p className="text-xs text-slate-500 mb-1">↳ الكتب المرتبطة بهذا ({(detail as any).children.length}):</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(detail as any).children.map((child: any) => (
+                      <button
+                        key={child.id}
+                        onClick={() => onOpenDetail(child.id)}
+                        className="text-xs text-emerald-700 hover:text-emerald-900 hover:underline font-medium flex items-center gap-1 bg-white px-2 py-1 rounded border border-emerald-200"
+                      >
+                        <Link className="w-3 h-3" />
+                        {child.reference}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1640,6 +1679,9 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
   const [saving, setSaving] = useState(false);
   const [refInfo, setRefInfo] = useState<{ lastGlobalMax: number; totalAllDisciplines: number; recentAllDisciplines: string[] } | null>(null);
   const [loadingRef, setLoadingRef] = useState(false);
+  const [parentTransmittalId, setParentTransmittalId] = useState('');
+  const [parentOptions, setParentOptions] = useState<any[]>([]);
+  const [loadingParents, setLoadingParents] = useState(false);
   const { toast } = useToast();
 
   const fetchNextReference = async (d: string) => {
@@ -1668,7 +1710,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
     try {
       const r = await fetch('/api/transmittals', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reference, discipline, type: type || undefined, description: description || undefined }),
+        body: JSON.stringify({ reference, discipline, type: type || undefined, description: description || undefined, parentTransmittalId: parentTransmittalId || undefined }),
       });
       if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الإنشاء'); }
       const created = await r.json();
@@ -1762,6 +1804,61 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
         <div className="space-y-1.5">
           <Label>تاريخ إرسال REV.0</Label>
           <Input type="date" value={submitDate} onChange={(e) => setSubmitDate(e.target.value)} />
+        </div>
+
+        {/* Link to parent transmittal (for incoming letters linked to outgoing) */}
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-1.5">
+            <Link className="w-3.5 h-3.5" />
+            ربط بكتاب آخر (اختياري)
+            <span className="text-xs text-slate-500">— للكتب الواردة المرتبطة بكتب صادرة</span>
+          </Label>
+          <div className="flex gap-2">
+            <Input
+              value={parentTransmittalId}
+              onChange={(e) => setParentTransmittalId(e.target.value)}
+              placeholder="أدخل معرف الكتاب المرتبط (ID) أو ابحث..."
+              className="flex-1"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={loadingParents}
+              onClick={async () => {
+                setLoadingParents(true);
+                try {
+                  const r = await fetch('/api/transmittals?limit=50');
+                  if (r.ok) {
+                    const data = await r.json();
+                    setParentOptions(data.items || []);
+                  }
+                } catch {}
+                setLoadingParents(false);
+              }}
+            >
+              {loadingParents ? '...' : '🔍 بحث'}
+            </Button>
+          </div>
+          {parentOptions.length > 0 && (
+            <div className="border border-slate-200 rounded-lg max-h-40 overflow-y-auto">
+              {parentOptions.map((opt: any) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => { setParentTransmittalId(opt.id); setParentOptions([]); }}
+                  className="block w-full text-right p-2 hover:bg-slate-50 border-b border-slate-100 last:border-0"
+                >
+                  <span className="font-mono text-sm font-semibold">{opt.reference}</span>
+                  <span className="text-xs text-slate-500 mr-2">{opt.category}</span>
+                  {opt.description && <span className="text-xs text-slate-600 block">{opt.description.slice(0, 60)}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+          {parentTransmittalId && (
+            <p className="text-xs text-emerald-700">✓ مرتبط بكتاب ID: {parentTransmittalId}</p>
+          )}
         </div>
           </>
         )}

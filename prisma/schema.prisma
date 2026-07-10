@@ -56,10 +56,13 @@ model Transmittal {
   category    String   @default("TRANSMITTAL") // category code (mirrors discipline's category)
   type        String?  // SHOP DRAWINGS, SAMPLE, SOURCE APPROVAL, etc.
   description String?
+  parentTransmittalId String? // links to another transmittal (e.g., incoming letter linked to outgoing)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   categoryRef Category?   @relation(fields: [category], references: [code], onDelete: Restrict)
+  parent      Transmittal? @relation("TransmittalLink", fields: [parentTransmittalId], references: [id], onDelete: SetNull)
+  children    Transmittal[] @relation("TransmittalLink")
   revisions   Revision[]
   reviews     Review[]
   attachments Attachment[]
@@ -68,6 +71,7 @@ model Transmittal {
   @@index([disciplineCode])
   @@index([category])
   @@index([reference])
+  @@index([parentTransmittalId])
 }
 
 model Revision {

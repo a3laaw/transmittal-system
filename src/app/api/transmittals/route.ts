@@ -31,6 +31,8 @@ export async function GET(req: NextRequest) {
     include: {
       revisions: { orderBy: { revNumber: 'asc' } },
       reviews: true,
+      parent: { select: { id: true, reference: true, description: true, category: true } },
+      children: { select: { id: true, reference: true, description: true, category: true } },
     },
     orderBy: { reference: 'asc' },
   });
@@ -65,6 +67,9 @@ export async function GET(req: NextRequest) {
       category: t.category,
       type: t.type,
       description: t.description,
+      parentTransmittalId: t.parentTransmittalId,
+      parent: t.parent,
+      children: t.children,
       createdAt: t.createdAt,
       revisionsCount: t.revisions.length,
       lastSubmitDate: t.revisions.filter(r => r.submitDate).slice(-1)[0]?.submitDate ?? null,
@@ -89,7 +94,7 @@ export async function GET(req: NextRequest) {
 // POST /api/transmittals — create new
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { reference, discipline, type, description } = body;
+  const { reference, discipline, type, description, parentTransmittalId } = body;
 
   if (!reference || !discipline) {
     return NextResponse.json({ error: 'المرجع والتخصص مطلوبان' }, { status: 400 });
@@ -112,6 +117,7 @@ export async function POST(req: NextRequest) {
       category,
       type: type || null,
       description: description || null,
+      parentTransmittalId: parentTransmittalId || null,
       revisions: { create: [{ revNumber: 0, submitDate: new Date() }] },
     },
     include: { revisions: true },

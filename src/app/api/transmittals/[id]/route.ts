@@ -15,6 +15,8 @@ export async function GET(
     include: {
       revisions: { orderBy: { revNumber: 'asc' } },
       reviews: { orderBy: { party: 'asc' } },
+      parent: { select: { id: true, reference: true, description: true, category: true } },
+      children: { select: { id: true, reference: true, description: true, category: true } },
     },
   });
 
@@ -42,7 +44,7 @@ export async function GET(
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
-  const { type, description, discipline } = body;
+  const { type, description, discipline, parentTransmittalId } = body;
 
   const t = await db.transmittal.update({
     where: { id },
@@ -50,6 +52,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ...(type !== undefined && { type: type || null }),
       ...(description !== undefined && { description: description || null }),
       ...(discipline && { discipline }),
+      ...(parentTransmittalId !== undefined && { parentTransmittalId: parentTransmittalId || null }),
     },
   });
 
