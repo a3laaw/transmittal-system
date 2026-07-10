@@ -14,10 +14,10 @@ export const maxDuration = 60;
  * Two modes:
  * 1. File upload — multipart/form-data with field "file"
  *    Saves the file to /home/z/my-project/storage/uploads/{transmittalId}/
- *    (NOT in public/ — that doesn't work in standalone production mode).
  *    Files are served via /api/files/{transmittalId}/{filename}.
  * 2. External link — application/json body { url, fileName, urlSource }
- *    Creates an Attachment record pointing to the external URL.
+ *
+ * Allowed file types: images (PNG, JPG, GIF, WebP, BMP, SVG), PDF, Word (DOC, DOCX)
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // ---------- Mode 1: File upload (FormData) ----------
   if (!contentType.includes('multipart/form-data')) {
     return NextResponse.json(
-      { error: 'نوع المحتوى غير مدعوم — استخدم multipart/form-data أو application/json' },
+      { error: 'نوع المحتوى غير مدعوم' },
       { status: 400 },
     );
   }
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
-  // Build a safe filename: keep word chars, dots, dashes, Arabic, underscores
+  // Build a safe filename
   const safeName = (file.name || 'file')
     .replace(/[^\w.\u0600-\u06FF-]/g, '_')
     .replace(/_+/g, '_')
@@ -113,33 +113,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const bytes = new Uint8Array(await file.arrayBuffer());
   await writeFile(absPath, bytes);
 
-  // Determine MIME type — use browser-provided type, fall back to extension
+  // Determine MIME type
   let fileType = file.type || '';
   if (!fileType) {
-    const ext = path.extname(file.name || '').toLowerCase();
     const extMimes: Record<string, string> = {
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.gif': 'image/gif',
-      '.webp': 'image/webp',
-      '.svg': 'image/svg+xml',
-      '.bmp': 'image/bmp',
-      '.pdf': 'application/pdf',
+      '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+      '.bmp': 'image/bmp', '.pdf': 'application/pdf',
       '.doc': 'application/msword',
       '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      '.xls': 'application/vnd.ms-excel',
-      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      '.txt': 'text/plain',
-      '.csv': 'text/csv',
-      '.zip': 'application/zip',
-      '.mp4': 'video/mp4',
-      '.mp3': 'audio/mpeg',
     };
     if (extMimes[ext]) fileType = extMimes[ext];
   }
 
-  // Public URL — served via /api/files/{id}/{filename} (works in dev & standalone production)
+  // Public URL — served via /api/files/{id}/{filename}
   const publicPath = `/api/files/${id}/${fileName}`;
 
   const att = await db.attachment.create({
