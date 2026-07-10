@@ -1435,22 +1435,35 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                       </div>
                     )}
                     <div className="flex-1">
-                      <button
-                        onClick={() => isUploaded ? handleDownloadFile(att) : window.open(openUrl, '_blank')}
-                        className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline truncate block text-right"
-                        title={att.fileName}
-                      >
-                        {isLink && `${sc.icon} `}{att.fileName}
-                      </button>
+                      {isUploaded ? (
+                        <a
+                          href={openUrl}
+                          download={att.fileName}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline truncate block text-right cursor-pointer"
+                          title={att.fileName}
+                        >
+                          {att.fileName}
+                        </a>
+                      ) : (
+                        <button
+                          onClick={() => window.open(openUrl, '_blank')}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline truncate block text-right"
+                          title={att.fileName}
+                        >
+                          {sc.icon} {att.fileName}
+                        </button>
+                      )}
                       <p className="text-xs text-slate-500 mt-0.5">
                         {isUploaded ? `${(att.fileSize / 1024).toFixed(1)} KB` : sc.label}
                       </p>
                     </div>
                     <div className="flex gap-1">
                       {isUploaded && (
-                        <Button size="sm" variant="ghost" title="تنزيل" onClick={() => handleDownloadFile(att)}>
-                          <Download className="w-4 h-4" />
-                        </Button>
+                        <a href={openUrl} download={att.fileName} title="تنزيل">
+                          <Button size="sm" variant="ghost" title="تنزيل">
+                            <Download className="w-4 h-4" />
+                          </Button>
+                        </a>
                       )}
                       {isLink && (
                         <a href={openUrl} target="_blank" rel="noopener noreferrer" title="فتح">
