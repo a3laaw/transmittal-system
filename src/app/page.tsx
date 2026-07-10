@@ -1132,6 +1132,29 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
     }
   };
 
+  // Download file using fetch + blob (works for all file types including PDF)
+  // This bypasses browser issues with direct download links
+  const handleDownloadFile = async (att: any) => {
+    if (!att.filePath) return;
+    try {
+      toast({ title: 'جاري التنزيل...', description: att.fileName });
+      const res = await fetch(att.filePath, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`فشل التنزيل (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = att.fileName || 'download';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast({ title: 'تم التنزيل', description: att.fileName });
+    } catch (e: any) {
+      toast({ title: 'خطأ في التنزيل', description: e.message, variant: 'destructive' });
+    }
+  };
+
   const sourceConfig: Record<string, { label: string; icon: string; color: string }> = {
     link: { label: 'رابط', icon: '🔗', color: 'bg-blue-600 text-white' },
   };
@@ -1383,25 +1406,22 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                       </div>
                     )}
                     <div className="flex-1">
-                      <a
-                        href={openUrl}
-                        download={isUploaded ? att.fileName : undefined}
-                        className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline truncate block"
+                      <button
+                        onClick={() => isUploaded ? handleDownloadFile(att) : window.open(openUrl, '_blank')}
+                        className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline truncate block text-right"
                         title={att.fileName}
                       >
                         {isLink && `${sc.icon} `}{att.fileName}
-                      </a>
+                      </button>
                       <p className="text-xs text-slate-500 mt-0.5">
                         {isUploaded ? `${(att.fileSize / 1024).toFixed(1)} KB` : sc.label}
                       </p>
                     </div>
                     <div className="flex gap-1">
                       {isUploaded && (
-                        <a href={openUrl} download={att.fileName} title="تنزيل">
-                          <Button size="sm" variant="ghost" title="تنزيل">
-                            <Download className="w-4 h-4" />
-                          </Button>
-                        </a>
+                        <Button size="sm" variant="ghost" title="تنزيل" onClick={() => handleDownloadFile(att)}>
+                          <Download className="w-4 h-4" />
+                        </Button>
                       )}
                       {isLink && (
                         <a href={openUrl} target="_blank" rel="noopener noreferrer" title="فتح">
