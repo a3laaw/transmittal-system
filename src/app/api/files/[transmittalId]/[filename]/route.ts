@@ -28,6 +28,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ transmittalId: string; filename: string }> },
 ) {
+  try {
   const { transmittalId, filename } = await params;
 
   // Sanitize inputs — prevent path traversal
@@ -93,8 +94,9 @@ export async function GET(
   let contentType = mimeByExt[ext] || 'application/octet-stream';
   let buffer: Buffer;
   try {
-    buffer = await readFile(resolvedPath);
-  } catch {
+    buffer = await readFile(resolvedPath) as Buffer;
+  } catch (e: any) {
+    console.error('[api/files] readFile error:', e.message);
     return NextResponse.json({ error: 'تعذّر قراءة الملف' }, { status: 500 });
   }
   // Magic-byte detection (first 8 bytes)
@@ -150,14 +152,20 @@ export async function GET(
   }
 
   // Try to find the original filename from DB (for a clean download name)
+  // Make this completely optional — if it fails, use the URL filename
   let downloadName = filename;
   try {
-    const att = await db.attachment.findFirst({
-      where: { transmittalId, filePath: { contains: filename } },
-      select: { fileName: true },
-    });
-    if (att?.fileName) downloadName = att.fileName;
-  } catch { /* ignore — use filename from URL */ }
+    if (filename && transmittalId) {
+      const att = await db.attachment.findFirst({
+        where: { transmittalId, filePath: { contains: filename } },
+        select: { fileName: true },
+      });
+      if (att?.fileName) downloadName = att.fileName;
+    }
+  } catch (dbErr: any) {
+    console.error('[api/files] DB lookup failed (non-fatal):', dbErr.message);
+    /* use filename from URL */
+  }
 
   // Full file response
   // Use "attachment" to force download (especially for PDF/Word that may fail to open inline)
@@ -171,4 +179,8 @@ export async function GET(
       'Content-Disposition': `attachment; filename="${downloadName.replace(/"/g, '_')}"`,
     },
   });
+  } catch (e: any) {
+    console.error('[api/files] Unhandled error:', e.message, e.stack);
+    return NextResponse.json({ error: 'تعذّر قراءة الملف' }, { status: 500 });
+  }
 }
