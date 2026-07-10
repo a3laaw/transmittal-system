@@ -84,6 +84,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'حجم الملف يتجاوز 25 ميجابايت' }, { status: 413 });
   }
 
+  // Type guard — only images, PDF, and Word documents allowed
+  const ALLOWED_EXTS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg', '.pdf', '.doc', '.docx'];
+  const ext = path.extname(file.name || '').toLowerCase();
+  const isImage = file.type && file.type.startsWith('image/');
+  const isPdf = file.type === 'application/pdf' || ext === '.pdf';
+  const isWord = file.type === 'application/msword' ||
+    file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    ext === '.doc' || ext === '.docx';
+  if (!isImage && !isPdf && !isWord && !ALLOWED_EXTS.includes(ext)) {
+    return NextResponse.json(
+      { error: 'نوع الملف غير مدعوم. يُسمح فقط بالصور (PNG, JPG, GIF, WebP) و PDF و Word' },
+      { status: 415 },
+    );
+  }
+
   // Build a safe filename: keep word chars, dots, dashes, Arabic, underscores
   const safeName = (file.name || 'file')
     .replace(/[^\w.\u0600-\u06FF-]/g, '_')

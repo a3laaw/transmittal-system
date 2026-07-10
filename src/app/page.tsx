@@ -1061,7 +1061,25 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
     fetchAttachments();
   }, [fetchAttachments]);
 
+  const ALLOWED_EXTS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg', '.pdf', '.doc', '.docx'];
+  const ALLOWED_TYPES = ['image/', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+
+  const isAllowedFile = (file: File): boolean => {
+    const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
+    if (ALLOWED_EXTS.includes(ext)) return true;
+    if (file.type && ALLOWED_TYPES.some(t => file.type.startsWith(t))) return true;
+    return false;
+  };
+
   const handleUpload = async (file: File) => {
+    if (!isAllowedFile(file)) {
+      toast({
+        title: 'نوع الملف غير مدعوم',
+        description: 'يُسمح فقط بالصور (PNG, JPG, GIF, WebP) و PDF و Word',
+        variant: 'destructive',
+      });
+      return;
+    }
     setUploading(true);
     try {
       const fd = new FormData();
@@ -1252,7 +1270,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
             <CardTitle className="text-lg flex items-center gap-2">
               <FileDown className="w-5 h-5" /> المرفقات والصور ({attachments.length})
             </CardTitle>
-            <CardDescription>ارفع ملفات أو اربط روابط خارجية</CardDescription>
+            <CardDescription>ارفع صور (PNG, JPG, GIF, WebP) أو PDF أو Word فقط</CardDescription>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -1262,6 +1280,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
               type="file"
               id="pick-file"
               className="hidden"
+              accept="image/*,.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (!f) return;
@@ -1298,16 +1317,32 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                 const isLink = att.url && att.url.length > 0;
                 // Detect image by MIME type OR by file extension (fallback)
                 const imgExts = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'];
+                const pdfExts = ['.pdf'];
+                const docExts = ['.doc', '.docx'];
                 const fileExt = (att.fileName || '').toLowerCase().match(/\.[a-z0-9]+$/)?.[0] || '';
                 const isImage = isUploaded && (
                   (att.fileType && att.fileType.startsWith('image/')) ||
                   imgExts.includes(fileExt)
+                );
+                const isPdf = isUploaded && (
+                  (att.fileType && att.fileType === 'application/pdf') ||
+                  pdfExts.includes(fileExt)
+                );
+                const isDoc = isUploaded && (
+                  (att.fileType && (att.fileType === 'application/msword' || att.fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')) ||
+                  docExts.includes(fileExt)
                 );
                 const src = att.urlSource || 'link';
                 const sc = sourceConfig[src] || sourceConfig.link;
                 const openUrl = isLink ? att.url : att.filePath;
                 // Cache-busting query for image src to force reload after re-upload
                 const imgSrc = isImage ? `${att.filePath}${att.filePath.includes('?') ? '&' : '?'}t=${att.createdAt ? new Date(att.createdAt).getTime() : ''}` : att.filePath;
+
+                // File type badge info
+                const typeBadge = isPdf ? { label: 'PDF', color: 'bg-red-100 text-red-700', icon: '📄' }
+                  : isDoc ? { label: 'Word', color: 'bg-blue-100 text-blue-700', icon: '📝' }
+                  : isImage ? { label: 'صورة', color: 'bg-emerald-100 text-emerald-700', icon: '🖼️' }
+                  : null;
 
                 return (
                   <div key={att.id} className="border border-slate-200 rounded-lg p-3 flex flex-col gap-2">
@@ -1330,8 +1365,16 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                     ) : (
                       <div className="w-full h-32 flex items-center justify-center bg-slate-50 rounded border border-slate-200 relative">
                         {isLink && <span className="text-3xl">{sc.icon}</span>}
-                        {isUploaded && !isImage && <FileDown className="w-8 h-8 text-slate-400" />}
-                        {/* Source badge */}
+                        {isPdf && <span className="text-4xl">📄</span>}
+                        {isDoc && <span className="text-4xl">📝</span>}
+                        {isUploaded && !isImage && !isPdf && !isDoc && <FileDown className="w-8 h-8 text-slate-400" />}
+                        {/* Type badge */}
+                        {typeBadge && (
+                          <span className={`absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-bold ${typeBadge.color}`}>
+                            {typeBadge.icon} {typeBadge.label}
+                          </span>
+                        )}
+                        {/* Source badge for links */}
                         {isLink && (
                           <span className={`absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-bold ${sc.color}`}>
                             {sc.label}
