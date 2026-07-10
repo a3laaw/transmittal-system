@@ -1437,7 +1437,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                     <div className="flex-1">
                       {isUploaded ? (
                         <a
-                          href={openUrl}
+                          href={`/api/download/${att.id}`}
                           download={att.fileName}
                           className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline truncate block text-right cursor-pointer"
                           title={att.fileName}
@@ -1459,7 +1459,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                     </div>
                     <div className="flex gap-1">
                       {isUploaded && (
-                        <a href={openUrl} download={att.fileName} title="تنزيل">
+                        <a href={`/api/download/${att.id}`} download={att.fileName} title="تنزيل">
                           <Button size="sm" variant="ghost" title="تنزيل">
                             <Download className="w-4 h-4" />
                           </Button>
