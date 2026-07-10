@@ -83,17 +83,27 @@ export async function GET(req: NextRequest) {
   // 1. If category is specified and has a custom template, use it
   // 2. Otherwise, fall back to the default TRANSIMITALS_template.xlsx
   let templatePath = findExcelTemplate();
+  let templateType = 'xlsx'; // default
 
   if (category) {
     try {
-      const cat = await db.category.findUnique({ where: { code: category }, select: { excelTemplate: true } });
-      if (cat?.excelTemplate) {
-        // Custom template path: /api/templates/{code} → storage/templates/{code}.xlsx
+      const cat = await db.category.findUnique({ 
+        where: { code: category }, 
+        select: { templatePath: true, templateType: true } 
+      });
+      if (cat?.templatePath) {
+        // Find the template file (any extension)
         const storageRoot = getStorageRoot();
-        const customPath = path.join(storageRoot, 'templates', `${category}.xlsx`);
-        if (existsSync(customPath)) {
-          templatePath = customPath;
-          console.log('[excel-template] Using custom template for category:', category);
+        const templatesDir = path.join(storageRoot, 'templates');
+        if (existsSync(templatesDir)) {
+          const { readdirSync } = require('fs');
+          const files = readdirSync(templatesDir);
+          const templateFile = files.find((f: string) => f.startsWith(`${category}.`));
+          if (templateFile) {
+            templatePath = path.join(templatesDir, templateFile);
+            templateType = cat.templateType || path.extname(templateFile).replace('.', '');
+            console.log('[excel-template] Using custom template for category:', category, 'type:', templateType);
+          }
         }
       }
     } catch (e: any) {
@@ -109,6 +119,29 @@ export async function GET(req: NextRequest) {
     // Read the template file as a buffer
     const templateBuf = await readFile(templatePath);
 
+    // For non-Excel templates (Word, PDF, etc.), just return the template as-is
+    // with the reference and date in the filename
+    if (templateType !== 'xlsx' && templateType !== 'xlsm') {
+      const ext = templateType;
+      const filename = `${reference}.${ext}`;
+      const mimeTypes: Record<string, string> = {
+        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'doc': 'application/msword',
+        'pdf': 'application/pdf',
+        'txt': 'text/plain; charset=utf-8',
+      };
+      return new NextResponse(new Uint8Array(templateBuf), {
+        status: 200,
+        headers: {
+          'Content-Type': mimeTypes[ext] || 'application/octet-stream',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Content-Length': String(templateBuf.length),
+        },
+      });
+    }
+
+    // For Excel templates, modify cell values using JSZip
     // Load as ZIP
     const zip = await JSZip.loadAsync(templateBuf);
 

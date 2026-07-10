@@ -17,7 +17,8 @@ model Category {
   label         String   // Arabic label: "ترانسميتال"
   icon          String   @default("📄") // emoji icon
   color         String   @default("bg-blue-100 text-blue-700") // tailwind classes
-  excelTemplate String?  // path to custom Excel template (if uploaded)
+  templatePath  String?  // path to custom template (if uploaded)
+  templateType  String?  // template file type: "xlsx", "docx", "pdf", etc.
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

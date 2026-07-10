@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { writeFile, mkdir, unlink } from 'fs/promises';
+import { writeFile, mkdir, unlink, readdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import { getStorageRoot } from '@/lib/paths';
@@ -23,36 +23,61 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
     const label = form.get('label') as string | null;
     const icon = form.get('icon') as string | null;
     const color = form.get('color') as string | null;
-    const file = form.get('excelTemplate') as File | null;
+    const file = form.get('template') as File | null;
     const removeTemplate = form.get('removeTemplate') === 'true';
 
-    let excelTemplate = existing.excelTemplate;
+    let templatePath = existing.templatePath;
+    let templateType = existing.templateType;
 
     // Remove template
     if (removeTemplate) {
-      excelTemplate = null;
-      // Delete file from disk
+      templatePath = null;
+      templateType = null;
+      // Delete file from disk (try all extensions)
       const storageRoot = getStorageRoot();
-      const filePath = path.join(storageRoot, 'templates', `${code}.xlsx`);
-      if (existsSync(filePath)) {
-        try { await unlink(filePath); } catch {}
+      const templatesDir = path.join(storageRoot, 'templates');
+      if (existsSync(templatesDir)) {
+        try {
+          const files = await readdir(templatesDir);
+          for (const f of files) {
+            if (f.startsWith(`${code}.`)) {
+              await unlink(path.join(templatesDir, f));
+            }
+          }
+        } catch {}
       }
     }
 
-    // Save new template
+    // Save new template (any file type)
     if (file && file instanceof File && file.size > 0) {
-      const ext = path.extname(file.name).toLowerCase();
-      if (ext !== '.xlsx' && ext !== '.xlsm') {
-        return NextResponse.json({ error: 'قالب Excel يجب أن يكون ملف .xlsx أو .xlsm' }, { status: 400 });
+      const ext = path.extname(file.name).toLowerCase().replace('.', '');
+      const allowedTypes = ['xlsx', 'xlsm', 'docx', 'doc', 'pdf', 'txt'];
+      if (!allowedTypes.includes(ext)) {
+        return NextResponse.json(
+          { error: `نوع القالب غير مدعوم. الأنواع المدعومة: ${allowedTypes.join(', ')}` },
+          { status: 400 },
+        );
       }
       const storageRoot = getStorageRoot();
       const templatesDir = path.join(storageRoot, 'templates');
       if (!existsSync(templatesDir)) await mkdir(templatesDir, { recursive: true });
-      const fileName = `${code}.xlsx`;
+      // Delete old template file (any extension)
+      if (existsSync(templatesDir)) {
+        try {
+          const files = await readdir(templatesDir);
+          for (const f of files) {
+            if (f.startsWith(`${code}.`)) {
+              await unlink(path.join(templatesDir, f));
+            }
+          }
+        } catch {}
+      }
+      const fileName = `${code}.${ext}`;
       const absPath = path.join(templatesDir, fileName);
       const bytes = new Uint8Array(await file.arrayBuffer());
       await writeFile(absPath, bytes);
-      excelTemplate = `/api/templates/${code}`;
+      templatePath = `/api/templates/${code}`;
+      templateType = ext;
     }
 
     const c = await db.category.update({
@@ -61,7 +86,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
         ...(label !== null && label !== undefined && { label: String(label).trim() }),
         ...(icon !== null && icon !== undefined && { icon }),
         ...(color !== null && color !== undefined && { color }),
-        excelTemplate,
+        templatePath,
+        templateType,
       },
     });
     return NextResponse.json(c);
@@ -96,11 +122,18 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       { status: 400 }
     );
   }
-  // Delete template file if exists
+  // Delete template file if exists (any extension)
   const storageRoot = getStorageRoot();
-  const filePath = path.join(storageRoot, 'templates', `${code}.xlsx`);
-  if (existsSync(filePath)) {
-    try { await unlink(filePath); } catch {}
+  const templatesDir = path.join(storageRoot, 'templates');
+  if (existsSync(templatesDir)) {
+    try {
+      const files = await readdir(templatesDir);
+      for (const f of files) {
+        if (f.startsWith(`${code}.`)) {
+          await unlink(path.join(templatesDir, f));
+        }
+      }
+    } catch {}
   }
   await db.category.delete({ where: { code } });
   return NextResponse.json({ ok: true });

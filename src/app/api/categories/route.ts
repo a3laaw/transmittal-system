@@ -24,7 +24,8 @@ export async function GET() {
       label: c.label,
       icon: c.icon,
       color: c.color,
-      excelTemplate: c.excelTemplate,
+      templatePath: c.templatePath,
+      templateType: c.templateType,
       disciplinesCount: c._count.disciplines,
       transmittalsCount: c._count.transmittals,
       createdAt: c.createdAt,
@@ -33,7 +34,7 @@ export async function GET() {
   });
 }
 
-// POST /api/categories — create new category (with optional Excel template upload)
+// POST /api/categories — create new category (with optional template upload)
 export async function POST(req: NextRequest) {
   const contentType = req.headers.get('content-type') || '';
 
@@ -44,33 +45,39 @@ export async function POST(req: NextRequest) {
     const label = String(form.get('label') || '').trim();
     const icon = String(form.get('icon') || '📄');
     const color = String(form.get('color') || 'bg-blue-100 text-blue-700');
-    const file = form.get('excelTemplate') as File | null;
+    const file = form.get('template') as File | null;
 
     if (!code || !label) {
       return NextResponse.json({ error: 'الكود والاسم مطلوبان' }, { status: 400 });
     }
 
-    let excelTemplate: string | null = null;
+    let templatePath: string | null = null;
+    let templateType: string | null = null;
 
-    // Save uploaded template
+    // Save uploaded template (any file type)
     if (file && file instanceof File) {
-      const ext = path.extname(file.name).toLowerCase();
-      if (ext !== '.xlsx' && ext !== '.xlsm') {
-        return NextResponse.json({ error: 'قالب Excel يجب أن يكون ملف .xlsx أو .xlsm' }, { status: 400 });
+      const ext = path.extname(file.name).toLowerCase().replace('.', '');
+      const allowedTypes = ['xlsx', 'xlsm', 'docx', 'doc', 'pdf', 'txt'];
+      if (!allowedTypes.includes(ext)) {
+        return NextResponse.json(
+          { error: `نوع القالب غير مدعوم. الأنواع المدعومة: ${allowedTypes.join(', ')}` },
+          { status: 400 },
+        );
       }
       const storageRoot = getStorageRoot();
       const templatesDir = path.join(storageRoot, 'templates');
       if (!existsSync(templatesDir)) await mkdir(templatesDir, { recursive: true });
-      const fileName = `${code}.xlsx`;
+      const fileName = `${code}.${ext}`;
       const absPath = path.join(templatesDir, fileName);
       const bytes = new Uint8Array(await file.arrayBuffer());
       await writeFile(absPath, bytes);
-      excelTemplate = `/api/templates/${code}`;
+      templatePath = `/api/templates/${code}`;
+      templateType = ext;
     }
 
     try {
       const c = await db.category.create({
-        data: { code, label, icon, color, excelTemplate },
+        data: { code, label, icon, color, templatePath, templateType },
       });
       return NextResponse.json(c, { status: 201 });
     } catch (e: any) {
