@@ -1385,8 +1385,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                     <div className="flex-1">
                       <a
                         href={openUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        download={isUploaded ? att.fileName : undefined}
                         className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline truncate block"
                         title={att.fileName}
                       >
@@ -1397,9 +1396,18 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                       </p>
                     </div>
                     <div className="flex gap-1">
-                      <a href={openUrl} target="_blank" rel="noopener noreferrer">
-                        <Button size="sm" variant="ghost" title="فتح"><Eye className="w-4 h-4" /></Button>
-                      </a>
+                      {isUploaded && (
+                        <a href={openUrl} download={att.fileName} title="تنزيل">
+                          <Button size="sm" variant="ghost" title="تنزيل">
+                            <Download className="w-4 h-4" />
+                          </Button>
+                        </a>
+                      )}
+                      {isLink && (
+                        <a href={openUrl} target="_blank" rel="noopener noreferrer" title="فتح">
+                          <Button size="sm" variant="ghost"><Eye className="w-4 h-4" /></Button>
+                        </a>
+                      )}
                       <Button size="sm" variant="ghost" onClick={() => handleDeleteAttachment(att.id)}>
                         <Trash2 className="w-4 h-4 text-red-600" />
                       </Button>

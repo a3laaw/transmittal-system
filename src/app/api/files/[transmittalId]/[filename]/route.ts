@@ -149,6 +149,7 @@ export async function GET(
   }
 
   // Full file response
+  // Use "attachment" to force download (especially for PDF/Word that may fail to open inline)
   return new NextResponse(new Uint8Array(buffer), {
     status: 200,
     headers: {
@@ -156,7 +157,7 @@ export async function GET(
       'Content-Length': String(stat.size),
       'Accept-Ranges': 'bytes',
       'Cache-Control': 'no-store',
-      'Content-Disposition': `inline; filename="${filename.replace(/"/g, '_')}"`,
+      'Content-Disposition': `attachment; filename="${filename.replace(/"/g, '_')}"`,
     },
   });
 }
