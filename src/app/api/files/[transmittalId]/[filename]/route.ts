@@ -3,6 +3,7 @@ import { readFile } from 'fs/promises';
 import { existsSync, statSync } from 'fs';
 import path from 'path';
 import { getStorageRoot } from '@/lib/paths';
+import { db } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -148,6 +149,16 @@ export async function GET(
     }
   }
 
+  // Try to find the original filename from DB (for a clean download name)
+  let downloadName = filename;
+  try {
+    const att = await db.attachment.findFirst({
+      where: { transmittalId, filePath: { contains: filename } },
+      select: { fileName: true },
+    });
+    if (att?.fileName) downloadName = att.fileName;
+  } catch { /* ignore — use filename from URL */ }
+
   // Full file response
   // Use "attachment" to force download (especially for PDF/Word that may fail to open inline)
   return new NextResponse(new Uint8Array(buffer), {
@@ -157,7 +168,7 @@ export async function GET(
       'Content-Length': String(stat.size),
       'Accept-Ranges': 'bytes',
       'Cache-Control': 'no-store',
-      'Content-Disposition': `attachment; filename="${filename.replace(/"/g, '_')}"`,
+      'Content-Disposition': `attachment; filename="${downloadName.replace(/"/g, '_')}"`,
     },
   });
 }
