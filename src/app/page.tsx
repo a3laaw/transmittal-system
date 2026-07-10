@@ -1134,24 +1134,53 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
 
   // Download file using fetch + blob (works for all file types including PDF)
   // This bypasses browser issues with direct download links
+  // Falls back to window.open if fetch fails
   const handleDownloadFile = async (att: any) => {
-    if (!att.filePath) return;
+    if (!att.filePath) {
+      toast({ title: 'خطأ', description: 'مسار الملف غير موجود', variant: 'destructive' });
+      return;
+    }
     try {
       toast({ title: 'جاري التنزيل...', description: att.fileName });
-      const res = await fetch(att.filePath, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`فشل التنزيل (${res.status})`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      
+      // Method 1: fetch + blob (preferred)
+      try {
+        const res = await fetch(att.filePath, { 
+          cache: 'no-store',
+          headers: { 'Accept': '*/*' },
+        });
+        if (res.ok) {
+          const blob = await res.blob();
+          if (blob.size > 0) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = att.fileName || 'download';
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+            toast({ title: 'تم التنزيل', description: att.fileName });
+            return;
+          }
+        }
+      } catch (fetchErr: any) {
+        console.log('Download fetch failed, trying fallback:', fetchErr.message);
+      }
+
+      // Method 2: Fallback - direct link with download attribute
       const a = document.createElement('a');
-      a.href = url;
+      a.href = att.filePath;
       a.download = att.fileName || 'download';
+      a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
       toast({ title: 'تم التنزيل', description: att.fileName });
     } catch (e: any) {
-      toast({ title: 'خطأ في التنزيل', description: e.message, variant: 'destructive' });
+      console.error('Download error:', e);
+      toast({ title: 'خطأ في التنزيل', description: e.message || 'فشل التنزيل', variant: 'destructive' });
     }
   };
 
