@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
+import path from 'path';
 import JSZip from 'jszip';
-import { findExcelTemplate } from '@/lib/paths';
+import { findExcelTemplate, getStorageRoot } from '@/lib/paths';
+import { db } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -71,12 +73,34 @@ export async function GET(req: NextRequest) {
   const reference = searchParams.get('reference') || '';
   const description = searchParams.get('description') || '';
   const date = searchParams.get('date') || new Date().toISOString().slice(0, 10);
+  const category = searchParams.get('category') || '';
 
   if (!reference) {
     return NextResponse.json({ error: 'المرجع مطلوب' }, { status: 400 });
   }
 
-  const templatePath = findExcelTemplate();
+  // Find the template to use:
+  // 1. If category is specified and has a custom template, use it
+  // 2. Otherwise, fall back to the default TRANSIMITALS_template.xlsx
+  let templatePath = findExcelTemplate();
+
+  if (category) {
+    try {
+      const cat = await db.category.findUnique({ where: { code: category }, select: { excelTemplate: true } });
+      if (cat?.excelTemplate) {
+        // Custom template path: /api/templates/{code} → storage/templates/{code}.xlsx
+        const storageRoot = getStorageRoot();
+        const customPath = path.join(storageRoot, 'templates', `${category}.xlsx`);
+        if (existsSync(customPath)) {
+          templatePath = customPath;
+          console.log('[excel-template] Using custom template for category:', category);
+        }
+      }
+    } catch (e: any) {
+      console.log('[excel-template] Error looking up category template:', e.message);
+    }
+  }
+
   if (!existsSync(templatePath)) {
     return NextResponse.json({ error: `القالب غير موجود` }, { status: 500 });
   }

@@ -433,13 +433,11 @@ export default function Home() {
     }
   };
 
-  const handleDownloadExcel = async (reference: string, description: string) => {
+  const handleDownloadExcel = async (reference: string, description: string, category?: string) => {
     const today = new Date().toISOString().slice(0, 10);
     toast({ title: 'جاري توليد ملف Excel', description: `سيتم تنزيل ${reference}.xlsx` });
-    // Use fetch + blob instead of window.location.href so:
-    //  1) it works inside the PWA (installed desktop app) where navigation downloads can be blocked
-    //  2) repeated downloads for the same reference (e.g. after publishing a new revision) always re-trigger
-    const url = `/api/excel-template?reference=${encodeURIComponent(reference)}&description=${encodeURIComponent(description)}&date=${today}&_=${Date.now()}`;
+    const catParam = category ? `&category=${encodeURIComponent(category)}` : '';
+    const url = `/api/excel-template?reference=${encodeURIComponent(reference)}&description=${encodeURIComponent(description)}&date=${today}${catParam}&_=${Date.now()}`;
     try {
       const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) {
@@ -2706,11 +2704,12 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
   const [label, setLabel] = useState('');
   const [icon, setIcon] = useState('📄');
   const [color, setColor] = useState('bg-blue-100 text-blue-700');
+  const [excelTemplate, setExcelTemplate] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    if (open) { setCode(''); setLabel(''); setIcon('📄'); setColor('bg-blue-100 text-blue-700'); }
+    if (open) { setCode(''); setLabel(''); setIcon('📄'); setColor('bg-blue-100 text-blue-700'); setExcelTemplate(null); }
   }, [open]);
 
   const iconOptions = ['📄', '🔍', '❓', '📚', '📋', '📝', '🏗️', '⚡', '🔥', '💧', '❄️', '📡', '🚪', '🛡️', '🔧', '📦'];
@@ -2733,11 +2732,23 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
     }
     setSaving(true);
     try {
-      const r = await fetch('/api/categories', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: code.toUpperCase(), label, icon, color }),
-      });
-      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الحفظ'); }
+      // Use FormData if template file is provided, otherwise JSON
+      if (excelTemplate) {
+        const fd = new FormData();
+        fd.append('code', code.toUpperCase());
+        fd.append('label', label);
+        fd.append('icon', icon);
+        fd.append('color', color);
+        fd.append('excelTemplate', excelTemplate);
+        const r = await fetch('/api/categories', { method: 'POST', body: fd });
+        if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الحفظ'); }
+      } else {
+        const r = await fetch('/api/categories', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: code.toUpperCase(), label, icon, color }),
+        });
+        if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الحفظ'); }
+      }
       toast({ title: 'تم إضافة القسم الرئيسي', description: `${code.toUpperCase()} - ${label}` });
       onSaved();
     } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
@@ -2785,6 +2796,28 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
             </Select>
             <div className={`inline-block px-3 py-1.5 rounded text-sm mt-1 ${color}`}>{icon} معاينة</div>
           </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">قالب Excel (اختياري)</Label>
+            <input
+              type="file"
+              accept=".xlsx,.xlsm"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) setExcelTemplate(f);
+                else setExcelTemplate(null);
+              }}
+              className="block w-full text-sm text-slate-500
+                file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0
+                file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700
+                hover:file:bg-emerald-100 cursor-pointer"
+            />
+            {excelTemplate && (
+              <p className="text-xs text-emerald-700 flex items-center gap-1">
+                ✓ {excelTemplate.name} ({(excelTemplate.size / 1024).toFixed(1)} KB)
+              </p>
+            )}
+            <p className="text-xs text-slate-500">ارفع قالب Excel مخصص لهذا القسم. سيُستخدم عند توليد ملفات Excel للترانسميتالات في هذا القسم.</p>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
@@ -2800,6 +2833,8 @@ function EditCategoryDialog({ category, onOpenChange, onSaved }: { category: Cat
   const [label, setLabel] = useState(category.label);
   const [icon, setIcon] = useState(category.icon);
   const [color, setColor] = useState(category.color);
+  const [excelTemplate, setExcelTemplate] = useState<File | null>(null);
+  const [removeTemplate, setRemoveTemplate] = useState(false);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
@@ -2820,11 +2855,23 @@ function EditCategoryDialog({ category, onOpenChange, onSaved }: { category: Cat
   const handleSave = async () => {
     setSaving(true);
     try {
-      const r = await fetch(`/api/categories/${category.code}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label, icon, color }),
-      });
-      if (!r.ok) throw new Error('فشل الحفظ');
+      // Use FormData if template file is provided or removal requested
+      if (excelTemplate || removeTemplate) {
+        const fd = new FormData();
+        fd.append('label', label);
+        fd.append('icon', icon);
+        fd.append('color', color);
+        if (excelTemplate) fd.append('excelTemplate', excelTemplate);
+        if (removeTemplate) fd.append('removeTemplate', 'true');
+        const r = await fetch(`/api/categories/${category.code}`, { method: 'PATCH', body: fd });
+        if (!r.ok) throw new Error('فشل الحفظ');
+      } else {
+        const r = await fetch(`/api/categories/${category.code}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label, icon, color }),
+        });
+        if (!r.ok) throw new Error('فشل الحفظ');
+      }
       toast({ title: 'تم تحديث القسم الرئيسي', description: category.code });
       onSaved();
     } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
@@ -2863,6 +2910,37 @@ function EditCategoryDialog({ category, onOpenChange, onSaved }: { category: Cat
                 {colorOptions.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">قالب Excel</Label>
+            {(category as any).excelTemplate && !removeTemplate ? (
+              <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-emerald-50 border border-emerald-200">
+                <span className="text-sm text-emerald-700 flex items-center gap-1">
+                  ✓ قالب مخصص محفوظ
+                </span>
+                <Button size="sm" variant="ghost" onClick={() => setRemoveTemplate(true)} className="text-red-600">
+                  حذف القالب
+                </Button>
+              </div>
+            ) : removeTemplate ? (
+              <p className="text-sm text-amber-700">سيتم حذف القالب عند الحفظ</p>
+            ) : (
+              <input
+                type="file"
+                accept=".xlsx,.xlsm"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) setExcelTemplate(f);
+                }}
+                className="block w-full text-sm text-slate-500
+                  file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0
+                  file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700
+                  hover:file:bg-emerald-100 cursor-pointer"
+              />
+            )}
+            {excelTemplate && (
+              <p className="text-xs text-emerald-700">✓ {excelTemplate.name} ({(excelTemplate.size / 1024).toFixed(1)} KB)</p>
+            )}
           </div>
         </div>
         <DialogFooter>
