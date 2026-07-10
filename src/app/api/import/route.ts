@@ -1,20 +1,110 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { spawn } from 'child_process';
-import { writeFile, readFile, mkdir } from 'fs/promises';
+import { writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import os from 'os';
-import { findPython } from '@/lib/paths';
+import * as XLSX from 'xlsx';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
+const DISCIPLINE_SHEETS = ['CIV', 'EL', 'PL', 'HVAC', 'FF', 'ELVE'];
+
+/** Clean a cell value. */
+function clean(v: any): string {
+  if (v === null || v === undefined) return '';
+  if (v instanceof Date) {
+    const yyyy = v.getFullYear();
+    const mm = String(v.getMonth() + 1).padStart(2, '0');
+    const dd = String(v.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  let s = String(v).trim();
+  s = s.replace(/\s*\n\s*/g, ' / ');
+  s = s.replace(/\s+/g, ' ').trim();
+  s = s.replace(/\xa0/g, ' ').trim();
+  return s;
+}
+
+/** Parse action from Excel cell. Returns [action, approvalType]. */
+function parseAction(v: any): [string, string] {
+  const s = clean(v).toLowerCase();
+  if (!s) return ['', ''];
+  if (s.includes('approved') && s.includes('noted') && s.includes('resubmit')) return ['approved', 'APPROVED_AS_NOTED_RESUBMIT'];
+  if (s.includes('approved') && s.includes('noted')) return ['approved', 'APPROVED_AS_NOTED'];
+  if (s.includes('not approved') || s.includes('not_approve')) return ['approved', 'NOT_APPROVED'];
+  if (s.includes('for information') || s.includes('more info')) return ['approved', 'FOR_INFORMATION'];
+  if (s === 'approved' || s === 'approve' || s.includes('approved')) return ['approved', 'APPROVED'];
+  if (s.includes('reject')) return ['rejected', ''];
+  if (s.includes('withdrawn') || s.includes('withdraw')) return ['withdrawn', ''];
+  if (s.includes('pending')) return ['', ''];
+  return [s, ''];
+}
+
+/** Normalize review status. */
+function normStatus(s: string): string {
+  if (!s) return '';
+  const sl = s.toLowerCase();
+  if (sl.includes('approved') && !sl.includes('overdue')) return 'Approved';
+  if (sl.includes('overdue')) return 'Overdue';
+  if (sl.includes('under review') || sl.includes('pending')) return 'Under Review';
+  if (sl.includes('cancelled')) return 'Cancelled';
+  if (sl.includes('submit') && sl.includes('rev')) return 'Submit Next Rev';
+  return s;
+}
+
+/** Extract transmittals from workbook using SheetJS (in-process, no spawn). */
+function extractFromWorkbook(buf: Buffer): any[] {
+  const wb = XLSX.read(buf, { cellDates: true, cellNF: false, cellText: false });
+  const out: any[] = [];
+
+  for (const sn of DISCIPLINE_SHEETS) {
+    if (!wb.SheetNames.includes(sn)) continue;
+    const ws = wb.Sheets[sn];
+    const rows: any[][] = XLSX.utils.sheet_to_json(ws, {
+      header: 1, raw: true, defval: '', blankrows: false,
+    }) as any[][];
+
+    for (let r = 5; r < rows.length; r++) {
+      const row = rows[r] || [];
+      const reference = clean(row[2]);
+      const description = clean(row[3]);
+      const typeVal = clean(row[1]);
+      if (!description) continue;
+
+      const revisions: any[] = [];
+      for (let revIdx = 0; revIdx < 8; revIdx++) {
+        const submit = clean(row[4 + revIdx * 3]);
+        const reply = clean(row[5 + revIdx * 3]);
+        const [action, approvalType] = parseAction(row[6 + revIdx * 3]);
+        if (submit || action) {
+          revisions.push({
+            revNumber: revIdx,
+            submitDate: submit,
+            replyDate: reply,
+            action,
+            approvalType: action === 'approved' ? approvalType : '',
+          });
+        }
+      }
+
+      const consultant = clean(row[28]);
+      const moh = clean(row[29]);
+
+      out.push({
+        reference, discipline: sn, type: typeVal, description,
+        revisions,
+        consultantStatus: normStatus(consultant),
+        mohStatus: normStatus(moh),
+      });
+    }
+  }
+  return out;
+}
+
 /**
- * POST /api/import
- * Body: FormData with file = LOG_Final.xlsm
- *
- * Uses the Python script (openpyxl) to read the Excel file.
+ * POST /api/import — reads Excel file using SheetJS (in-process, no Python).
  */
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
@@ -23,50 +113,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'لم يتم رفع ملف' }, { status: 400 });
   }
 
-  // Save uploaded file to temp
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  // Save to temp for debugging
   const tmpDir = path.join(os.tmpdir(), 'transmittal-import');
   if (!existsSync(tmpDir)) await mkdir(tmpDir, { recursive: true });
-  const uploadPath = path.join(tmpDir, `upload-${Date.now()}.xlsm`);
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const uploadPath = path.join(tmpDir, `upload-${Date.now()}.${file.name.split('.').pop() || 'xlsm'}`);
   await writeFile(uploadPath, buffer);
 
-  // Output JSON path
-  const outPath = path.join(tmpDir, `extracted-${Date.now()}.json`);
-
-  // Run Python extractor
-  const projectRoot = '/home/z/my-project';
-  const scriptCandidates = [
-    path.join(projectRoot, 'scripts', 'import_log.py'),
-    path.join(process.cwd(), 'scripts', 'import_log.py'),
-    path.join(process.cwd(), '..', '..', 'scripts', 'import_log.py'),
-  ];
-  const scriptPath = scriptCandidates.find(p => existsSync(p)) || scriptCandidates[0];
-  const pythonBin = findPython();
-  if (!existsSync(scriptPath)) {
-    return NextResponse.json({ error: `السكريبت غير موجود: ${scriptPath}` }, { status: 500 });
-  }
+  let extracted: any[];
   try {
-    await new Promise<void>((resolve, reject) => {
-      const py = spawn(pythonBin, [scriptPath, uploadPath, outPath], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env, PYTHONUNBUFFERED: '1' },
-      });
-      let stderr = '';
-      let stdout = '';
-      py.stdout.on('data', d => { stdout += d.toString(); process.stdout.write(d); });
-      py.stderr.on('data', d => { stderr += d.toString(); process.stderr.write(d); });
-      py.on('error', err => reject(new Error(`فشل تشغيل Python: ${err.message}`)));
-      py.on('close', code => {
-        if (code !== 0) reject(new Error(`Python failed (exit ${code}): ${stderr || stdout}`));
-        else resolve();
-      });
-    });
+    extracted = extractFromWorkbook(buffer);
   } catch (e: any) {
-    return NextResponse.json({ error: 'تعذّر قراءة الملف. تأكد من أنه ملف Excel صالح.' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'تعذّر قراءة الملف. تأكد من أنه ملف Excel صالح.' },
+      { status: 500 },
+    );
   }
-
-  // Read extracted JSON
-  const extracted = JSON.parse(await readFile(outPath, 'utf-8'));
 
   let imported = 0;
   let skipped = 0;
@@ -77,18 +140,9 @@ export async function POST(req: NextRequest) {
   await db.revision.deleteMany();
   await db.transmittal.deleteMany();
 
-  // Insert extracted records
   for (const item of extracted) {
     try {
-      if (!item.reference && !item.description) {
-        skipped++;
-        continue;
-      }
-      if (!item.description || !item.description.trim()) {
-        skipped++;
-        continue;
-      }
-
+      if (!item.description || !item.description.trim()) { skipped++; continue; }
       await db.transmittal.create({
         data: {
           reference: item.reference,
@@ -98,13 +152,15 @@ export async function POST(req: NextRequest) {
           type: item.type || null,
           description: item.description,
           revisions: {
-            create: item.revisions.filter((r: any) => r.submitDate || r.action).map((r: any) => ({
-              revNumber: r.revNumber,
-              submitDate: r.submitDate ? new Date(r.submitDate) : null,
-              replyDate: r.replyDate ? new Date(r.replyDate) : null,
-              action: r.action || null,
-              approvalType: r.action === 'approved' ? (r.approvalType || null) : null,
-            })),
+            create: item.revisions
+              .filter((r: any) => r.submitDate || r.action)
+              .map((r: any) => ({
+                revNumber: r.revNumber,
+                submitDate: r.submitDate ? new Date(r.submitDate) : null,
+                replyDate: r.replyDate ? new Date(r.replyDate) : null,
+                action: r.action || null,
+                approvalType: r.action === 'approved' ? (r.approvalType || null) : null,
+              })),
           },
           reviews: {
             create: [
@@ -121,8 +177,7 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({
-    imported,
-    skipped,
+    imported, skipped,
     errors: errors.slice(0, 20),
     totalExtracted: extracted.length,
   });
