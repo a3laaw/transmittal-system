@@ -2,7 +2,7 @@
 // Strategy: network-first for EVERYTHING (always get latest code),
 // fall back to cache only when offline.
 // This ensures users never get stuck with old cached JS that has bugs.
-const CACHE_NAME = 'transmittal-v19';
+const CACHE_NAME = 'transmittal-v20';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',

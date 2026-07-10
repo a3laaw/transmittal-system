@@ -1132,51 +1132,36 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
     }
   };
 
-  // Download file using fetch + blob (works for all file types including PDF)
-  // This bypasses browser issues with direct download links
-  // Falls back to window.open if fetch fails
+  // Download file using base64 data URL (most reliable method)
+  // Fetches file as base64 from server, then downloads directly from data URL
+  // This bypasses ALL proxy/server issues with direct file serving
   const handleDownloadFile = async (att: any) => {
-    if (!att.filePath) {
-      toast({ title: 'خطأ', description: 'مسار الملف غير موجود', variant: 'destructive' });
+    if (!att.id) {
+      toast({ title: 'خطأ', description: 'معرف الملف غير موجود', variant: 'destructive' });
       return;
     }
     try {
       toast({ title: 'جاري التنزيل...', description: att.fileName });
       
-      // Method 1: fetch + blob (preferred)
-      try {
-        const res = await fetch(att.filePath, { 
-          cache: 'no-store',
-          headers: { 'Accept': '*/*' },
-        });
-        if (res.ok) {
-          const blob = await res.blob();
-          if (blob.size > 0) {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = att.fileName || 'download';
-            a.style.display = 'none';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(url), 5000);
-            toast({ title: 'تم التنزيل', description: att.fileName });
-            return;
-          }
-        }
-      } catch (fetchErr: any) {
-        console.log('Download fetch failed, trying fallback:', fetchErr.message);
+      // Fetch file as base64 data URL
+      const res = await fetch(`/api/file-data/${att.id}`, { cache: 'no-store' });
+      if (!res.ok) {
+        throw new Error(`فشل التحضير (${res.status})`);
+      }
+      const data = await res.json();
+      if (!data.ok || !data.dataUrl) {
+        throw new Error('فشل قراءة الملف');
       }
 
-      // Method 2: Fallback - direct link with download attribute
+      // Create download link from data URL
       const a = document.createElement('a');
-      a.href = att.filePath;
+      a.href = data.dataUrl;
       a.download = att.fileName || 'download';
       a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      
       toast({ title: 'تم التنزيل', description: att.fileName });
     } catch (e: any) {
       console.error('Download error:', e);
@@ -1436,14 +1421,13 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                     )}
                     <div className="flex-1">
                       {isUploaded ? (
-                        <a
-                          href={`/api/download/${att.id}`}
-                          download={att.fileName}
+                        <button
+                          onClick={() => handleDownloadFile(att)}
                           className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline truncate block text-right cursor-pointer"
                           title={att.fileName}
                         >
                           {att.fileName}
-                        </a>
+                        </button>
                       ) : (
                         <button
                           onClick={() => window.open(openUrl, '_blank')}
@@ -1459,11 +1443,9 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                     </div>
                     <div className="flex gap-1">
                       {isUploaded && (
-                        <a href={`/api/download/${att.id}`} download={att.fileName} title="تنزيل">
-                          <Button size="sm" variant="ghost" title="تنزيل">
-                            <Download className="w-4 h-4" />
-                          </Button>
-                        </a>
+                        <Button size="sm" variant="ghost" title="تنزيل" onClick={() => handleDownloadFile(att)}>
+                          <Download className="w-4 h-4" />
+                        </Button>
                       )}
                       {isLink && (
                         <a href={openUrl} target="_blank" rel="noopener noreferrer" title="فتح">
