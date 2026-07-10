@@ -11,9 +11,9 @@ const cairo = Cairo({
 });
 
 export const metadata: Metadata = {
-  title: "نظام إدارة الترانسميتالات",
+  title: "سكرتير الموقع",
   description: "نظام متابعة المستندات والمراجعات - Sabah Al Salem South Health Center",
-  applicationName: "نظام إدارة الترانسميتالات",
+  applicationName: "سكرتير الموقع",
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: "ترانسميتالات",
+    title: "سكرتير الموقع",
     statusBarStyle: "default",
   },
   formatDetection: {
@@ -54,7 +54,7 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="ترانسميتالات" />
+        <meta name="apple-mobile-web-app-title" content="سكرتير الموقع" />
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>
       <body

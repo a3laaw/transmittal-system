@@ -470,7 +470,7 @@ export default function Home() {
                 <FileText className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">نظام إدارة الترانسميتالات</h1>
+                <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">سكرتير الموقع</h1>
                 <p className="text-xs text-slate-500 hidden sm:block">Sabah Al Salem South Health Center</p>
               </div>
             </div>
@@ -589,7 +589,7 @@ export default function Home() {
 
       <footer className="bg-white border-t border-slate-200 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 text-center text-xs text-slate-500">
-          نظام إدارة الترانسميتالات · Sabah Al Salem South Health Center · {new Date().getFullYear()}
+          سكرتير الموقع · Sabah Al Salem South Health Center · {new Date().getFullYear()}
         </div>
       </footer>
 
