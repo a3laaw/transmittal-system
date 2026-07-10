@@ -8,7 +8,7 @@ export function PWARegister() {
       navigator.serviceWorker
         .register('/sw.js')
         .then((reg) => {
-          console.log('PWA: Service Worker registered, version v5');
+          console.log('PWA: Service Worker registered, version v6');
 
           // Listen for new SW taking over, then force reload once
           let refreshing = false;

@@ -155,7 +155,7 @@ export async function GET(req: NextRequest) {
       });
     });
   } catch (e: any) {
-    return NextResponse.json({ error: `فشل توليد التقرير: ${e.message}` }, { status: 500 });
+    return NextResponse.json({ error: 'تعذّر توليد التقرير. حاول مرة أخرى.' }, { status: 500 });
   }
 
   if (!existsSync(outPath)) {

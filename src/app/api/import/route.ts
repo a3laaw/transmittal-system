@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       });
     });
   } catch (e: any) {
-    return NextResponse.json({ error: `فشل الاستيراد: ${e.message}` }, { status: 500 });
+    return NextResponse.json({ error: 'تعذّر قراءة الملف. تأكد من أنه ملف Excel صالح.' }, { status: 500 });
   }
 
   // Read extracted JSON

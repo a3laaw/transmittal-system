@@ -75,7 +75,9 @@ export async function GET(req: NextRequest) {
       });
     });
   } catch (e: any) {
-    return NextResponse.json({ error: `فشل توليد الملف: ${e.message}` }, { status: 500 });
+    // Log full error for debugging but show user-friendly message
+    console.error('[excel-template] Error:', e.message);
+    return NextResponse.json({ error: 'تعذّر توليد ملف Excel. حاول مرة أخرى.' }, { status: 500 });
   }
 
   if (!existsSync(outPath)) {
