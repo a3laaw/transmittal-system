@@ -2325,6 +2325,9 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
 }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showAddCategory, setShowAddCategory] = useState(false);
+  const [showAddDocType, setShowAddDocType] = useState(false);
+  const [newDocTypeCode, setNewDocTypeCode] = useState('');
+  const [newDocTypeLabel, setNewDocTypeLabel] = useState('');
   const [editing, setEditing] = useState<Discipline | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const { toast } = useToast();
@@ -2359,8 +2362,23 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
     if (!confirm(`هل أنت متأكد من حذف النوع ${code}؟`)) return;
     try {
       const r = await fetch(`/api/doc-types/${id}`, { method: 'DELETE' });
-      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الحذف'); }
+      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || 'فشل الحذف'); }
       toast({ title: 'تم حذف النوع', description: code });
+      onRefreshDocTypes();
+    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+  };
+
+  const handleAddDocType = async () => {
+    if (!newDocTypeCode || !newDocTypeLabel) return;
+    try {
+      const r = await fetch('/api/doc-types', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: newDocTypeCode.toUpperCase().trim(), label: newDocTypeLabel.trim() }),
+      });
+      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || 'فشل الحفظ'); }
+      toast({ title: 'تم إضافة النوع', description: newDocTypeCode.toUpperCase() });
+      setShowAddDocType(false);
+      setNewDocTypeCode(''); setNewDocTypeLabel('');
       onRefreshDocTypes();
     } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
   };
@@ -2425,11 +2443,16 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
 
       {/* Types Management Section */}
       <Card className="border-0 shadow-sm">
-        <CardHeader className="border-b bg-slate-50">
-          <CardTitle className="text-base flex items-center gap-2">
-            <FileText className="w-5 h-5" /> أنواع المستندات ({docTypes.length})
-          </CardTitle>
-          <CardDescription>الأنواع المستخدمة في تصنيف الترانسميتالات (Shop Drawings, Sample, ...)</CardDescription>
+        <CardHeader className="border-b bg-slate-50 flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileText className="w-5 h-5" /> أنواع المستندات ({docTypes.length})
+            </CardTitle>
+            <CardDescription>الأنواع المستخدمة في تصنيف الترانسميتالات (Shop Drawings, Sample, ...)</CardDescription>
+          </div>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowAddDocType(true)}>
+            <Plus className="w-4 h-4" /> إضافة نوع
+          </Button>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -2456,6 +2479,32 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
           </Table>
         </CardContent>
       </Card>
+
+      {/* Add DocType Dialog */}
+      {showAddDocType && (
+        <Dialog open={true} onOpenChange={(v) => !v && setShowAddDocType(false)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>إضافة نوع مستند جديد</DialogTitle>
+              <DialogDescription>أضف نوعاً جديداً لتصنيف الترانسميتالات</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm">الكود *</Label>
+                <Input value={newDocTypeCode} onChange={(e) => setNewDocTypeCode(e.target.value.toUpperCase())} placeholder="مثال: MD" className="font-mono" maxLength={30} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">الاسم *</Label>
+                <Input value={newDocTypeLabel} onChange={(e) => setNewDocTypeLabel(e.target.value)} placeholder="مثال: Method Statement" autoFocus />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAddDocType(false)}>إلغاء</Button>
+              <Button onClick={handleAddDocType} disabled={!newDocTypeCode || !newDocTypeLabel} className="bg-emerald-700 hover:bg-emerald-800">حفظ</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <h3 className="text-lg font-semibold text-slate-700 pt-2">التخصصات الفرعية حسب القسم الرئيسي</h3>
 
