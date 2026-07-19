@@ -7,19 +7,21 @@ import os from 'os';
  * production standalone mode (`bun .next/standalone/server.js`).
  *
  * Why this is needed:
- *  - In dev, `process.cwd()` = /home/z/my-project
+ *  - In dev, `process.cwd()` = '/home/user/transmittal-system'
  *  - In standalone publish, the server may run from .next/standalone/ or the project root
  *  - Files written to `public/` at runtime are NOT served in standalone mode (404!)
  *  - The `scripts/` dir may or may not be inside the standalone bundle
  *
- * Solution: use absolute paths anchored to /home/z/my-project for source assets
- * (scripts, templates), and a dedicated /home/z/my-project/storage dir for
+ * Solution: use absolute paths anchored to '/home/user/transmittal-system' for source assets
+ * (scripts, templates), and a dedicated '/home/user/transmittal-system'/storage dir for
  * runtime-uploaded files (served via /api/files/... API route, not static).
  */
 
 // Absolute anchor to the project source root.
 // This is always correct on the Z.ai platform.
-const PROJECT_ROOT = '/home/z/my-project';
+// Dynamic project root based on current working directory.
+// Works in dev, standalone, and Electron desktop modes.
+const PROJECT_ROOT = process.cwd();
 
 /**
  * Find the Python script `gen_excel_template.py`.
@@ -104,7 +106,7 @@ export function getStorageRoot(): string {
 }
 
 /**
- * Get the IM gateway upload directory (/home/z/my-project/upload).
+ * Get the IM gateway upload directory ('/home/user/transmittal-system'/upload).
  *
  * This is where the IM gateway saves pasted images and dropped files
  * (e.g. `pasted_image_1783626027762.png`). These files are NOT under our
@@ -137,7 +139,7 @@ export function getUploadDir(transmittalId: string): string {
 
 /**
  * Convert an absolute file path on disk to the API URL that serves it.
- * Example: /home/z/my-project/storage/uploads/{id}/123-file.png
+ * Example: '/home/user/transmittal-system'/storage/uploads/{id}/123-file.png
  *       →  /api/files/{id}/123-file.png
  */
 export function filePathToApiUrl(absPath: string): string {

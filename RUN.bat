@@ -49,6 +49,7 @@ REM Set environment variables for the server
 set NODE_ENV=production
 set PORT=3000
 set HOSTNAME=0.0.0.0
+set DATABASE_URL=file:%~dp0db\custom.db
 
 REM Use the database in the local db/ folder (Windows path)
 if not exist "%~dp0db\custom.db" (

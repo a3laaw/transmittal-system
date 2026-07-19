@@ -198,7 +198,7 @@ export async function GET(req: NextRequest) {
   const lastCol = totalDaysCol;
 
   // Title row (row 1)
-  ws.mergeCells(1, 1, 1, lastCol);
+
   const titleCell = ws.getCell(1, 1);
   titleCell.value = `تقرير الجدول الزمني للترانسميتالات - Timeline Report (${filtered.length} عنصر · REV.0 - REV.${maxRev})`;
   titleCell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FF1F4E78' } };
@@ -208,7 +208,7 @@ export async function GET(req: NextRequest) {
   // Group header row (row 2) + sub-header (row 3)
   const fixedLabels = ['المرجع', 'القسم الرئيسي', 'التخصص', 'النوع', 'الوصف'];
   for (let i = 0; i < fixedLabels.length; i++) {
-    ws.mergeCells(2, i + 1, 3, i + 1);
+
     const cell = ws.getCell(2, i + 1);
     cell.value = fixedLabels[i];
     cell.font = headerFont;
@@ -223,7 +223,7 @@ export async function GET(req: NextRequest) {
   for (let r = 0; r < numRevs; r++) {
     const start = revStartCols[r];
     const end = start + 3;
-    ws.mergeCells(2, start, 2, end);
+
     const cell = ws.getCell(2, start);
     cell.value = `REV.${r}`;
     cell.font = headerFont;
@@ -236,7 +236,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Consultant header
-  ws.mergeCells(2, consultantCol, 3, consultantCol);
+
   const consCell = ws.getCell(2, consultantCol);
   consCell.value = 'الاستشاري';
   consCell.font = headerFont;
@@ -247,7 +247,7 @@ export async function GET(req: NextRequest) {
   ws.getCell(3, consultantCol).fill = groupFill;
 
   // MOH header
-  ws.mergeCells(2, mohSubmitCol, 2, mohStatusCol);
+
   const mohCell = ws.getCell(2, mohSubmitCol);
   mohCell.value = 'الوزارة';
   mohCell.font = headerFont;
@@ -259,7 +259,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Total Days header
-  ws.mergeCells(2, totalDaysCol, 3, totalDaysCol);
+
   const tdCell = ws.getCell(2, totalDaysCol);
   tdCell.value = 'إجمالي الأيام';
   tdCell.font = headerFont;
