@@ -1140,7 +1140,7 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
                             onClick={() => onRegisterRevision(item.id, item.reference, item.revisionsCount)}
                             disabled={item.computedStatus.status === 'cancelled' || item.revisionsCount === 0 || item.lastReplyDate === null}
                           >
-                            <History className="w-4 h-4 ml-2" /> {t('list.action.registerRevision')} (REV.{item.revisionsCount})
+                            <History className="w-4 h-4 ml-2" /> {t('list.action.registerRevision')} (<span dir="ltr">REV.{item.revisionsCount}</span>)
                             {item.computedStatus.status === 'cancelled' ? <span className="text-[10px] text-slate-400 mr-1">{t('list.disabled.cancelled')}</span> :
                              (item.revisionsCount === 0 || item.lastReplyDate === null) && <span className="text-[10px] text-slate-400 mr-1">{t('list.disabled.waitingReply')}</span>}
                           </DropdownMenuItem>
@@ -1165,7 +1165,7 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
                             onClick={() => onSendToMoh(item.id, item.reference)}
                             disabled={item.computedStatus.status === 'cancelled' || item.consultantStatus.status !== 'approved' || (item.mohStatus.status !== 'not_sent' && item.mohStatus.status !== 'reviewed')}
                           >
-                            <Send className="w-4 h-4 ml-2" /> {t('list.action.sendToMoh')} REV.{item.revisionsCount > 0 ? (item.revisionsCount - 1) : 0}
+                            <Send className="w-4 h-4 ml-2" /> {t('list.action.sendToMoh')} <span dir="ltr">REV.{item.revisionsCount > 0 ? (item.revisionsCount - 1) : 0}</span>
                             {item.consultantStatus.status !== 'approved' && <span className="text-[10px] text-slate-400 mr-1">{t('list.disabled.notApproved')}</span>}
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => onCopy(item.id, item.reference, item.description || '')}>
@@ -1207,6 +1207,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
 }) {
   const [showRevDialog, setShowRevDialog] = useState(false);
   const { toast } = useToast();
+  const { t } = useI18n();
 
   const latestRevNumber = detail.revisions.length > 0 ? detail.revisions[detail.revisions.length - 1].revNumber : 0;
   const [attachments, setAttachments] = useState<any[]>([]);
@@ -1347,13 +1348,13 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft className="w-4 h-4" /> رجوع للقائمة</Button>
+        <Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft className="w-4 h-4" /> {t('detail.backToList')}</Button>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> تحديث
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> {t('common.refresh')}
           </Button>
           <Button variant="outline" size="sm" onClick={onCopy} className="gap-1.5">
-            <Copy className="w-4 h-4" /> نسخ برقم جديد
+            <Copy className="w-4 h-4" /> {t('detail.copyNew')}
           </Button>
           <Button variant="outline" size="sm" onClick={onEdit} className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50">
             <Pencil className="w-4 h-4" /> تعديل
@@ -1364,7 +1365,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
           <Button variant="outline" size="sm" onClick={onSendToMoh}
             disabled={detail.mohStatus.status !== 'not_sent' && detail.mohStatus.status !== 'reviewed'}
             className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50">
-            <Send className="w-4 h-4" /> إرسال REV.{latestRevNumber} للوزارة
+            <Send className="w-4 h-4" /> إرسال <span dir="ltr">REV.{latestRevNumber}</span> للوزارة
           </Button>
           <Button size="sm" onClick={onDownloadExcel} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
             <Download className="w-4 h-4" /> تنزيل ملف Excel
@@ -1455,9 +1456,9 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
       <Card className="border-0 shadow-sm">
         <CardHeader className="flex-row items-center justify-between">
           <div><CardTitle className="text-lg flex items-center gap-2"><History className="w-5 h-5" /> سجل المراجعات ({detail.revisions.length})</CardTitle>
-            <CardDescription>سيتم اقتراح REV.{detail.revisions.length} تلقائياً عند الإضافة</CardDescription></div>
+            <CardDescription>سيتم اقتراح <span dir="ltr">REV.{detail.revisions.length}</span> تلقائياً عند الإضافة</CardDescription></div>
           <Button size="sm" onClick={() => setShowRevDialog(true)} className="gap-1.5">
-            <Plus className="w-4 h-4" /> إضافة مراجعة (REV.{detail.revisions.length})
+            <Plus className="w-4 h-4" /> إضافة مراجعة (<span dir="ltr">REV.{detail.revisions.length}</span>)
           </Button>
         </CardHeader>
         <CardContent className="p-0">
@@ -1495,7 +1496,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                   }
                   return (
                     <TableRow key={r.id}>
-                      <TableCell className="text-center font-bold">REV.{r.revNumber}</TableCell>
+                      <TableCell className="text-center font-bold"><span dir="ltr">REV.{r.revNumber}</span></TableCell>
                       <TableCell className="text-center text-sm">{fmtDate(r.submitDate)}</TableCell>
                       <TableCell className="text-center text-sm">{fmtDate(r.replyDate)}</TableCell>
                       <TableCell className={`text-center font-semibold ${actionColor}`}>{actionLabel}</TableCell>
@@ -1692,7 +1693,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
             </DialogHeader>
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label className="text-sm font-semibold">النوع</Label>
+                <Label className="text-sm font-semibold">{t('reports.filterType')}</Label>
                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white w-fit">
                   <span className="text-lg">🔗</span>
                   <span className="font-semibold text-sm">رابط خارجي</span>
@@ -1718,7 +1719,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowLinkDialog(false)}>إلغاء</Button>
+              <Button variant="outline" onClick={() => setShowLinkDialog(false)}>{t('common.cancel')}</Button>
               <Button
                 onClick={handleAddLink}
                 disabled={!linkUrl.trim() || !linkName.trim() || uploading}
@@ -1738,6 +1739,7 @@ function AddRevisionDialog({ open, onOpenChange, transmittalId, nextRevNumber, o
   open: boolean; onOpenChange: (v: boolean) => void;
   transmittalId: string; nextRevNumber: number; onSaved: () => void;
 }) {
+  const { t } = useI18n();
   const [submitDate, setSubmitDate] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -1771,12 +1773,12 @@ function AddRevisionDialog({ open, onOpenChange, transmittalId, nextRevNumber, o
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>تقديم مراجعة جديدة - REV.{nextRevNumber}</DialogTitle>
+          <DialogTitle>تقديم مراجعة جديدة - <span dir="ltr">REV.{nextRevNumber}</span></DialogTitle>
           <DialogDescription>سيتم تسجيل تاريخ التقديم الآن. الرد والإجراء يُسجّلان لاحقاً عند ورود رد الاستشاري.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="bg-emerald-50 border border-emerald-200 rounded p-2 text-sm">
-            <strong>رقم المراجعة:</strong> REV.{nextRevNumber} (تلقائي)
+            <strong>رقم المراجعة:</strong> <span dir="ltr">REV.{nextRevNumber}</span> (تلقائي)
           </div>
           <div className="space-y-1.5">
             <Label className="text-sm">تاريخ التقديم *</Label>
@@ -1787,7 +1789,7 @@ function AddRevisionDialog({ open, onOpenChange, transmittalId, nextRevNumber, o
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
           <Button onClick={handleSave} disabled={saving || !submitDate} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'تقديم REV.' + nextRevNumber}</Button>
         </DialogFooter>
       </DialogContent>
@@ -1802,6 +1804,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
   onCreated: (t: any) => void;
   onDownloadTemplate: (ref: string, discipline: string, desc: string) => void;
 }) {
+  const { t, lang } = useI18n();
   const [reference, setReference] = useState('');
   const [category, setCategory] = useState('');
   const [discipline, setDiscipline] = useState('');
@@ -1911,7 +1914,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
         {discipline && (
           <>
             <div className="space-y-1.5">
-              <Label>النوع</Label>
+              <Label>{t('reports.filterType')}</Label>
           <Select value={type} onValueChange={setType}>
             <SelectTrigger><SelectValue placeholder="اختر النوع" /></SelectTrigger>
             <SelectContent>
@@ -1934,7 +1937,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
         </div>
 
         <div className="space-y-1.5">
-          <Label>تاريخ إرسال REV.0</Label>
+          <Label>تاريخ إرسال <span dir="ltr">REV.0</span></Label>
           <Input type="date" value={submitDate} onChange={(e) => setSubmitDate(e.target.value)} />
         </div>
 
@@ -2114,6 +2117,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
   categories: Category[];
   onOpenDetail: (id: string) => void;
 }) {
+  const { t, lang } = useI18n();
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -2398,14 +2402,14 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">تقارير الجدول الزمني</h2>
+          <h2 className="text-2xl font-bold text-slate-900">{t('reports.title')}</h2>
           <p className="text-sm text-slate-500 mt-1">
-            {items.length} ترانسميتال · {revColumns.length} مراجعة (REV.0 - REV.{maxRevNumber})
+            {items.length} ترانسميتال · {revColumns.length} مراجعة (<span dir="ltr">REV.0 - REV.{maxRevNumber}</span>)
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={fetchReport} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> تحديث
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> {t('common.refresh')}
           </Button>
           <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5">
             <Printer className="w-4 h-4" /> طباعة كاملة
@@ -2420,48 +2424,48 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
       <Card className="border-0 shadow-sm"><CardContent className="p-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
-            <Label className="text-xs">بحث</Label>
+            <Label className="text-xs">{t('common.search')}</Label>
             <div className="relative">
               <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="مرجع أو وصف..." className="pr-8" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('reports.searchPlaceholder')} className="pr-8" />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">القسم الرئيسي</Label>
+            <Label className="text-xs">{t('reports.filterCategory')}</Label>
             <Select value={filterCategory} onValueChange={(v) => { setFilterCategory(v); setFilterDiscipline('all'); }}>
               <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">الكل</SelectItem>
+                <SelectItem value="all">{t('common.all')}</SelectItem>
                 {categories.map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {c.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">التخصص</Label>
+            <Label className="text-xs">{t('reports.filterDiscipline')}</Label>
             <Select value={filterDiscipline} onValueChange={setFilterDiscipline}>
               <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">الكل</SelectItem>
+                <SelectItem value="all">{t('common.all')}</SelectItem>
                 {availableDisciplines.map(d => <SelectItem key={d.code} value={d.code}>{d.label} ({d.code})</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">النوع</Label>
+            <Label className="text-xs">{t('reports.filterType')}</Label>
             <Select value={filterType} onValueChange={setFilterType}>
               <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">الكل</SelectItem>
+                <SelectItem value="all">{t('common.all')}</SelectItem>
                 {types.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">من تاريخ</Label>
+            <Label className="text-xs">{t('reports.dateFrom')}</Label>
             <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">إلى تاريخ</Label>
+            <Label className="text-xs">{t('reports.dateTo')}</Label>
             <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
           </div>
         </div>
@@ -2478,7 +2482,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
           ) : items.length === 0 ? (
             <div className="text-center py-16 text-slate-500">
               <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p>لا توجد بيانات مطابقة للفلاتر</p>
+              <p>{t('reports.empty')}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -2493,7 +2497,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
                         className={`text-center min-w-[260px] p-0 border-l-4 ${revIdx === 0 ? 'border-l-2 border-slate-400' : 'border-l-4 border-blue-500'}`}
                       >
                         {/* REV group header — colored band on top */}
-                        <div className="bg-blue-700 text-white py-1.5 px-2 font-bold text-sm">REV.{rev}</div>
+                        <div className="bg-blue-700 text-white py-1.5 px-2 font-bold text-sm"><span dir="ltr">REV.{rev}</span></div>
                         <div className="flex text-xs font-normal mt-0 bg-blue-50">
                           <div className="flex-1 py-1 border-l border-blue-200">تقديم</div>
                           <div className="flex-1 py-1 border-l border-blue-200">رد</div>
@@ -3403,6 +3407,7 @@ function SendToMohDialog({ target, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (submitDate: string, submitRev: number, notes: string) => void;
 }) {
+  const { t } = useI18n();
   const [submitDate, setSubmitDate] = useState(new Date().toISOString().slice(0, 10));
   const [submitRev, setSubmitRev] = useState<number>(target.latestRev);
   const [notes, setNotes] = useState('');
@@ -3424,7 +3429,7 @@ function SendToMohDialog({ target, onClose, onConfirm }: {
             إرسال للوزارة - {target.reference}
           </DialogTitle>
           <DialogDescription>
-            أدخل تاريخ الإرسال لوزارة الصحة. سيتم إرسال آخر مراجعة (REV.{target.latestRev}) تلقائياً.
+            أدخل تاريخ الإرسال لوزارة الصحة. سيتم إرسال آخر مراجعة (<span dir="ltr">REV.{target.latestRev}</span>) تلقائياً.
           </DialogDescription>
         </DialogHeader>
 
@@ -3434,7 +3439,7 @@ function SendToMohDialog({ target, onClose, onConfirm }: {
               <strong>المرجع:</strong> <span className="font-mono">{target.reference}</span>
             </p>
             <p className="text-sm text-blue-900">
-              <strong>المراجعة المُرسلة (تلقائي - آخر ريفجن):</strong> REV.{target.latestRev}
+              <strong>المراجعة المُرسلة (تلقائي - آخر ريفجن):</strong> <span dir="ltr">REV.{target.latestRev}</span>
             </p>
           </div>
 
@@ -3460,7 +3465,7 @@ function SendToMohDialog({ target, onClose, onConfirm }: {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>إلغاء</Button>
+          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
           <Button
             onClick={handleConfirm}
             disabled={saving || !submitDate}
@@ -3477,6 +3482,7 @@ function SendToMohDialog({ target, onClose, onConfirm }: {
 
 /* ============ ADD CATEGORY DIALOG ============ */
 function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenChange: (v: boolean) => void; onSaved: () => void }) {
+  const { t } = useI18n();
   const [code, setCode] = useState('');
   const [label, setLabel] = useState('');
   const [icon, setIcon] = useState('📄');
@@ -3597,8 +3603,8 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'حفظ'}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? t('common.saving') : t('common.save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -3607,6 +3613,7 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
 
 /* ============ EDIT CATEGORY DIALOG ============ */
 function EditCategoryDialog({ category, onOpenChange, onSaved }: { category: Category; onOpenChange: (v: boolean) => void; onSaved: () => void }) {
+  const { t } = useI18n();
   const [label, setLabel] = useState(category.label);
   const [icon, setIcon] = useState(category.icon);
   const [color, setColor] = useState(category.color);
@@ -3721,8 +3728,8 @@ function EditCategoryDialog({ category, onOpenChange, onSaved }: { category: Cat
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'حفظ'}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? t('common.saving') : t('common.save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -3735,6 +3742,7 @@ function RegisterRevisionDialog({ target, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (submitDate: string, replyDate: string, action: string, approvalType: string, notes: string) => void;
 }) {
+  const { t } = useI18n();
   const [submitDate, setSubmitDate] = useState(new Date().toISOString().slice(0, 10));
   const [replyDate, setReplyDate] = useState('');
   const [action, setAction] = useState('');
@@ -3763,7 +3771,7 @@ function RegisterRevisionDialog({ target, onClose, onConfirm }: {
             تسجيل ريفجن جديد - {target.reference}
           </DialogTitle>
           <DialogDescription>
-            سيتم إنشاء مراجعة جديدة REV.{target.nextRev} (آخر رقم + 1). أدخل تاريخ الإرسال والرد والإجراء.
+            سيتم إنشاء مراجعة جديدة <span dir="ltr">REV.{target.nextRev}</span> (آخر رقم + 1). أدخل تاريخ الإرسال والرد والإجراء.
           </DialogDescription>
         </DialogHeader>
 
@@ -3771,7 +3779,7 @@ function RegisterRevisionDialog({ target, onClose, onConfirm }: {
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-sm text-blue-900">
               <strong>المرجع:</strong> <span className="font-mono">{target.reference}</span> ·
-              <strong> المراجعة الجديدة:</strong> REV.{target.nextRev}
+              <strong> المراجعة الجديدة:</strong> <span dir="ltr">REV.{target.nextRev}</span>
             </p>
           </div>
 
@@ -3824,7 +3832,7 @@ function RegisterRevisionDialog({ target, onClose, onConfirm }: {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>إلغاء</Button>
+          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
           <Button onClick={handleConfirm} disabled={saving || !submitDate || (action === 'approved' && !approvalType)} className="bg-blue-700 hover:bg-blue-800 gap-1.5">
             <History className="w-4 h-4" />
             {saving ? 'جاري التسجيل...' : `تسجيل REV.${target.nextRev}`}
@@ -3841,6 +3849,7 @@ function ConsultantReplyDialog({ target, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (replyDate: string, action: string, approvalType: string, notes: string) => void;
 }) {
+  const { t } = useI18n();
   const [replyDate, setReplyDate] = useState(new Date().toISOString().slice(0, 10));
   const [action, setAction] = useState('');
   const [approvalType, setApprovalType] = useState('');
@@ -3925,7 +3934,7 @@ function ConsultantReplyDialog({ target, onClose, onConfirm }: {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>إلغاء</Button>
+          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
           <Button onClick={handleConfirm} disabled={saving || !replyDate || !action || (action === 'approved' && !approvalType)} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
             <Building2 className="w-4 h-4" />
             {saving ? 'جاري التسجيل...' : 'تسجيل الرد'}
@@ -3942,6 +3951,7 @@ function MohReplyDialog({ target, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (reviewDate: string, status: string, notes: string) => void;
 }) {
+  const { t } = useI18n();
   const [reviewDate, setReviewDate] = useState(new Date().toISOString().slice(0, 10));
   const [status, setStatus] = useState('');
   const [notes, setNotes] = useState('');
@@ -4000,7 +4010,7 @@ function MohReplyDialog({ target, onClose, onConfirm }: {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>إلغاء</Button>
+          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
           <Button onClick={handleConfirm} disabled={saving || !reviewDate || !status} className="bg-purple-700 hover:bg-purple-800 gap-1.5">
             <Hospital className="w-4 h-4" />
             {saving ? 'جاري التسجيل...' : 'تسجيل رد الوزارة'}
@@ -4017,6 +4027,7 @@ function CopyTransmittalDialog({ target, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (editedDescription: string) => void;
 }) {
+  const { t } = useI18n();
   const [description, setDescription] = useState(target.description);
   const [saving, setSaving] = useState(false);
 
@@ -4061,7 +4072,7 @@ function CopyTransmittalDialog({ target, onClose, onConfirm }: {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>إلغاء</Button>
+          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
           <Button onClick={handleConfirm} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
             <Copy className="w-4 h-4" />
             {saving ? 'جاري النسخ...' : 'نسخ برقم جديد'}

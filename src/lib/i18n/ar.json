@@ -232,5 +232,19 @@
   "color.emerald": "أخضر",
   "color.blue": "أزرق",
   "color.indigo": "نيلي",
-  "color.orange": "برتقالي"
+  "color.orange": "برتقالي",
+  "common.code": "الكود",
+  "common.icon": "الأيقونة",
+  "common.prefix": "البادئة",
+  "common.color": "اللون",
+  "common.label": "الاسم",
+  "detail.linkedDescription": "— تخصص فرعي آخر",
+  "detail.submitDateLabel": "تاريخ إرسال REV.0",
+  "reports.filterCategory": "القسم",
+  "reports.filterDiscipline": "التخصص",
+  "reports.filterType": "النوع",
+  "settings.notesTitle": "ملاحظات",
+  "dialog.addLink.title": "إضافة رابط خارجي",
+  "dialog.addLink.desc": "أضف أي رابط مباشر لملف أو صورة خارجية",
+  "dialog.addCategory.desc": "أضف قسماً رئيسياً جديداً"
 }

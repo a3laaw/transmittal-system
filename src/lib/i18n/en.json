@@ -232,5 +232,19 @@
   "color.emerald": "Emerald",
   "color.blue": "Blue",
   "color.indigo": "Indigo",
-  "color.orange": "Orange"
+  "color.orange": "Orange",
+  "common.code": "Code",
+  "common.icon": "Icon",
+  "common.prefix": "Prefix",
+  "common.color": "Color",
+  "common.label": "Label",
+  "detail.linkedDescription": "— another sub-discipline",
+  "detail.submitDateLabel": "REV.0 Submit Date",
+  "reports.filterCategory": "Category",
+  "reports.filterDiscipline": "Discipline",
+  "reports.filterType": "Type",
+  "settings.notesTitle": "Notes",
+  "dialog.addLink.title": "Add External Link",
+  "dialog.addLink.desc": "Add a direct link to an external file or image",
+  "dialog.addCategory.desc": "Add a new main category"
 }
