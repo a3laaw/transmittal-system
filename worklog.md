@@ -97,3 +97,46 @@ Work Log:
 - /home/z/my-project/download/Site-Secretary-Windows.zip (70 MB)
 - نظيفة تماماً بدون zip بداخل zip
 - جاهزة للاستخدام على ويندوز
+
+---
+Task ID: final-electron-fix
+Agent: Main (Super Z)
+Task: إصلاح مشكلة "Could not find a production build" + تضمين Electron
+
+Work Log:
+- اكتشفت أن النسخة السابقة (70 MB) كانت تفتح في المتصفح لأن:
+  1. مجلد .next لم يكن موجوداً (cp -r .next/standalone/* لا ينسخ المجلدات المخفية)
+  2. Electron لم يكن مضمّناً في النسخة
+
+الإصلاحات:
+1. تنزيل Electron 31.0.0 for Windows (106 MB) من GitHub releases
+2. إصلاح سكربت البناء:
+   - استخدام cp -a .next/standalone/. بدلاً من cp -r .next/standalone/* (لنسخ المجلدات المخفية)
+   - نسخ electron.exe + كل DLLs المطلوبة (libEGL, libGLESv2, ffmpeg, etc.)
+   - حذف .env (كان يحتوي على مسار Linux يكسر Windows)
+3. إصلاح electron-main.js:
+   - getServerPath() الآن يبحث عن server.js في الجذر أولاً
+   - serverDir = __dirname (وليس path.dirname(serverPath))
+   - حذف DATABASE_URL من env قبل إعادة تعيينها
+   - استخدام process.execPath (electron.exe) مع ELECTRON_RUN_AS_NODE=1 لتشغيل server.js
+4. تحديث RUN.bat:
+   - يكتشف electron.exe المضمّن أولاً
+   - رسائل أوضح للمستخدم
+   - fallback لـ Node.js + المتصفح
+
+النتيجة:
+- الحجم: 207 MB (شامل Electron)
+- electron.exe مضمّن (180 MB)
+- .next/BUILD_ID موجود ✅
+- .env محذوف ✅
+- لا توجد zips بداخلها ✅
+- storage/uploads/ فارغ (تم حذف بيانات الاختبار)
+- 4420 ملف
+
+النسخة النهائية:
+- /home/z/my-project/download/Site-Secretary-Windows.zip (207 MB)
+- عند فك الضغط: المستخدم يضغط دبل-كليك على RUN.bat
+- RUN.bat يفتح electron.exe تلقائياً
+- electron.exe يشغل server.js (باستخدام ELECTRON_RUN_AS_NODE=1)
+- server.js يخدم التطبيق على http://localhost:3000
+- electron.exe يفتح نافذة desktop تحمل localhost:3000
