@@ -7,13 +7,13 @@ export const maxDuration = 300;
 
 export async function GET() {
   try {
-    const filePath = path.join(process.cwd(), 'download', 'nova-edms-final.zip');
+    const filePath = path.join(process.cwd(), 'download', 'Site-Secretary-Windows.zip');
     const fileBuffer = await readFile(filePath);
     return new NextResponse(new Uint8Array(fileBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',
-        'Content-Disposition': 'attachment; filename="nova-edms-final.zip"',
+        'Content-Disposition': 'attachment; filename="Site-Secretary-Windows.zip"',
         'Content-Length': String(fileBuffer.length),
       },
     });
