@@ -67,9 +67,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .replace(/\s+/g, '_')
     .slice(0, 200);
 
-  // Build folder path: storage/uploads/{transmittalId}/{filename}
-  // Each transmittal gets its OWN folder for clean organization
-  const uploadDir = getUploadDir(id);
+  // Build folder path: storage/uploads/{categoryCode}/{disciplineCode}/{transmittalId}/
+  // Organized by category → discipline → transmittal for easy file management
+  const categoryCode = t.category || 'TRANSMITTAL';
+  const disciplineCode = t.disciplineCode || t.discipline || 'UNKNOWN';
+  const storageRoot = getStorageRoot();
+  const uploadDir = path.join(storageRoot, 'uploads', categoryCode, disciplineCode, id);
   if (!existsSync(uploadDir)) {
     await mkdir(uploadDir, { recursive: true });
   }

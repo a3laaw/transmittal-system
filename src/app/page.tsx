@@ -622,6 +622,8 @@ export default function Home() {
             }}
             onSendToMoh={() => handleSendToMoh(detail.id, detail.reference, detail.revisions.length > 0 ? detail.revisions[detail.revisions.length - 1].revNumber : 0)}
             onCopy={() => handleCopyTransmittal(detail.id, detail.reference, detail.description || '')}
+            onEdit={() => handleEditTransmittal(detail as any)}
+            onDelete={() => handleDeleteTransmittal(detail as any)}
           />
         )}
         {view === 'detail' && !detail && !loading && <div className="text-center py-20 text-slate-500">لا توجد بيانات</div>}
@@ -1197,10 +1199,11 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
 }
 
 /* ============ DETAIL VIEW ============ */
-function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloadExcel, onSendToMoh, onCopy, onOpenDetail }: {
+function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloadExcel, onSendToMoh, onCopy, onOpenDetail, onEdit, onDelete }: {
   detail: TransmittalDetail; loading: boolean; disciplines: Discipline[];
   onBack: () => void; onRefresh: () => void; onDownloadExcel: () => void; onSendToMoh: () => void;
   onCopy: () => void; onOpenDetail: (id: string) => void;
+  onEdit: () => void; onDelete: () => void;
 }) {
   const [showRevDialog, setShowRevDialog] = useState(false);
   const { toast } = useToast();
@@ -1351,6 +1354,12 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
           </Button>
           <Button variant="outline" size="sm" onClick={onCopy} className="gap-1.5">
             <Copy className="w-4 h-4" /> نسخ برقم جديد
+          </Button>
+          <Button variant="outline" size="sm" onClick={onEdit} className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50">
+            <Pencil className="w-4 h-4" /> تعديل
+          </Button>
+          <Button variant="outline" size="sm" onClick={onDelete} className="gap-1.5 border-red-300 text-red-700 hover:bg-red-50">
+            <Trash2 className="w-4 h-4" /> حذف
           </Button>
           <Button variant="outline" size="sm" onClick={onSendToMoh}
             disabled={detail.mohStatus.status !== 'not_sent' && detail.mohStatus.status !== 'reviewed'}
@@ -2267,18 +2276,13 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
   };
 
   const handlePrint = () => {
-    const printWin = window.open('', '_blank', 'width=1400,height=900');
-    if (!printWin) {
-      toast({ title: 'Error', description: 'Please allow pop-ups', variant: 'destructive' });
-      return;
-    }
+    // Build the full HTML content for printing
     const catLabel = filterCategory !== 'all'
       ? (categories.find(c => c.code === filterCategory)?.label || filterCategory)
       : 'جميع الأقسام';
     const dateStr = dateTo || new Date().toISOString().slice(0, 10);
 
-    // Build table HTML
-    let tableHtml = '<table style="border-collapse:collapse;width:100%;font-size:9px;table-layout:fixed;"><thead><tr>';
+    let tableHtml = '<table style="border-collapse:collapse;width:100%;font-size:9px;table-layout:auto;"><thead><tr>';
     tableHtml += '<th style="border:1px solid #333;padding:4px;background:#1d4ed8;color:white;min-width:80px;">المرجع</th>';
     tableHtml += '<th style="border:1px solid #333;padding:4px;background:#1d4ed8;color:white;min-width:120px;">الوصف</th>';
     revColumns.forEach(rev => {
@@ -2311,7 +2315,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
     });
     tableHtml += '</tbody></table>';
 
-    printWin.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>تقرير ${catLabel}</title>
+    const fullHtml = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>تقرير ${catLabel}</title>
     <style>
       @page { size: A4 landscape; margin: 0.5cm; }
       body { font-family: Tahoma, Arial, sans-serif; margin: 0; padding: 10px; }
@@ -2330,7 +2334,25 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
       <p>وحتى تاريخ: ${dateStr} · ${items.length} ترانسميتال</p>
     </div>
     ${tableHtml}
-    </body></html>`);
+    </body></html>`;
+
+    // If running in Electron, use IPC for native printing (avoids pop-up blocker)
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.printContent) {
+      (window as any).electronAPI.printContent(fullHtml).then(() => {
+        toast({ title: 'تم الطباعة' });
+      }).catch(() => {
+        toast({ title: 'خطأ', description: 'فشل الطباعة', variant: 'destructive' });
+      });
+      return;
+    }
+
+    // Browser fallback: use window.open
+    const printWin = window.open('', '_blank', 'width=1400,height=900');
+    if (!printWin) {
+      toast({ title: 'Error', description: 'Please allow pop-ups', variant: 'destructive' });
+      return;
+    }
+    printWin.document.write(fullHtml);
     printWin.document.close();
     printWin.focus();
     setTimeout(() => { printWin.print(); }, 500);

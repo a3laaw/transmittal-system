@@ -86,10 +86,29 @@ function startServer() {
 }
 
 function createWindow() {
-  mainWindow = new BrowserWindow({ width: 1400, height: 900, minWidth: 1024, minHeight: 700, title: 'Site Secretary', webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }, autoHideMenuBar: true, center: true, show: false });
+  mainWindow = new BrowserWindow({ width: 1400, height: 900, minWidth: 1024, minHeight: 700, title: 'Site Secretary', webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, preload: path.join(__dirname, 'preload.js') }, autoHideMenuBar: true, center: true, show: false });
   mainWindow.loadURL(SERVER_URL);
   mainWindow.once('ready-to-show', function() { mainWindow.show(); mainWindow.focus(); });
-  mainWindow.webContents.setWindowOpenHandler(function(info) { if (info.url.indexOf('http://localhost') === 0) return { action: 'allow' }; shell.openExternal(info.url); return { action: 'deny' }; });
+  // Allow window.open for localhost (print windows), deny external
+  mainWindow.webContents.setWindowOpenHandler(function(info) {
+    if (info.url.indexOf('http://localhost') === 0 || info.url === 'about:blank') return { action: 'allow' };
+    shell.openExternal(info.url);
+    return { action: 'deny' };
+  });
+  // Handle IPC for printing
+  var { ipcMain } = require('electron');
+  ipcMain.handle('print-content', function(event, htmlContent) {
+    return new Promise(function(resolve, reject) {
+      var printWin = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: true, contextIsolation: false } });
+      printWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
+      printWin.webContents.on('did-finish-load', function() {
+        printWin.webContents.print({ landscape: true, printBackground: true }, function(success) {
+          printWin.close();
+          resolve(success);
+        });
+      });
+    });
+  });
   mainWindow.on('closed', function() { mainWindow = null; });
 }
 
