@@ -46,3 +46,5 @@ prisma/migrations/
 
 # Scripts output
 scripts/output/
+
+*.zip
