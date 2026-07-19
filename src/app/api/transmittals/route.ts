@@ -67,6 +67,7 @@ export async function GET(req: NextRequest) {
       category: t.category,
       type: t.type,
       description: t.description,
+      alternativeTitle: t.alternativeTitle,
       parentTransmittalId: t.parentTransmittalId,
       parent: t.parent,
       children: t.children,
@@ -94,7 +95,7 @@ export async function GET(req: NextRequest) {
 // POST /api/transmittals — create new
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { reference, discipline, type, description, parentTransmittalId } = body;
+  const { reference, discipline, type, description, alternativeTitle, parentTransmittalId } = body;
 
   if (!reference || !discipline) {
     return NextResponse.json({ error: 'المرجع والتخصص مطلوبان' }, { status: 400 });
@@ -117,6 +118,7 @@ export async function POST(req: NextRequest) {
       category,
       type: type || null,
       description: description || null,
+      alternativeTitle: alternativeTitle || null,
       parentTransmittalId: parentTransmittalId || null,
       revisions: { create: [{ revNumber: 0, submitDate: new Date() }] },
     },

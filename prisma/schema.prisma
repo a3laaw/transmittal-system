@@ -16,6 +16,7 @@ model Category {
   id            String   @id @default(cuid())
   code          String   @unique // e.g. "TRANSMITTAL", "MIR", "RFI", "BOOKS"
   label         String   // Arabic label: "ترانسميتال"
+  labelEn       String?  // English label: "Transmittal" (for bilingual UI)
   icon          String   @default("📄") // emoji icon
   color         String   @default("bg-blue-100 text-blue-700") // tailwind classes
   templatePath  String?  // path to custom template (if uploaded)
@@ -25,6 +26,7 @@ model Category {
 
   disciplines  Discipline[]
   transmittals Transmittal[]
+  docTypes     DocType[]
 }
 
 // Document types (SHOP DRAWINGS, SAMPLE, SOURCE APPROVAL, etc.) — user-editable
@@ -32,14 +34,19 @@ model DocType {
   id        String   @id @default(cuid())
   code      String   @unique // e.g. "SHOP_DRAWINGS", "SAMPLE"
   label     String   // Arabic label: "رسم تنفيذي"
+  labelEn   String?  // English label
+  categoryCode String? // links to Category.code (filter doc types by main category)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  category  Category? @relation(fields: [categoryCode], references: [code], onDelete: SetNull)
 }
 
 model Discipline {
   id         String   @id @default(cuid())
   code       String   @unique // e.g. "CIV", "EL", "PL", "HVAC", "FF", "ELVE"
   label      String   // Arabic label: "المدنية"
+  labelEn    String?  // English label: "Civil" (for bilingual UI)
   color      String   // tailwind classes: "bg-amber-100 text-amber-700"
   prefix     String   // prefix used in references: "CIV-", "ELEV "
   categoryCode String? // links to Category.code (nullable for migration)
@@ -57,6 +64,7 @@ model Transmittal {
   category    String   @default("TRANSMITTAL") // category code (mirrors discipline's category)
   type        String?  // SHOP DRAWINGS, SAMPLE, SOURCE APPROVAL, etc.
   description String?
+  alternativeTitle String? // short title shown in reports instead of long description
   parentTransmittalId String? // links to another transmittal (e.g., incoming letter linked to outgoing)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

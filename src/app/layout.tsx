@@ -3,6 +3,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Cairo } from "next/font/google";
 import { PWARegister } from "@/components/pwa-register";
+import { LanguageProvider } from "@/lib/i18n/useI18n";
 
 const cairo = Cairo({
   subsets: ["arabic", "latin"],
@@ -61,9 +62,11 @@ export default function RootLayout({
         className={`${cairo.variable} font-sans antialiased bg-slate-50 text-slate-900 min-h-screen`}
         style={{ fontFamily: 'var(--font-cairo), system-ui, sans-serif' }}
       >
-        {children}
-        <Toaster />
-        <PWARegister />
+        <LanguageProvider>
+          {children}
+          <Toaster />
+          <PWARegister />
+        </LanguageProvider>
       </body>
     </html>
   );

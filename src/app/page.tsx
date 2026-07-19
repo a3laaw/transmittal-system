@@ -24,6 +24,7 @@ import {
   CATEGORIES, getCategoryLabel, getCategoryColor, getCategoryIcon,
   APPROVAL_TYPES, getApprovalTypeLetter, getApprovalTypeLabel,
 } from '@/lib/status';
+import { useI18n, useFmtDate } from '@/lib/i18n/useI18n';
 import {
   FileText, Search, Plus, Download, Upload, AlertCircle,
   CheckCircle2, Clock, XCircle, Bell, LayoutDashboard, FileSpreadsheet,
@@ -36,8 +37,8 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-type Discipline = { code: string; label: string; color: string; prefix: string; categoryCode?: string; category?: string; transmittalsCount?: number };
-type Category = { id?: string; code: string; label: string; icon: string; color: string; disciplinesCount?: number; transmittalsCount?: number };
+type Discipline = { code: string; label: string; labelEn?: string; color: string; prefix: string; categoryCode?: string; category?: string; transmittalsCount?: number };
+type Category = { id?: string; code: string; label: string; labelEn?: string; icon: string; color: string; templatePath?: string; templateType?: string; disciplinesCount?: number; transmittalsCount?: number };
 
 type Transmittal = {
   id: string;
@@ -46,6 +47,7 @@ type Transmittal = {
   category?: string;
   type: string | null;
   description: string | null;
+  alternativeTitle?: string | null;
   createdAt: string;
   revisionsCount: number;
   lastSubmitDate: string | null;
@@ -111,6 +113,7 @@ const fmtDate = (s: string | null) => {
 };
 
 export default function Home() {
+  const { t, lang, toggleLang } = useI18n();
   const [view, setView] = useState<'dashboard' | 'list' | 'detail' | 'new' | 'import' | 'settings' | 'reports'>('dashboard');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
@@ -247,6 +250,8 @@ export default function Home() {
   const [consultantReplyTarget, setConsultantReplyTarget] = useState<{ id: string; reference: string } | null>(null);
   const [mohReplyTarget, setMohReplyTarget] = useState<{ id: string; reference: string } | null>(null);
   const [copyTarget, setCopyTarget] = useState<{ id: string; reference: string; description: string } | null>(null);
+  const [editTarget, setEditTarget] = useState<Transmittal | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Transmittal | null>(null);
 
   const handleSendToMoh = (id: string, reference?: string, latestRev?: number) => {
     setSendToMohTarget({ id, reference: reference || '', latestRev: latestRev ?? 0 });
@@ -433,6 +438,56 @@ export default function Home() {
     }
   };
 
+  const handleEditTransmittal = (item: Transmittal) => setEditTarget(item);
+  const confirmEditTransmittal = async (data: { reference: string; discipline: string; type: string; description: string; alternativeTitle: string }) => {
+    if (!editTarget) return;
+    const { id } = editTarget;
+    try {
+      const r = await fetch(`/api/transmittals/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reference: data.reference.trim(),
+          discipline: data.discipline,
+          type: data.type || null,
+          description: data.description || null,
+          alternativeTitle: data.alternativeTitle || null,
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.json();
+        throw new Error(err.error || 'فشل التعديل');
+      }
+      toast({ title: 'تم تعديل البيانات' });
+      setEditTarget(null);
+      if (view === 'list') fetchList();
+      else if (view === 'detail' && selectedId === id) fetchDetail(id);
+      else fetchDashboard();
+    } catch (e: any) {
+      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteTransmittal = (item: Transmittal) => setDeleteTarget(item);
+  const confirmDeleteTransmittal = async () => {
+    if (!deleteTarget) return;
+    const { id, reference } = deleteTarget;
+    try {
+      const r = await fetch(`/api/transmittals/${id}`, { method: 'DELETE' });
+      if (!r.ok) {
+        const err = await r.json();
+        throw new Error(err.error || 'فشل الحذف');
+      }
+      toast({ title: 'تم حذف الترانسميتال', description: reference });
+      setDeleteTarget(null);
+      if (view === 'detail' && selectedId === id) setView('list');
+      if (view === 'list') fetchList();
+      else fetchDashboard();
+    } catch (e: any) {
+      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+    }
+  };
+
   const handleDownloadExcel = async (reference: string, description: string, category?: string) => {
     const today = new Date().toISOString().slice(0, 10);
     toast({ title: 'جاري توليد ملف Excel', description: `سيتم تنزيل ${reference}.xlsx` });
@@ -468,17 +523,27 @@ export default function Home() {
                 <FileText className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">سكرتير الموقع</h1>
+                <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">{t('app.name')}</h1>
                 <p className="text-xs text-slate-500 hidden sm:block">Sabah Al Salem South Health Center</p>
               </div>
             </div>
             <nav className="flex items-center gap-1 sm:gap-2 flex-wrap">
-              <NavButton active={view === 'dashboard'} onClick={() => setView('dashboard')} icon={<LayoutDashboard className="w-4 h-4" />} label="الرئيسية" />
-              <NavButton active={view === 'list'} onClick={() => setView('list')} icon={<FileSpreadsheet className="w-4 h-4" />} label="القائمة" />
-              <NavButton active={view === 'new'} onClick={() => setView('new')} icon={<FilePlus className="w-4 h-4" />} label="جديد" />
-              <NavButton active={view === 'reports'} onClick={() => setView('reports')} icon={<BarChart3 className="w-4 h-4" />} label="تقارير" />
-              <NavButton active={view === 'settings'} onClick={() => setView('settings')} icon={<Settings className="w-4 h-4" />} label="الإعدادات" />
-              <NavButton active={view === 'import'} onClick={() => setView('import')} icon={<Upload className="w-4 h-4" />} label="استيراد" />
+              <NavButton active={view === 'dashboard'} onClick={() => setView('dashboard')} icon={<LayoutDashboard className="w-4 h-4" />} label={t('nav.dashboard')} />
+              <NavButton active={view === 'list'} onClick={() => setView('list')} icon={<FileSpreadsheet className="w-4 h-4" />} label={t('nav.list')} />
+              <NavButton active={view === 'new'} onClick={() => setView('new')} icon={<FilePlus className="w-4 h-4" />} label={t('nav.new')} />
+              <NavButton active={view === 'reports'} onClick={() => setView('reports')} icon={<BarChart3 className="w-4 h-4" />} label={t('nav.reports')} />
+              <NavButton active={view === 'settings'} onClick={() => setView('settings')} icon={<Settings className="w-4 h-4" />} label={t('nav.settings')} />
+              <NavButton active={view === 'import'} onClick={() => setView('import')} icon={<Upload className="w-4 h-4" />} label={t('nav.import')} />
+              <Button
+                onClick={toggleLang}
+                variant="outline"
+                size="sm"
+                className="gap-1.5 px-3 border-slate-300 text-slate-700 hover:bg-slate-100"
+                title={lang === 'ar' ? 'Switch to English' : 'التبديل للعربية'}
+              >
+                <span className="text-base">{lang === 'ar' ? '🇬🇧' : '🇸🇦'}</span>
+                <span className="hidden sm:inline text-xs font-semibold">{lang === 'ar' ? 'EN' : 'ع'}</span>
+              </Button>
             </nav>
           </div>
         </div>
@@ -511,6 +576,8 @@ export default function Home() {
             onRegisterRevision={handleRegisterRevision}
             onRegisterConsultantReply={handleRegisterConsultantReply}
             onRegisterMohReply={handleRegisterMohReply}
+            onEdit={handleEditTransmittal}
+            onDelete={handleDeleteTransmittal}
           />
         )}
         {view === 'detail' && detail && (
@@ -627,6 +694,21 @@ export default function Home() {
           onConfirm={confirmCopyTransmittal}
         />
       )}
+      {editTarget && (
+        <EditTransmittalDialog
+          target={editTarget}
+          disciplines={disciplines}
+          onClose={() => setEditTarget(null)}
+          onConfirm={confirmEditTransmittal}
+        />
+      )}
+      {deleteTarget && (
+        <DeleteTransmittalDialog
+          target={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={confirmDeleteTransmittal}
+        />
+      )}
     </div>
   );
 }
@@ -647,34 +729,59 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
   onCopy: (id: string, reference: string, description?: string) => void;
   onDownloadExcel: (reference: string, description: string) => void;
 }) {
+  const { t, lang } = useI18n();
+  const [activeTab, setActiveTab] = useState<string>('all');
   if (loading && !data) return <div className="space-y-4"><Skeleton className="h-24 w-full" /><Skeleton className="h-64 w-full" /></div>;
-  if (!data) return <div className="text-center py-20 text-slate-500">لا توجد بيانات. قم باستيراد ملف Excel أولاً.</div>;
+  if (!data) return <div className="text-center py-20 text-slate-500">{t('dashboard.noData')}</div>;
 
   const kpis = [
-    { label: 'إجمالي', value: data.kpis.total, color: 'bg-slate-700', icon: <FileText className="w-5 h-5" /> },
-    { label: 'معتمد', value: data.kpis.approved, color: 'bg-emerald-600', icon: <CheckCircle2 className="w-5 h-5" /> },
-    { label: 'بانتظار', value: data.kpis.pending, color: 'bg-yellow-500', icon: <Clock className="w-5 h-5" /> },
-    { label: 'متأخر استشاري', value: data.kpis.overdue, color: 'bg-red-600', icon: <AlertCircle className="w-5 h-5" /> },
-    { label: 'إعادة إرسال', value: data.kpis.resubmit, color: 'bg-orange-500', icon: <RefreshCw className="w-5 h-5" /> },
-    { label: 'ملغى', value: data.kpis.cancelled, color: 'bg-gray-500', icon: <XCircle className="w-5 h-5" /> },
+    { label: t('dashboard.total'), value: data.kpis.total, color: 'bg-slate-700', icon: <FileText className="w-5 h-5" /> },
+    { label: t('dashboard.approved'), value: data.kpis.approved, color: 'bg-emerald-600', icon: <CheckCircle2 className="w-5 h-5" /> },
+    { label: t('dashboard.pending'), value: data.kpis.pending, color: 'bg-yellow-500', icon: <Clock className="w-5 h-5" /> },
+    { label: t('dashboard.overdue'), value: data.kpis.overdue, color: 'bg-red-600', icon: <AlertCircle className="w-5 h-5" /> },
+    { label: t('dashboard.resubmit'), value: data.kpis.resubmit, color: 'bg-orange-500', icon: <RefreshCw className="w-5 h-5" /> },
+    { label: t('dashboard.cancelled'), value: data.kpis.cancelled, color: 'bg-gray-500', icon: <XCircle className="w-5 h-5" /> },
   ];
   const mohKpis = [
-    { label: 'مُرسل للوزارة', value: data.mohKpis.sent, color: 'bg-blue-600', icon: <Send className="w-5 h-5" /> },
-    { label: 'معتمد بالوزارة', value: data.mohKpis.approved, color: 'bg-emerald-600', icon: <CheckCircle2 className="w-5 h-5" /> },
-    { label: 'قيد المراجعة', value: data.mohKpis.underReview, color: 'bg-yellow-500', icon: <Clock className="w-5 h-5" /> },
-    { label: 'متأخر بالوزارة', value: data.mohKpis.overdue, color: 'bg-red-600', icon: <AlertCircle className="w-5 h-5" /> },
+    { label: t('dashboard.mohSent'), value: data.mohKpis.sent, color: 'bg-blue-600', icon: <Send className="w-5 h-5" /> },
+    { label: t('dashboard.mohApproved'), value: data.mohKpis.approved, color: 'bg-emerald-600', icon: <CheckCircle2 className="w-5 h-5" /> },
+    { label: t('dashboard.mohUnderReview'), value: data.mohKpis.underReview, color: 'bg-yellow-500', icon: <Clock className="w-5 h-5" /> },
+    { label: t('dashboard.mohOverdue'), value: data.mohKpis.overdue, color: 'bg-red-600', icon: <AlertCircle className="w-5 h-5" /> },
   ];
+
+  // Filter dashboard data by active tab (category)
+  const filterByCategory = (items: any[]) => activeTab === 'all' ? items : items.filter((it: any) => it.category === activeTab || it.disciplineCategory === activeTab);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">لوحة المعلومات</h2>
-          <p className="text-sm text-slate-500 mt-1">نظرة عامة على حالة كل الترانسميتالات</p>
+          <h2 className="text-2xl font-bold text-slate-900">{t('dashboard.title')}</h2>
+          <p className="text-sm text-slate-500 mt-1">{t('dashboard.subtitle')}</p>
         </div>
         <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> تحديث
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> {t('common.refresh')}
         </Button>
+      </div>
+
+      {/* Tabs for main categories */}
+      <div className="flex flex-wrap gap-1.5 border-b border-slate-200 pb-2">
+        <button
+          onClick={() => setActiveTab('all')}
+          className={`px-4 py-2 rounded-t-lg text-sm font-semibold transition-colors ${activeTab === 'all' ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+        >
+          {t('dashboard.tab.all')}
+        </button>
+        {categories.map(cat => (
+          <button
+            key={cat.code}
+            onClick={() => setActiveTab(cat.code)}
+            className={`px-4 py-2 rounded-t-lg text-sm font-semibold transition-colors flex items-center gap-1.5 ${activeTab === cat.code ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+          >
+            <span>{cat.icon}</span>
+            <span>{(lang === 'en' && cat.labelEn) ? cat.labelEn : cat.label}</span>
+          </button>
+        ))}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -846,7 +953,7 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
 }
 
 /* ============ LIST VIEW ============ */
-function ListView({ items, loading, search, onSearch, filterCategory, onFilterCategory, filterDiscipline, onFilterDiscipline, filterStatus, onFilterStatus, filterType, onFilterType, types, disciplines, categories, onOpenDetail, onRefresh, onSendToMoh, onCopy, onDownloadExcel, onRegisterRevision, onRegisterConsultantReply, onRegisterMohReply }: {
+function ListView({ items, loading, search, onSearch, filterCategory, onFilterCategory, filterDiscipline, onFilterDiscipline, filterStatus, onFilterStatus, filterType, onFilterType, types, disciplines, categories, onOpenDetail, onRefresh, onSendToMoh, onCopy, onDownloadExcel, onRegisterRevision, onRegisterConsultantReply, onRegisterMohReply, onEdit, onDelete }: {
   items: Transmittal[]; loading: boolean; search: string; onSearch: (s: string) => void;
   filterCategory: string; onFilterCategory: (s: string) => void;
   filterDiscipline: string; onFilterDiscipline: (s: string) => void;
@@ -859,7 +966,10 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
   onRegisterRevision: (id: string, reference: string, nextRev: number) => void;
   onRegisterConsultantReply: (id: string, reference: string) => void;
   onRegisterMohReply: (id: string, reference: string) => void;
+  onEdit: (t: Transmittal) => void;
+  onDelete: (t: Transmittal) => void;
 }) {
+  const { t, lang } = useI18n();
   // Filter disciplines based on selected category (cascading)
   const availableDisciplines = filterCategory !== 'all'
     ? disciplines.filter(d => (d.categoryCode || d.category || 'TRANSMITTAL') === filterCategory)
@@ -868,64 +978,64 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div><h2 className="text-2xl font-bold text-slate-900">قائمة الترانسميتالات</h2>
-          <p className="text-sm text-slate-500 mt-1">{items.length} نتيجة</p></div>
+        <div><h2 className="text-2xl font-bold text-slate-900">{t('list.title')}</h2>
+          <p className="text-sm text-slate-500 mt-1">{items.length} {t('list.results')}</p></div>
         <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> تحديث
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> {t('common.refresh')}
         </Button>
       </div>
 
       <Card className="border-0 shadow-sm"><CardContent className="p-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
-            <Label className="text-xs">بحث</Label>
+            <Label className="text-xs">{t('common.search')}</Label>
             <div className="relative">
               <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="ابحث بالمرجع أو الوصف..." className="pr-8" />
+              <Input value={search} onChange={(e) => onSearch(e.target.value)} placeholder={t('list.searchPlaceholder')} className="pr-8" />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">القسم الرئيسي</Label>
+            <Label className="text-xs">{t('list.filterCategory')}</Label>
             <Select value={filterCategory} onValueChange={(v) => { onFilterCategory(v); onFilterDiscipline('all'); }}>
-              <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('common.all')} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">كل الأقسام</SelectItem>
-                {categories.map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {c.label}</SelectItem>)}
+                <SelectItem value="all">{t('list.allCategories')}</SelectItem>
+                {categories.map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">التخصص الفرعي</Label>
+            <Label className="text-xs">{t('list.filterDiscipline')}</Label>
             <Select value={filterDiscipline} onValueChange={onFilterDiscipline}>
-              <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('common.all')} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">كل التخصصات</SelectItem>
-                {availableDisciplines.map(d => <SelectItem key={d.code} value={d.code}>{d.label} ({d.code})</SelectItem>)}
+                <SelectItem value="all">{t('list.allDisciplines')}</SelectItem>
+                {availableDisciplines.map(d => <SelectItem key={d.code} value={d.code}>{(lang === 'en' && d.labelEn) ? d.labelEn : d.label} ({d.code})</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">النوع</Label>
+            <Label className="text-xs">{t('list.filterType')}</Label>
             <Select value={filterType} onValueChange={onFilterType}>
-              <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('common.all')} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">كل الأنواع</SelectItem>
-                {types.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                <SelectItem value="all">{t('list.allTypes')}</SelectItem>
+                {types.map(ty => <SelectItem key={ty} value={ty}>{ty}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">الحالة</Label>
+            <Label className="text-xs">{t('list.filterStatus')}</Label>
             <Select value={filterStatus} onValueChange={onFilterStatus}>
-              <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('common.all')} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">كل الحالات</SelectItem>
-                <SelectItem value="approved">✅ معتمد</SelectItem>
-                <SelectItem value="pending">⏳ بانتظار الرد</SelectItem>
-                <SelectItem value="overdue">🔴 متأخر</SelectItem>
-                <SelectItem value="resubmit">🔔 إعادة إرسال</SelectItem>
-                <SelectItem value="cancelled">🚫 ملغى</SelectItem>
-                <SelectItem value="draft">📝 مسودة</SelectItem>
+                <SelectItem value="all">{t('list.allStatuses')}</SelectItem>
+                <SelectItem value="approved">✅ {t('status.approved')}</SelectItem>
+                <SelectItem value="pending">⏳ {t('status.pending')}</SelectItem>
+                <SelectItem value="overdue">🔴 {t('status.overdue', { days: '' })}</SelectItem>
+                <SelectItem value="resubmit">🔔 {t('status.resubmit')}</SelectItem>
+                <SelectItem value="cancelled">🚫 {t('status.cancelled')}</SelectItem>
+                <SelectItem value="draft">📝 {t('status.draft')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -937,31 +1047,31 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
           <div className="p-4 space-y-2">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
         ) : items.length === 0 ? (
           <div className="text-center py-16 text-slate-500">
-            <FileSpreadsheet className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>لا توجد نتائج مطابقة</p>
+            <FileSpreadsheet className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>{t('list.empty')}</p>
           </div>
         ) : (
           <div className="max-h-[70vh] overflow-y-auto">
             <Table>
               <TableHeader className="sticky top-0 bg-white z-10"><TableRow>
-                <TableHead className="text-right">المرجع</TableHead>
-                <TableHead className="text-right">القسم</TableHead>
-                <TableHead className="text-right">النوع</TableHead>
-                <TableHead className="text-right">الوصف</TableHead>
-                <TableHead className="text-center">المراجعات</TableHead>
-                <TableHead className="text-center">الاستشاري</TableHead>
-                <TableHead className="text-center">الوزارة</TableHead>
-                <TableHead className="text-center">إجراءات</TableHead>
+                <TableHead className="text-right">{t('list.col.reference')}</TableHead>
+                <TableHead className="text-right">{t('list.col.discipline')}</TableHead>
+                <TableHead className="text-right">{t('list.col.type')}</TableHead>
+                <TableHead className="text-right">{t('list.col.description')}</TableHead>
+                <TableHead className="text-center">{t('list.col.revisions')}</TableHead>
+                <TableHead className="text-center">{t('list.col.consultant')}</TableHead>
+                <TableHead className="text-center">{t('list.col.moh')}</TableHead>
+                <TableHead className="text-center">{t('list.col.actions')}</TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {items.map((t) => (
-                  <TableRow key={t.id} className="cursor-pointer hover:bg-slate-50" onClick={() => onOpenDetail(t.id)}>
-                    <TableCell className="font-mono font-semibold whitespace-nowrap">{t.reference}</TableCell>
-                    <TableCell><Badge variant="secondary" className={getDisciplineColor(t.discipline, disciplines)}>{getDisciplineLabel(t.discipline, disciplines)}</Badge></TableCell>
-                    <TableCell className="text-xs text-slate-600 whitespace-nowrap">{t.type || '—'}</TableCell>
-                    <TableCell className="text-sm text-slate-700 max-w-xs truncate">{t.description || '—'}</TableCell>
-                    <TableCell className="text-center font-semibold">{t.revisionsCount}</TableCell>
-                    <TableCell className="text-center"><Badge variant="outline" className={t.consultantStatus.color}>{t.consultantStatus.emoji}</Badge></TableCell>
-                    <TableCell className="text-center"><Badge variant="outline" className={t.mohStatus.color}>{t.mohStatus.emoji}</Badge></TableCell>
+                {items.map((item) => (
+                  <TableRow key={item.id} className="cursor-pointer hover:bg-slate-50" onClick={() => onOpenDetail(item.id)}>
+                    <TableCell className="font-mono font-semibold whitespace-nowrap">{item.reference}</TableCell>
+                    <TableCell><Badge variant="secondary" className={getDisciplineColor(item.discipline, disciplines)}>{(lang === 'en' && disciplines.find(d => d.code === item.discipline)?.labelEn) ? disciplines.find(d => d.code === item.discipline)!.labelEn : getDisciplineLabel(item.discipline, disciplines)}</Badge></TableCell>
+                    <TableCell className="text-xs text-slate-600 whitespace-nowrap">{item.type || '—'}</TableCell>
+                    <TableCell className="text-sm text-slate-700 max-w-xs truncate">{(lang === 'en' ? (item.alternativeTitle || item.description) : (item.description || item.alternativeTitle)) || '—'}</TableCell>
+                    <TableCell className="text-center font-semibold">{item.revisionsCount}</TableCell>
+                    <TableCell className="text-center"><Badge variant="outline" className={item.consultantStatus.color}>{item.consultantStatus.emoji}</Badge></TableCell>
+                    <TableCell className="text-center"><Badge variant="outline" className={item.mohStatus.color}>{item.mohStatus.emoji}</Badge></TableCell>
                     <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -970,48 +1080,58 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuLabel>إجراءات</DropdownMenuLabel>
+                          <DropdownMenuLabel>{t('common.actions')}</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => onOpenDetail(t.id)}>
-                            <Eye className="w-4 h-4 ml-2" /> عرض التفاصيل
+                          <DropdownMenuItem onClick={() => onOpenDetail(item.id)}>
+                            <Eye className="w-4 h-4 ml-2" /> {t('list.action.viewDetails')}
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => onRegisterRevision(t.id, t.reference, t.revisionsCount)}
-                            disabled={t.computedStatus.status === 'cancelled' || t.revisionsCount === 0 || t.lastReplyDate === null}
+                            onClick={() => onRegisterRevision(item.id, item.reference, item.revisionsCount)}
+                            disabled={item.computedStatus.status === 'cancelled' || item.revisionsCount === 0 || item.lastReplyDate === null}
                           >
-                            <History className="w-4 h-4 ml-2" /> تسجيل ريفجن (REV.{t.revisionsCount})
-                            {t.computedStatus.status === 'cancelled' ? <span className="text-[10px] text-slate-400 mr-1">(مسحوب)</span> :
-                             (t.revisionsCount === 0 || t.lastReplyDate === null) && <span className="text-[10px] text-slate-400 mr-1">(بانتظار الرد)</span>}
+                            <History className="w-4 h-4 ml-2" /> {t('list.action.registerRevision')} (REV.{item.revisionsCount})
+                            {item.computedStatus.status === 'cancelled' ? <span className="text-[10px] text-slate-400 mr-1">{t('list.disabled.cancelled')}</span> :
+                             (item.revisionsCount === 0 || item.lastReplyDate === null) && <span className="text-[10px] text-slate-400 mr-1">{t('list.disabled.waitingReply')}</span>}
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => onRegisterConsultantReply(t.id, t.reference)}
-                            disabled={t.computedStatus.status === 'cancelled' || t.revisionsCount === 0 || t.lastReplyDate !== null}
+                            onClick={() => onRegisterConsultantReply(item.id, item.reference)}
+                            disabled={item.computedStatus.status === 'cancelled' || item.revisionsCount === 0 || item.lastReplyDate !== null}
                           >
-                            <Building2 className="w-4 h-4 ml-2" /> تسجيل رد الاستشاري
-                            {t.computedStatus.status === 'cancelled' ? <span className="text-[10px] text-slate-400 mr-1">(مسحوب)</span> :
-                             (t.revisionsCount === 0 || t.lastReplyDate !== null) && <span className="text-[10px] text-slate-400 mr-1">{t.revisionsCount === 0 ? '(لا ريفجن)' : '(تم الرد)'}</span>}
+                            <Building2 className="w-4 h-4 ml-2" /> {t('list.action.registerConsultantReply')}
+                            {item.computedStatus.status === 'cancelled' ? <span className="text-[10px] text-slate-400 mr-1">{t('list.disabled.cancelled')}</span> :
+                             (item.revisionsCount === 0 || item.lastReplyDate !== null) && <span className="text-[10px] text-slate-400 mr-1">{item.revisionsCount === 0 ? t('list.disabled.noRev') : t('list.disabled.replied')}</span>}
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => onRegisterMohReply(t.id, t.reference)}
-                            disabled={t.computedStatus.status === 'cancelled' || t.mohStatus.status === 'not_sent'}
+                            onClick={() => onRegisterMohReply(item.id, item.reference)}
+                            disabled={item.computedStatus.status === 'cancelled' || item.mohStatus.status === 'not_sent'}
                           >
-                            <Hospital className="w-4 h-4 ml-2" /> تسجيل رد الوزارة
-                            {t.computedStatus.status === 'cancelled' ? <span className="text-[10px] text-slate-400 mr-1">(مسحوب)</span> :
-                             t.mohStatus.status === 'not_sent' && <span className="text-[10px] text-slate-400 mr-1">(لم يُرسل)</span>}
+                            <Hospital className="w-4 h-4 ml-2" /> {t('list.action.registerMohReply')}
+                            {item.computedStatus.status === 'cancelled' ? <span className="text-[10px] text-slate-400 mr-1">{t('list.disabled.cancelled')}</span> :
+                             item.mohStatus.status === 'not_sent' && <span className="text-[10px] text-slate-400 mr-1">{t('list.disabled.notSent')}</span>}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            onClick={() => onSendToMoh(t.id, t.reference)}
-                            disabled={t.computedStatus.status === 'cancelled' || t.consultantStatus.status !== 'approved' || (t.mohStatus.status !== 'not_sent' && t.mohStatus.status !== 'reviewed')}
+                            onClick={() => onSendToMoh(item.id, item.reference)}
+                            disabled={item.computedStatus.status === 'cancelled' || item.consultantStatus.status !== 'approved' || (item.mohStatus.status !== 'not_sent' && item.mohStatus.status !== 'reviewed')}
                           >
-                            <Send className="w-4 h-4 ml-2" /> إرسال REV.{t.revisionsCount > 0 ? (t.revisionsCount - 1) : 0} للوزارة
-                            {t.consultantStatus.status !== 'approved' && <span className="text-[10px] text-slate-400 mr-1">(غير معتمد)</span>}
+                            <Send className="w-4 h-4 ml-2" /> {t('list.action.sendToMoh')} REV.{item.revisionsCount > 0 ? (item.revisionsCount - 1) : 0}
+                            {item.consultantStatus.status !== 'approved' && <span className="text-[10px] text-slate-400 mr-1">{t('list.disabled.notApproved')}</span>}
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onCopy(t.id, t.reference, t.description || '')}>
-                            <Copy className="w-4 h-4 ml-2" /> نسخ برقم جديد
+                          <DropdownMenuItem onClick={() => onCopy(item.id, item.reference, item.description || '')}>
+                            <Copy className="w-4 h-4 ml-2" /> {t('list.action.copyNew')}
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onDownloadExcel(t.reference, t.description || '')}>
-                            <FileDown className="w-4 h-4 ml-2" /> تنزيل Excel
+                          <DropdownMenuItem onClick={() => onDownloadExcel(item.reference, item.description || '')}>
+                            <FileDown className="w-4 h-4 ml-2" /> {t('list.action.downloadExcel')}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => onEdit(item)}>
+                            <Pencil className="w-4 h-4 ml-2" /> {t('list.action.edit')}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => onDelete(item)}
+                            className="text-red-700 focus:text-red-700 focus:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4 ml-2" /> {t('list.action.delete')}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -3434,6 +3554,179 @@ function CopyTransmittalDialog({ target, onClose, onConfirm }: {
           <Button onClick={handleConfirm} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
             <Copy className="w-4 h-4" />
             {saving ? 'جاري النسخ...' : 'نسخ برقم جديد'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ============ EDIT TRANSMITTAL DIALOG ============ */
+function EditTransmittalDialog({ target, disciplines, onClose, onConfirm }: {
+  target: Transmittal;
+  disciplines: Discipline[];
+  onClose: () => void;
+  onConfirm: (data: { reference: string; discipline: string; type: string; description: string; alternativeTitle: string }) => void;
+}) {
+  const { t, lang } = useI18n();
+  const [reference, setReference] = useState(target.reference);
+  const [discipline, setDiscipline] = useState(target.discipline);
+  const [type, setType] = useState(target.type || '');
+  const [description, setDescription] = useState(target.description || '');
+  const [alternativeTitle, setAlternativeTitle] = useState((target as any).alternativeTitle || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleConfirm = async () => {
+    if (!reference.trim() || !discipline) return;
+    setSaving(true);
+    await onConfirm({ reference, discipline, type, description, alternativeTitle });
+    setSaving(false);
+  };
+
+  return (
+    <Dialog open={true} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="w-5 h-5 text-blue-700" />
+            {t('dialog.editTransmittal.title')}
+          </DialogTitle>
+          <DialogDescription>
+            {lang === 'ar' ? 'يمكنك تعديل المرجع، التخصص، النوع، العنوان المختصر، والوصف. ستظل المراجعات والردود محفوظة.' : 'You can edit reference, discipline, type, short title, and description. Revisions and replies will remain saved.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p className="text-sm text-blue-900">
+              <strong>{t('common.reference')}:</strong> <span className="font-mono">{target.reference}</span> ·
+              <strong className="mr-2">{t('common.discipline')}:</strong> {target.discipline}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-sm">{t('common.reference')} *</Label>
+              <Input value={reference} onChange={(e) => setReference(e.target.value)} className="font-mono" placeholder="CIV-001" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">{t('common.discipline')} *</Label>
+              <Select value={discipline} onValueChange={setDiscipline}>
+                <SelectTrigger><SelectValue placeholder={t('new.disciplinePlaceholder')} /></SelectTrigger>
+                <SelectContent>
+                  {disciplines.map(d => (
+                    <SelectItem key={d.code} value={d.code}>
+                      {(lang === 'en' && d.labelEn) ? d.labelEn : d.label} · {d.code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('common.type')} ({t('common.optional')})</Label>
+            <Input value={type} onChange={(e) => setType(e.target.value)} placeholder="SHOP DRAWINGS" />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('new.altTitleLabel')}</Label>
+            <Input value={alternativeTitle} onChange={(e) => setAlternativeTitle(e.target.value)} placeholder={t('new.altTitlePlaceholder')} />
+            <p className="text-xs text-slate-500">{t('new.altTitleHint')}</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('new.descriptionLabel')} ({t('common.optional')})</Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder={t('new.descriptionPlaceholder')} />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={saving || !reference.trim() || !discipline}
+            className="bg-blue-700 hover:bg-blue-800 gap-1.5"
+          >
+            <Pencil className="w-4 h-4" />
+            {saving ? t('common.saving') : (lang === 'ar' ? 'حفظ التعديلات' : 'Save Changes')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ============ DELETE TRANSMITTAL DIALOG ============ */
+function DeleteTransmittalDialog({ target, onClose, onConfirm }: {
+  target: Transmittal;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const { t } = useI18n();
+  const [saving, setSaving] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+
+  const handleConfirm = async () => {
+    if (confirmText !== target.reference) return;
+    setSaving(true);
+    await onConfirm();
+    setSaving(false);
+  };
+
+  return (
+    <Dialog open={true} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-700">
+            <Trash2 className="w-5 h-5" />
+            {t('dialog.deleteTransmittal.title')}
+          </DialogTitle>
+          <DialogDescription>
+            {t('dialog.deleteTransmittal.desc') || (t('dialog.deleteTransmittal.title'))}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="text-sm text-red-900">
+              <strong>{t('common.reference')}:</strong> <span className="font-mono">{target.reference}</span>
+            </p>
+            <p className="text-sm text-red-900 mt-1">
+              <strong>{t('common.discipline')}:</strong> {target.discipline} ·
+              <strong className="mr-2">{t('list.col.revisions')}:</strong> {target.revisionsCount}
+            </p>
+            {target.description && (
+              <p className="text-sm text-red-900 mt-1">
+                <strong>{t('common.description')}:</strong> {target.description.slice(0, 80)}{target.description.length > 80 ? '...' : ''}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-sm">
+              {t('dialog.deleteTransmittal.confirm', { ref: target.reference })}
+            </Label>
+            <Input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              className="font-mono"
+              placeholder={target.reference}
+              autoFocus
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={saving || confirmText !== target.reference}
+            variant="destructive"
+            className="gap-1.5"
+          >
+            <Trash2 className="w-4 h-4" />
+            {saving ? t('common.saving') : t('dialog.deleteTransmittal.deleteBtn')}
           </Button>
         </DialogFooter>
       </DialogContent>
