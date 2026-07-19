@@ -25,6 +25,7 @@ model Category {
   updatedAt     DateTime @updatedAt
 
   disciplines  Discipline[]
+  disciplineCategories DisciplineCategory[]
   transmittals Transmittal[]
   docTypes     DocType[]
 }
@@ -53,7 +54,23 @@ model Discipline {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  category   Category? @relation(fields: [categoryCode], references: [code], onDelete: Restrict)
+  category      Category?           @relation(fields: [categoryCode], references: [code], onDelete: Restrict)
+  categories    DisciplineCategory[]
+}
+
+// Many-to-many: a discipline can belong to multiple categories
+model DisciplineCategory {
+  id            String   @id @default(cuid())
+  disciplineId  String
+  categoryCode  String
+  createdAt     DateTime @default(now())
+
+  discipline  Discipline @relation(fields: [disciplineId], references: [id], onDelete: Cascade)
+  category    Category   @relation(fields: [categoryCode], references: [code], onDelete: Cascade)
+
+  @@unique([disciplineId, categoryCode])
+  @@index([disciplineId])
+  @@index([categoryCode])
 }
 
 model Transmittal {

@@ -37,8 +37,9 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-type Discipline = { code: string; label: string; labelEn?: string; color: string; prefix: string; categoryCode?: string; category?: string; transmittalsCount?: number };
+type Discipline = { code: string; label: string; labelEn?: string; color: string; prefix: string; categoryCode?: string; category?: string; transmittalsCount?: number; allCategories?: string[] };
 type Category = { id?: string; code: string; label: string; labelEn?: string; icon: string; color: string; templatePath?: string; templateType?: string; disciplinesCount?: number; transmittalsCount?: number };
+type DocType = { id: string; code: string; label: string; labelEn?: string; categoryCode?: string | null; transmittalsCount?: number };
 
 type Transmittal = {
   id: string;
@@ -125,10 +126,12 @@ export default function Home() {
   const [search, setSearch] = useState('');
   const [filterDiscipline, setFilterDiscipline] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [sortBy, setSortBy] = useState<'date' | 'reference' | 'discipline'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [filterType, setFilterType] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [types, setTypes] = useState<string[]>([]);
-  const [docTypes, setDocTypes] = useState<{ id: string; code: string; label: string; transmittalsCount?: number }[]>([]);
+  const [docTypes, setDocTypes] = useState<DocType[]>([]);
   const { toast } = useToast();
 
   const fetchCategories = useCallback(async () => {
@@ -578,6 +581,10 @@ export default function Home() {
             onRegisterMohReply={handleRegisterMohReply}
             onEdit={handleEditTransmittal}
             onDelete={handleDeleteTransmittal}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            onSortByChange={setSortBy}
+            onSortOrderChange={setSortOrder}
           />
         )}
         {view === 'detail' && detail && (
@@ -953,7 +960,7 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
 }
 
 /* ============ LIST VIEW ============ */
-function ListView({ items, loading, search, onSearch, filterCategory, onFilterCategory, filterDiscipline, onFilterDiscipline, filterStatus, onFilterStatus, filterType, onFilterType, types, disciplines, categories, onOpenDetail, onRefresh, onSendToMoh, onCopy, onDownloadExcel, onRegisterRevision, onRegisterConsultantReply, onRegisterMohReply, onEdit, onDelete }: {
+function ListView({ items, loading, search, onSearch, filterCategory, onFilterCategory, filterDiscipline, onFilterDiscipline, filterStatus, onFilterStatus, filterType, onFilterType, types, disciplines, categories, onOpenDetail, onRefresh, onSendToMoh, onCopy, onDownloadExcel, onRegisterRevision, onRegisterConsultantReply, onRegisterMohReply, onEdit, onDelete, sortBy, sortOrder, onSortByChange, onSortOrderChange }: {
   items: Transmittal[]; loading: boolean; search: string; onSearch: (s: string) => void;
   filterCategory: string; onFilterCategory: (s: string) => void;
   filterDiscipline: string; onFilterDiscipline: (s: string) => void;
@@ -968,12 +975,31 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
   onRegisterMohReply: (id: string, reference: string) => void;
   onEdit: (t: Transmittal) => void;
   onDelete: (t: Transmittal) => void;
+  sortBy: 'date' | 'reference' | 'discipline';
+  sortOrder: 'asc' | 'desc';
+  onSortByChange: (s: 'date' | 'reference' | 'discipline') => void;
+  onSortOrderChange: (s: 'asc' | 'desc') => void;
 }) {
   const { t, lang } = useI18n();
   // Filter disciplines based on selected category (cascading)
   const availableDisciplines = filterCategory !== 'all'
     ? disciplines.filter(d => (d.categoryCode || d.category || 'TRANSMITTAL') === filterCategory)
     : disciplines;
+
+  // Sort items based on sortBy + sortOrder
+  const sortedItems = [...items].sort((a, b) => {
+    let cmp = 0;
+    if (sortBy === 'date') {
+      const aDate = a.lastSubmitDate ? new Date(a.lastSubmitDate).getTime() : 0;
+      const bDate = b.lastSubmitDate ? new Date(b.lastSubmitDate).getTime() : 0;
+      cmp = aDate - bDate;
+    } else if (sortBy === 'reference') {
+      cmp = a.reference.localeCompare(b.reference);
+    } else if (sortBy === 'discipline') {
+      cmp = a.discipline.localeCompare(b.discipline);
+    }
+    return sortOrder === 'asc' ? cmp : -cmp;
+  });
 
   return (
     <div className="space-y-4">
@@ -1039,6 +1065,29 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
               </SelectContent>
             </Select>
           </div>
+          {/* Sort dropdowns */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t('list.sortBy')}</Label>
+            <div className="flex gap-1.5">
+              <Select value={sortBy} onValueChange={(v) => onSortByChange(v as any)}>
+                <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date">{t('settings.sortDate')}</SelectItem>
+                  <SelectItem value="reference">{t('settings.sortReference')}</SelectItem>
+                  <SelectItem value="discipline">{t('settings.sortDiscipline')}</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onSortOrderChange(sortOrder === 'asc' ? 'desc' : 'asc')}
+                title={sortOrder === 'asc' ? t('settings.sortAsc') : t('settings.sortDesc')}
+                className="px-3"
+              >
+                {sortOrder === 'asc' ? '↑' : '↓'}
+              </Button>
+            </div>
+          </div>
         </div>
       </CardContent></Card>
 
@@ -1063,7 +1112,7 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
                 <TableHead className="text-center">{t('list.col.actions')}</TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {items.map((item) => (
+                {sortedItems.map((item) => (
                   <TableRow key={item.id} className="cursor-pointer hover:bg-slate-50" onClick={() => onOpenDetail(item.id)}>
                     <TableCell className="font-mono font-semibold whitespace-nowrap">{item.reference}</TableCell>
                     <TableCell><Badge variant="secondary" className={getDisciplineColor(item.discipline, disciplines)}>{(lang === 'en' && disciplines.find(d => d.code === item.discipline)?.labelEn) ? disciplines.find(d => d.code === item.discipline)!.labelEn : getDisciplineLabel(item.discipline, disciplines)}</Badge></TableCell>
@@ -2217,21 +2266,91 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
     return 'text-slate-700';
   };
 
+  const handlePrint = () => {
+    const printWin = window.open('', '_blank', 'width=1400,height=900');
+    if (!printWin) {
+      toast({ title: 'Error', description: 'Please allow pop-ups', variant: 'destructive' });
+      return;
+    }
+    const catLabel = filterCategory !== 'all'
+      ? (categories.find(c => c.code === filterCategory)?.label || filterCategory)
+      : 'جميع الأقسام';
+    const dateStr = dateTo || new Date().toISOString().slice(0, 10);
+
+    // Build table HTML
+    let tableHtml = '<table style="border-collapse:collapse;width:100%;font-size:9px;table-layout:fixed;"><thead><tr>';
+    tableHtml += '<th style="border:1px solid #333;padding:4px;background:#1d4ed8;color:white;min-width:80px;">المرجع</th>';
+    tableHtml += '<th style="border:1px solid #333;padding:4px;background:#1d4ed8;color:white;min-width:120px;">الوصف</th>';
+    revColumns.forEach(rev => {
+      tableHtml += `<th style="border:1px solid #333;padding:4px;background:#1d4ed8;color:white;min-width:150px;">REV.${rev}</th>`;
+    });
+    tableHtml += '<th style="border:1px solid #333;padding:4px;background:#059669;color:white;">الاستشاري</th>';
+    tableHtml += '<th style="border:1px solid #333;padding:4px;background:#7c3aed;color:white;">الوزارة</th>';
+    tableHtml += '</tr></thead><tbody>';
+
+    items.forEach(item => {
+      tableHtml += '<tr style="page-break-inside:avoid;">';
+      tableHtml += `<td style="border:1px solid #999;padding:3px;font-family:monospace;font-weight:bold;">${item.reference || '—'}</td>`;
+      tableHtml += `<td style="border:1px solid #999;padding:3px;word-wrap:break-word;">${(item as any).alternativeTitle || item.description || '—'}</td>`;
+      revColumns.forEach(rev => {
+        const r = (item.revisions as any)[rev];
+        if (!r || (!r.submitDate && !r.action)) {
+          tableHtml += '<td style="border:1px solid #999;padding:3px;text-align:center;color:#ccc;">—</td>';
+        } else {
+          const s = r.submitDate ? new Date(r.submitDate).toLocaleDateString('en-GB') : '—';
+          const rp = r.replyDate ? new Date(r.replyDate).toLocaleDateString('en-GB') : '—';
+          const a = actionLabel(r.action, r.approvalType);
+          tableHtml += `<td style="border:1px solid #999;padding:3px;font-size:8px;"><div>تقديم: ${s}</div><div>رد: ${rp}</div><div style="font-weight:bold;">${a}</div></td>`;
+        }
+      });
+      const ce = item.consultantStatus === 'Approved' ? '✅' : item.consultantStatus === 'Overdue' ? '🔴' : item.consultantStatus === 'Under Review' ? '⏳' : '—';
+      const me = item.mohStatus === 'Approved' ? '✅' : item.mohStatus === 'Under Review' ? '⏳' : item.mohStatus === 'Overdue' ? '🔴' : item.mohStatus === 'Rejected' ? '❌' : '—';
+      tableHtml += `<td style="border:1px solid #999;padding:3px;text-align:center;">${ce}</td>`;
+      tableHtml += `<td style="border:1px solid #999;padding:3px;text-align:center;">${me}</td>`;
+      tableHtml += '</tr>';
+    });
+    tableHtml += '</tbody></table>';
+
+    printWin.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>تقرير ${catLabel}</title>
+    <style>
+      @page { size: A4 landscape; margin: 0.5cm; }
+      body { font-family: Tahoma, Arial, sans-serif; margin: 0; padding: 10px; }
+      .header { text-align: center; border: 2px solid #0f172a; padding: 10px; margin-bottom: 10px; }
+      .header h1 { font-size: 18px; margin: 0; }
+      .header p { font-size: 12px; margin: 4px 0 0; color: #475569; }
+      table { width: 100%; border-collapse: collapse; table-layout: auto; }
+      th { background: #f1f5f9; }
+      tr { page-break-inside: avoid; }
+      thead { display: table-header-group; }
+      td, th { font-size: 9px; }
+    </style>
+    </head><body>
+    <div class="header">
+      <h1>تقرير عن ${catLabel}</h1>
+      <p>وحتى تاريخ: ${dateStr} · ${items.length} ترانسميتال</p>
+    </div>
+    ${tableHtml}
+    </body></html>`);
+    printWin.document.close();
+    printWin.focus();
+    setTimeout(() => { printWin.print(); }, 500);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">تقارير الجدول الزمني</h2>
           <p className="text-sm text-slate-500 mt-1">
-            {items.length} ترانسميتال · {revColumns.length} مراجعة (REV.0 - REV.{maxRevNumber}) · كل ريفجن في جدول منفصل بفواصل رأسية
+            {items.length} ترانسميتال · {revColumns.length} مراجعة (REV.0 - REV.{maxRevNumber})
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={fetchReport} disabled={loading}>
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> تحديث
           </Button>
-          <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-1.5">
-            <Printer className="w-4 h-4" /> طباعة
+          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5">
+            <Printer className="w-4 h-4" /> طباعة كاملة
           </Button>
           <Button size="sm" onClick={handleExportExcel} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
             <FileDown className="w-4 h-4" /> تنزيل Excel
@@ -2438,54 +2557,61 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
 function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines, onRefreshCategories, onRefreshDocTypes }: {
   disciplines: Discipline[];
   categories: Category[];
-  docTypes: { id: string; code: string; label: string; transmittalsCount?: number }[];
+  docTypes: DocType[];
   onRefreshDisciplines: () => void;
   onRefreshCategories: () => void;
   onRefreshDocTypes: () => void;
 }) {
+  const { t, lang } = useI18n();
   const [showAdd, setShowAdd] = useState(false);
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [showAddDocType, setShowAddDocType] = useState(false);
+  const [showWipeData, setShowWipeData] = useState(false);
   const [newDocTypeCode, setNewDocTypeCode] = useState('');
   const [newDocTypeLabel, setNewDocTypeLabel] = useState('');
+  const [newDocTypeLabelEn, setNewDocTypeLabelEn] = useState('');
+  const [newDocTypeCategory, setNewDocTypeCategory] = useState('');
   const [editing, setEditing] = useState<Discipline | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editingDocType, setEditingDocType] = useState<DocType | null>(null);
+  const [storagePath, setStoragePath] = useState('');
   const { toast } = useToast();
 
-  // Always fetch fresh data when SettingsView mounts
   useEffect(() => {
     onRefreshDisciplines();
     onRefreshCategories();
+    // Fetch storage path
+    fetch('/api/config/storage-path').then(r => r.json()).then(d => setStoragePath(d.path || 'storage/uploads/')).catch(() => setStoragePath('storage/uploads/'));
   }, []);
 
   const handleDelete = async (code: string) => {
-    if (!confirm(`هل أنت متأكد من حذف القسم ${code}؟`)) return;
+    if (!confirm(lang === 'ar' ? `هل أنت متأكد من حذف التخصص ${code}؟` : `Delete discipline ${code}?`)) return;
     try {
       const r = await fetch(`/api/disciplines/${code}`, { method: 'DELETE' });
-      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الحذف'); }
-      toast({ title: 'تم حذف القسم', description: code });
+      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'Failed'); }
+      toast({ title: lang === 'ar' ? 'تم حذف التخصص' : 'Deleted', description: code });
       onRefreshDisciplines();
-    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: t('common.error'), description: e.message, variant: 'destructive' }); }
   };
 
   const handleDeleteCategory = async (code: string) => {
-    if (!confirm(`هل أنت متأكد من حذف القسم الرئيسي ${code}؟`)) return;
+    if (!confirm(lang === 'ar' ? `هل أنت متأكد من حذف القسم الرئيسي ${code}؟` : `Delete category ${code}?`)) return;
     try {
       const r = await fetch(`/api/categories/${code}`, { method: 'DELETE' });
-      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الحذف'); }
-      toast({ title: 'تم حذف القسم الرئيسي', description: code });
+      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'Failed'); }
+      toast({ title: lang === 'ar' ? 'تم حذف القسم الرئيسي' : 'Deleted', description: code });
       onRefreshCategories();
-    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: t('common.error'), description: e.message, variant: 'destructive' }); }
   };
 
   const handleDeleteDocType = async (id: string, code: string) => {
-    if (!confirm(`هل أنت متأكد من حذف النوع ${code}؟`)) return;
+    if (!confirm(lang === 'ar' ? `هل أنت متأكد من حذف النوع ${code}؟` : `Delete type ${code}?`)) return;
     try {
       const r = await fetch(`/api/doc-types/${id}`, { method: 'DELETE' });
-      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || 'فشل الحذف'); }
-      toast({ title: 'تم حذف النوع', description: code });
+      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || 'Failed'); }
+      toast({ title: lang === 'ar' ? 'تم حذف النوع' : 'Deleted', description: code });
       onRefreshDocTypes();
-    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: t('common.error'), description: e.message, variant: 'destructive' }); }
   };
 
   const handleAddDocType = async () => {
@@ -2493,51 +2619,80 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
     try {
       const r = await fetch('/api/doc-types', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: newDocTypeCode.toUpperCase().trim(), label: newDocTypeLabel.trim() }),
+        body: JSON.stringify({
+          code: newDocTypeCode.toUpperCase().trim(),
+          label: newDocTypeLabel.trim(),
+          labelEn: newDocTypeLabelEn.trim() || undefined,
+          categoryCode: newDocTypeCategory || undefined,
+        }),
       });
-      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || 'فشل الحفظ'); }
-      toast({ title: 'تم إضافة النوع', description: newDocTypeCode.toUpperCase() });
+      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || 'Failed'); }
+      toast({ title: lang === 'ar' ? 'تم إضافة النوع' : 'Added', description: newDocTypeCode.toUpperCase() });
       setShowAddDocType(false);
-      setNewDocTypeCode(''); setNewDocTypeLabel('');
+      setNewDocTypeCode(''); setNewDocTypeLabel(''); setNewDocTypeLabelEn(''); setNewDocTypeCategory('');
       onRefreshDocTypes();
-    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: t('common.error'), description: e.message, variant: 'destructive' }); }
   };
+
+  const colorOptions = [
+    { value: 'bg-gray-100 text-gray-700', label: t('color.gray') },
+    { value: 'bg-amber-100 text-amber-700', label: t('color.amber') },
+    { value: 'bg-purple-100 text-purple-700', label: t('color.purple') },
+    { value: 'bg-cyan-100 text-cyan-700', label: t('color.cyan') },
+    { value: 'bg-rose-100 text-rose-700', label: t('color.rose') },
+    { value: 'bg-red-100 text-red-700', label: t('color.red') },
+    { value: 'bg-emerald-100 text-emerald-700', label: t('color.emerald') },
+    { value: 'bg-blue-100 text-blue-700', label: t('color.blue') },
+    { value: 'bg-indigo-100 text-indigo-700', label: t('color.indigo') },
+    { value: 'bg-orange-100 text-orange-700', label: t('color.orange') },
+  ];
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">إعدادات الأقسام</h2>
-          <p className="text-sm text-slate-500 mt-1">الأقسام الرئيسية والتخصصات الفرعية تحتها</p>
+          <h2 className="text-2xl font-bold text-slate-900">{t('settings.title')}</h2>
+          <p className="text-sm text-slate-500 mt-1">{t('settings.subtitle')}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button onClick={() => setShowAddCategory(true)} variant="outline" className="gap-1.5">
-            <FolderPlus className="w-4 h-4" /> إضافة قسم رئيسي
+            <FolderPlus className="w-4 h-4" /> {t('settings.addCategory')}
           </Button>
           <Button onClick={() => setShowAdd(true)} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
-            <Plus className="w-4 h-4" /> إضافة تخصص
+            <Plus className="w-4 h-4" /> {t('settings.addDiscipline')}
           </Button>
         </div>
       </div>
+
+      {/* Storage Path Card */}
+      <Card className="border-blue-200 bg-blue-50/30">
+        <CardHeader><CardTitle className="text-base flex items-center gap-2">
+          <Folder className="w-5 h-5 text-blue-700" /> {t('settings.storagePath')}
+        </CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-sm text-slate-600 mb-2">{t('settings.storagePathHint')}</p>
+          <code className="block bg-white border border-slate-200 rounded p-2 text-xs font-mono text-slate-800 break-all">{storagePath}</code>
+        </CardContent>
+      </Card>
 
       {/* Categories Management Section */}
       <Card className="border-0 shadow-sm">
         <CardHeader className="border-b bg-slate-50">
           <CardTitle className="text-base flex items-center gap-2">
-            <Folder className="w-5 h-5" /> الأقسام الرئيسية ({categories.length})
+            <Folder className="w-5 h-5" /> {t('settings.categories')} ({categories.length})
           </CardTitle>
-          <CardDescription>الأقسام الرئيسية القابلة للإضافة (ترانسميتال، MIR، RFI، كتب، وأي قسم آخر)</CardDescription>
+          <CardDescription>{lang === 'ar' ? 'الأقسام الرئيسية القابلة للإضافة' : 'Addable main categories'}</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader><TableRow>
-              <TableHead className="text-right">الأيقونة</TableHead>
-              <TableHead className="text-right">الكود</TableHead>
-              <TableHead className="text-right">الاسم</TableHead>
-              <TableHead className="text-center">عدد التخصصات</TableHead>
-              <TableHead className="text-center">عدد الترانسميتالات</TableHead>
-              <TableHead className="text-center">اللون</TableHead>
-              <TableHead className="text-center">إجراءات</TableHead>
+              <TableHead className="text-right">{lang === 'ar' ? 'الأيقونة' : 'Icon'}</TableHead>
+              <TableHead className="text-right">{t('common.code')}</TableHead>
+              <TableHead className="text-right">{lang === 'ar' ? 'الاسم (عربي)' : 'Label (AR)'}</TableHead>
+              <TableHead className="text-right">{lang === 'ar' ? 'الاسم (EN)' : 'Label (EN)'}</TableHead>
+              <TableHead className="text-center">{lang === 'ar' ? 'تخصصات' : 'Disciplines'}</TableHead>
+              <TableHead className="text-center">{lang === 'ar' ? 'ترانسميتالات' : 'Transmittals'}</TableHead>
+              <TableHead className="text-center">{t('common.actions')}</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {categories.map((c) => (
@@ -2545,9 +2700,9 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
                   <TableCell className="text-2xl">{c.icon}</TableCell>
                   <TableCell className="font-mono font-bold">{c.code}</TableCell>
                   <TableCell>{c.label}</TableCell>
+                  <TableCell className="text-slate-600">{c.labelEn || '—'}</TableCell>
                   <TableCell className="text-center font-semibold">{c.disciplinesCount || 0}</TableCell>
                   <TableCell className="text-center font-semibold">{c.transmittalsCount || 0}</TableCell>
-                  <TableCell className="text-center"><div className={`inline-block px-2 py-1 rounded text-xs ${c.color}`}>عينة</div></TableCell>
                   <TableCell className="text-center">
                     <div className="flex justify-center gap-1">
                       <Button size="sm" variant="ghost" onClick={() => setEditingCategory(c)}><Pencil className="w-4 h-4" /></Button>
@@ -2566,35 +2721,43 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
         <CardHeader className="border-b bg-slate-50 flex-row items-center justify-between">
           <div>
             <CardTitle className="text-base flex items-center gap-2">
-              <FileText className="w-5 h-5" /> أنواع المستندات ({docTypes.length})
+              <FileText className="w-5 h-5" /> {t('settings.docTypes', { count: docTypes.length }).replace('{count}', String(docTypes.length))}
             </CardTitle>
-            <CardDescription>الأنواع المستخدمة في تصنيف الترانسميتالات (Shop Drawings, Sample, ...)</CardDescription>
+            <CardDescription>{t('settings.docTypesHint')}</CardDescription>
           </div>
           <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowAddDocType(true)}>
-            <Plus className="w-4 h-4" /> إضافة نوع
+            <Plus className="w-4 h-4" /> {t('settings.addDocType')}
           </Button>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader><TableRow>
-              <TableHead className="text-right">الكود</TableHead>
-              <TableHead className="text-right">الاسم</TableHead>
-              <TableHead className="text-center">عدد الترانسميتالات</TableHead>
-              <TableHead className="text-center">إجراءات</TableHead>
+              <TableHead className="text-right">{t('common.code')}</TableHead>
+              <TableHead className="text-right">{lang === 'ar' ? 'الاسم (عربي)' : 'Label (AR)'}</TableHead>
+              <TableHead className="text-right">{lang === 'ar' ? 'الاسم (EN)' : 'Label (EN)'}</TableHead>
+              <TableHead className="text-right">{t('common.category')}</TableHead>
+              <TableHead className="text-center">{lang === 'ar' ? 'ترانسميتالات' : 'Transmittals'}</TableHead>
+              <TableHead className="text-center">{t('common.actions')}</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {docTypes.map((t) => (
-                <TableRow key={t.id}>
-                  <TableCell className="font-mono font-bold">{t.code}</TableCell>
-                  <TableCell>{t.label}</TableCell>
-                  <TableCell className="text-center font-semibold">{t.transmittalsCount || 0}</TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex justify-center gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => handleDeleteDocType(t.id, t.code)}><Trash2 className="w-4 h-4 text-red-600" /></Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {docTypes.map((dt) => {
+                const cat = categories.find(c => c.code === (dt as any).categoryCode);
+                return (
+                  <TableRow key={dt.id}>
+                    <TableCell className="font-mono font-bold">{dt.code}</TableCell>
+                    <TableCell>{dt.label}</TableCell>
+                    <TableCell className="text-slate-600">{(dt as any).labelEn || '—'}</TableCell>
+                    <TableCell>{cat ? `${cat.icon} ${(lang === 'en' && cat.labelEn) ? cat.labelEn : cat.label}` : '—'}</TableCell>
+                    <TableCell className="text-center font-semibold">{dt.transmittalsCount || 0}</TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex justify-center gap-1">
+                        <Button size="sm" variant="ghost" onClick={() => setEditingDocType(dt)}><Pencil className="w-4 h-4" /></Button>
+                        <Button size="sm" variant="ghost" onClick={() => handleDeleteDocType(dt.id, dt.code)}><Trash2 className="w-4 h-4 text-red-600" /></Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
@@ -2605,30 +2768,50 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
         <Dialog open={true} onOpenChange={(v) => !v && setShowAddDocType(false)}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>إضافة نوع مستند جديد</DialogTitle>
-              <DialogDescription>أضف نوعاً جديداً لتصنيف الترانسميتالات</DialogDescription>
+              <DialogTitle>{t('dialog.addDocType.title')}</DialogTitle>
+              <DialogDescription>{t('dialog.addDocType.desc')}</DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label className="text-sm">الكود *</Label>
-                <Input value={newDocTypeCode} onChange={(e) => setNewDocTypeCode(e.target.value.toUpperCase())} placeholder="مثال: MD" className="font-mono" maxLength={30} />
+                <Label className="text-sm">{t('common.code')} *</Label>
+                <Input value={newDocTypeCode} onChange={(e) => setNewDocTypeCode(e.target.value.toUpperCase())} placeholder="MD" className="font-mono" maxLength={30} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-sm">{lang === 'ar' ? 'الاسم (عربي) *' : 'Label (AR) *'}</Label>
+                  <Input value={newDocTypeLabel} onChange={(e) => setNewDocTypeLabel(e.target.value)} placeholder={lang === 'ar' ? 'طريقة تنفيذ' : 'Method Statement'} autoFocus />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm">{t('common.labelEn')}</Label>
+                  <Input value={newDocTypeLabelEn} onChange={(e) => setNewDocTypeLabelEn(e.target.value)} placeholder="Method Statement" dir="ltr" />
+                </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm">الاسم *</Label>
-                <Input value={newDocTypeLabel} onChange={(e) => setNewDocTypeLabel(e.target.value)} placeholder="مثال: Method Statement" autoFocus />
+                <Label className="text-sm">{t('common.category')}</Label>
+                <Select value={newDocTypeCategory} onValueChange={setNewDocTypeCategory}>
+                  <SelectTrigger><SelectValue placeholder={lang === 'ar' ? 'اختر القسم' : 'Select category'} /></SelectTrigger>
+                  <SelectContent>
+                    {categories.map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowAddDocType(false)}>إلغاء</Button>
-              <Button onClick={handleAddDocType} disabled={!newDocTypeCode || !newDocTypeLabel} className="bg-emerald-700 hover:bg-emerald-800">حفظ</Button>
+              <Button variant="outline" onClick={() => setShowAddDocType(false)}>{t('common.cancel')}</Button>
+              <Button onClick={handleAddDocType} disabled={!newDocTypeCode || !newDocTypeLabel} className="bg-emerald-700 hover:bg-emerald-800">{t('common.save')}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
 
-      <h3 className="text-lg font-semibold text-slate-700 pt-2">التخصصات الفرعية حسب القسم الرئيسي</h3>
+      {/* Edit DocType Dialog */}
+      {editingDocType && (
+        <EditDocTypeDialog docType={editingDocType} categories={categories} onOpenChange={(v) => !v && setEditingDocType(null)} onSaved={() => { setEditingDocType(null); onRefreshDocTypes(); }} />
+      )}
 
-      {/* Render disciplines grouped by category */}
+      {/* Disciplines grouped by category */}
+      <h3 className="text-lg font-semibold text-slate-700 pt-2">{t('settings.disciplines')}</h3>
+
       {categories.map((cat) => {
         const catDisciplines = disciplines.filter(d => (d.categoryCode || d.category || 'TRANSMITTAL') === cat.code);
         if (catDisciplines.length === 0) return null;
@@ -2637,36 +2820,42 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
             <CardHeader className="border-b bg-slate-50">
               <CardTitle className="text-base flex items-center gap-2">
                 <span className="text-xl">{cat.icon}</span>
-                <Badge className={`${cat.color} border-0`}>{cat.label}</Badge>
-                <span className="text-xs text-slate-500">({catDisciplines.length} تخصص)</span>
+                <Badge className={`${cat.color} border-0`}>{(lang === 'en' && cat.labelEn) ? cat.labelEn : cat.label}</Badge>
+                <span className="text-xs text-slate-500">({catDisciplines.length} {lang === 'ar' ? 'تخصص' : 'disciplines'})</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead className="text-right">الكود</TableHead>
-                  <TableHead className="text-right">الاسم</TableHead>
-                  <TableHead className="text-right">البادئة</TableHead>
-                  <TableHead className="text-center">اللون</TableHead>
-                  <TableHead className="text-center">عدد الترانسميتالات</TableHead>
-                  <TableHead className="text-center">إجراءات</TableHead>
+                  <TableHead className="text-right">{t('common.code')}</TableHead>
+                  <TableHead className="text-right">{lang === 'ar' ? 'الاسم (عربي)' : 'Label (AR)'}</TableHead>
+                  <TableHead className="text-right">{lang === 'ar' ? 'الاسم (EN)' : 'Label (EN)'}</TableHead>
+                  <TableHead className="text-right">{lang === 'ar' ? 'أقسام إضافية' : 'Extra Categories'}</TableHead>
+                  <TableHead className="text-right">{lang === 'ar' ? 'البادئة' : 'Prefix'}</TableHead>
+                  <TableHead className="text-center">{lang === 'ar' ? 'ترانسميتالات' : 'Transmittals'}</TableHead>
+                  <TableHead className="text-center">{t('common.actions')}</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {catDisciplines.map((d) => (
-                    <TableRow key={d.code}>
-                      <TableCell className="font-mono font-bold">{d.code}</TableCell>
-                      <TableCell>{d.label}</TableCell>
-                      <TableCell className="font-mono text-sm">{d.prefix}</TableCell>
-                      <TableCell className="text-center"><div className={`inline-block px-2 py-1 rounded text-xs ${d.color}`}>عينة</div></TableCell>
-                      <TableCell className="text-center font-semibold">{d.transmittalsCount || 0}</TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex justify-center gap-1">
-                          <Button size="sm" variant="ghost" onClick={() => setEditing(d)}><Pencil className="w-4 h-4" /></Button>
-                          <Button size="sm" variant="ghost" onClick={() => handleDelete(d.code)}><Trash2 className="w-4 h-4 text-red-600" /></Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {catDisciplines.map((d) => {
+                    const extraCats = (d.allCategories || []).filter((c: string) => c !== cat.code);
+                    const extraCatLabels = extraCats.map((c: string) => categories.find(cat => cat.code === c)?.label || c).join('، ');
+                    return (
+                      <TableRow key={d.code}>
+                        <TableCell className="font-mono font-bold">{d.code}</TableCell>
+                        <TableCell>{d.label}</TableCell>
+                        <TableCell className="text-slate-600">{d.labelEn || '—'}</TableCell>
+                        <TableCell className="text-xs text-slate-600">{extraCats.length > 0 ? extraCatLabels : '—'}</TableCell>
+                        <TableCell className="font-mono text-sm">{d.prefix}</TableCell>
+                        <TableCell className="text-center font-semibold">{d.transmittalsCount || 0}</TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex justify-center gap-1">
+                            <Button size="sm" variant="ghost" onClick={() => setEditing(d)}><Pencil className="w-4 h-4" /></Button>
+                            <Button size="sm" variant="ghost" onClick={() => handleDelete(d.code)}><Trash2 className="w-4 h-4 text-red-600" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
@@ -2680,26 +2869,33 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
         if (emptyCats.length === 0) return null;
         return (
           <Card className="bg-slate-50 border-slate-200"><CardContent className="p-4">
-            <p className="text-sm text-slate-700 mb-2"><strong>أقسام رئيسية بدون تخصصات بعد:</strong></p>
+            <p className="text-sm text-slate-700 mb-2"><strong>{t('settings.emptyCategories')}</strong></p>
             <div className="flex flex-wrap gap-2">
               {emptyCats.map(c => (
-                <Badge key={c.code} variant="outline" className="text-sm">{c.icon} {c.label}</Badge>
+                <Badge key={c.code} variant="outline" className="text-sm">{c.icon} {(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</Badge>
               ))}
             </div>
-            <p className="text-xs text-slate-500 mt-2">أضف تخصصاً جديداً واختر القسم المناسب له.</p>
           </CardContent></Card>
         );
       })()}
 
-      <Card className="bg-blue-50 border-blue-200"><CardContent className="p-4">
-        <p className="text-sm text-blue-900">
-          <strong>💡 ملاحظات:</strong><br />
-          • الأقسام الرئيسية: ترانسميتال، MIR، RFI، كتب — قابلة للإضافة والحذف<br />
-          • كل قسم رئيسي له تسلسل ترقيم مستقل خاص به<br />
-          • البادئة تُستخدم في تكوين رقم المرجع (مثال: <code className="bg-white px-1 rounded">CIV-</code> + <code className="bg-white px-1 rounded">171</code> = <code className="bg-white px-1 rounded">CIV-171</code>)<br />
-          • لا يمكن حذف قسم مرتبط بترانسميتالات (احذف الترانسميتالات أولاً)
-        </p>
-      </CardContent></Card>
+      {/* Wipe Data Section */}
+      <Card className="border-red-200 bg-red-50/30">
+        <CardHeader><CardTitle className="text-base flex items-center gap-2 text-red-800">
+          <AlertCircle className="w-5 h-5" /> {t('settings.wipeData')}
+        </CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-sm text-slate-600 mb-3">{t('settings.wipeDataDesc')}</p>
+          <Button variant="destructive" onClick={() => setShowWipeData(true)} className="gap-1.5">
+            <Trash2 className="w-4 h-4" /> {t('settings.wipeDataBtn')}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Wipe Data Dialog */}
+      {showWipeData && (
+        <WipeDataDialog onClose={() => setShowWipeData(false)} onSuccess={() => { setShowWipeData(false); onRefreshDisciplines(); onRefreshCategories(); onRefreshDocTypes(); }} />
+      )}
 
       <AddDisciplineDialog open={showAdd} onOpenChange={setShowAdd} onSaved={() => { setShowAdd(false); onRefreshDisciplines(); }} categories={categories} />
       <AddCategoryDialog open={showAddCategory} onOpenChange={setShowAddCategory} onSaved={() => { setShowAddCategory(false); onRefreshCategories(); }} />
@@ -2709,100 +2905,295 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
   );
 }
 
+/* ============ WIPE DATA DIALOG ============ */
+function WipeDataDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const { t } = useI18n();
+  const [password, setPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  const handleConfirm = async () => {
+    setSaving(true);
+    try {
+      const r = await fetch('/api/wipe-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (!r.ok) {
+        const err = await r.json();
+        throw new Error(err.error || t('settings.wipeDataWrongPassword'));
+      }
+      const data = await r.json();
+      toast({ title: t('dialog.wipeData.success'), description: `${data.wiped.transmittals} transmittals, ${data.wiped.revisions} revisions` });
+      onSuccess();
+    } catch (e: any) {
+      toast({ title: t('common.error'), description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={true} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-700">
+            <AlertCircle className="w-5 h-5" />
+            {t('dialog.wipeData.title')}
+          </DialogTitle>
+          <DialogDescription>{t('dialog.wipeData.desc')}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="text-sm text-red-900">{t('dialog.wipeData.confirm')}</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('settings.wipeDataPassword')}</Label>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="0160"
+              autoFocus
+              className="font-mono"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={saving || !password}
+            variant="destructive"
+            className="gap-1.5"
+          >
+            <Trash2 className="w-4 h-4" />
+            {saving ? t('common.saving') : t('dialog.wipeData.btn')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ============ EDIT DOC TYPE DIALOG ============ */
+function EditDocTypeDialog({ docType, categories, onOpenChange, onSaved }: {
+  docType: DocType;
+  categories: Category[];
+  onOpenChange: (v: boolean) => void;
+  onSaved: () => void;
+}) {
+  const { t, lang } = useI18n();
+  const [code, setCode] = useState(docType.code);
+  const [label, setLabel] = useState(docType.label);
+  const [labelEn, setLabelEn] = useState((docType as any).labelEn || '');
+  const [categoryCode, setCategoryCode] = useState((docType as any).categoryCode || '');
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  const handleSave = async () => {
+    if (!code.trim() || !label.trim()) return;
+    setSaving(true);
+    try {
+      const r = await fetch(`/api/doc-types/${docType.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: code.toUpperCase().trim(),
+          label: label.trim(),
+          labelEn: labelEn.trim() || null,
+          categoryCode: categoryCode || null,
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed');
+      }
+      toast({ title: lang === 'ar' ? 'تم تحديث النوع' : 'Updated', description: code.toUpperCase() });
+      onSaved();
+    } catch (e: any) {
+      toast({ title: t('common.error'), description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={true} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('dialog.editDocType.title')}: {docType.code}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('common.code')} *</Label>
+            <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} className="font-mono" maxLength={30} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-sm">{lang === 'ar' ? 'الاسم (عربي) *' : 'Label (AR) *'}</Label>
+              <Input value={label} onChange={(e) => setLabel(e.target.value)} autoFocus />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">{t('common.labelEn')}</Label>
+              <Input value={labelEn} onChange={(e) => setLabelEn(e.target.value)} dir="ltr" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('common.category')}</Label>
+            <Select value={categoryCode} onValueChange={setCategoryCode}>
+              <SelectTrigger><SelectValue placeholder={lang === 'ar' ? 'بدون قسم' : 'No category'} /></SelectTrigger>
+              <SelectContent>
+                {categories.map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button onClick={handleSave} disabled={saving || !code.trim() || !label.trim()} className="bg-emerald-700 hover:bg-emerald-800">
+            {saving ? t('common.saving') : t('common.save')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AddDisciplineDialog({ open, onOpenChange, onSaved, categories }: { open: boolean; onOpenChange: (v: boolean) => void; onSaved: () => void; categories?: Category[] }) {
+  const { t, lang } = useI18n();
   const [code, setCode] = useState('');
   const [label, setLabel] = useState('');
+  const [labelEn, setLabelEn] = useState('');
   const [prefix, setPrefix] = useState('');
   const [color, setColor] = useState('bg-gray-100 text-gray-700');
   const [category, setCategory] = useState('TRANSMITTAL');
+  const [extraCategories, setExtraCategories] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    if (open) { setCode(''); setLabel(''); setPrefix(''); setColor('bg-gray-100 text-gray-700'); setCategory('TRANSMITTAL'); }
+    if (open) {
+      setCode(''); setLabel(''); setLabelEn(''); setPrefix(''); setColor('bg-gray-100 text-gray-700');
+      setCategory('TRANSMITTAL'); setExtraCategories([]);
+    }
   }, [open]);
 
   const colorOptions = [
-    { value: 'bg-gray-100 text-gray-700', label: 'رمادي' },
-    { value: 'bg-amber-100 text-amber-700', label: 'كهرماني' },
-    { value: 'bg-purple-100 text-purple-700', label: 'بنفسجي' },
-    { value: 'bg-cyan-100 text-cyan-700', label: 'سماوي' },
-    { value: 'bg-rose-100 text-rose-700', label: 'وردي' },
-    { value: 'bg-red-100 text-red-700', label: 'أحمر' },
-    { value: 'bg-emerald-100 text-emerald-700', label: 'أخضر' },
-    { value: 'bg-blue-100 text-blue-700', label: 'أزرق' },
-    { value: 'bg-indigo-100 text-indigo-700', label: 'نيلي' },
-    { value: 'bg-orange-100 text-orange-700', label: 'برتقالي' },
+    { value: 'bg-gray-100 text-gray-700', label: t('color.gray') },
+    { value: 'bg-amber-100 text-amber-700', label: t('color.amber') },
+    { value: 'bg-purple-100 text-purple-700', label: t('color.purple') },
+    { value: 'bg-cyan-100 text-cyan-700', label: t('color.cyan') },
+    { value: 'bg-rose-100 text-rose-700', label: t('color.rose') },
+    { value: 'bg-red-100 text-red-700', label: t('color.red') },
+    { value: 'bg-emerald-100 text-emerald-700', label: t('color.emerald') },
+    { value: 'bg-blue-100 text-blue-700', label: t('color.blue') },
+    { value: 'bg-indigo-100 text-indigo-700', label: t('color.indigo') },
+    { value: 'bg-orange-100 text-orange-700', label: t('color.orange') },
   ];
 
   const handleSave = async () => {
     if (!code || !label || !prefix) {
-      toast({ title: 'خطأ', description: 'كل الحقول مطلوبة', variant: 'destructive' }); return;
+      toast({ title: t('common.error'), description: lang === 'ar' ? 'كل الحقول مطلوبة' : 'All fields required', variant: 'destructive' });
+      return;
     }
     setSaving(true);
     try {
+      const allCategories = [category, ...extraCategories.filter(c => c !== category)];
       const r = await fetch('/api/disciplines', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: code.toUpperCase(), label, prefix, color, category }),
+        body: JSON.stringify({
+          code: code.toUpperCase(),
+          label,
+          labelEn: labelEn || undefined,
+          prefix,
+          color,
+          category,
+          categories: allCategories,
+        }),
       });
-      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الحفظ'); }
-      toast({ title: 'تم إضافة القسم', description: `${code.toUpperCase()} - ${label} (${getCategoryLabel(category)})` });
+      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'Failed'); }
+      toast({ title: lang === 'ar' ? 'تم إضافة التخصص' : 'Added', description: `${code.toUpperCase()} - ${label}` });
       onSaved();
-    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: t('common.error'), description: e.message, variant: 'destructive' }); }
     finally { setSaving(false); }
   };
 
-  // Auto-suggest prefix based on code
   useEffect(() => {
-    if (code && !prefix) {
-      setPrefix(`${code.toUpperCase()}-`);
-    }
+    if (code && !prefix) setPrefix(`${code.toUpperCase()}-`);
   }, [code, prefix]);
+
+  const toggleExtraCategory = (catCode: string) => {
+    if (catCode === category) return;
+    setExtraCategories(prev => prev.includes(catCode) ? prev.filter(c => c !== catCode) : [...prev, catCode]);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader><DialogTitle>إضافة قسم جديد</DialogTitle>
-          <DialogDescription>أضف تخصصاً جديداً تحت أحد الأقسام الرئيسية</DialogDescription></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{t('dialog.addDiscipline.title')}</DialogTitle>
+          <DialogDescription>{t('dialog.addDiscipline.desc')}</DialogDescription>
+        </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label className="text-sm">القسم الرئيسي *</Label>
-            <Select value={category} onValueChange={setCategory}>
+            <Label className="text-sm">{t('dialog.addDiscipline.mainCategory')}</Label>
+            <Select value={category} onValueChange={(v) => {
+              setCategory(v);
+              setExtraCategories(prev => prev.filter(c => c !== v));
+            }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {(categories || CATEGORIES).map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {c.label}</SelectItem>)}
+                {(categories || (CATEGORIES as readonly Category[])).map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('dialog.addDiscipline.extraCategories')}</Label>
+            <p className="text-xs text-slate-500">{t('dialog.addDiscipline.extraCategoriesHint')}</p>
+            <div className="flex flex-wrap gap-1.5 p-2 border border-slate-200 rounded-lg max-h-32 overflow-y-auto">
+              {(categories || (CATEGORIES as readonly Category[])).filter(c => c.code !== category).map(c => (
+                <label key={c.code} className="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 cursor-pointer text-xs">
+                  <input type="checkbox" checked={extraCategories.includes(c.code)} onChange={() => toggleExtraCategory(c.code)} className="w-3 h-3" />
+                  <span>{c.icon}</span>
+                  <span>{(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-sm">الكود *</Label>
-              <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="مثال: ELV" className="font-mono" maxLength={10} />
+              <Label className="text-sm">{t('common.code')} *</Label>
+              <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="ELV" className="font-mono" maxLength={10} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm">الاسم (عربي) *</Label>
-              <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="مثال: المصاعد" />
+              <Label className="text-sm">{lang === 'ar' ? 'الاسم (عربي) *' : 'Label (AR) *'}</Label>
+              <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={lang === 'ar' ? 'المصاعد' : 'Elevators'} />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm">البادئة * (تُستخدم في رقم المرجع)</Label>
-            <Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="مثال: ELV-" className="font-mono" />
-            <p className="text-xs text-slate-500">مثال: <code className="bg-slate-100 px-1 rounded">{prefix || 'CIV-'}171</code></p>
+            <Label className="text-sm">{t('common.labelEn')}</Label>
+            <Input value={labelEn} onChange={(e) => setLabelEn(e.target.value)} placeholder="Elevators" dir="ltr" />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm">اللون</Label>
+            <Label className="text-sm">{lang === 'ar' ? 'البادئة *' : 'Prefix *'}</Label>
+            <Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="ELV-" className="font-mono" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('color.blue' ) && lang === 'ar' ? 'اللون' : 'Color'}</Label>
             <Select value={color} onValueChange={setColor}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {colorOptions.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
               </SelectContent>
             </Select>
-            <div className={`inline-block px-3 py-1.5 rounded text-sm mt-1 ${color}`}>معاينة اللون</div>
+            <div className={`inline-block px-3 py-1.5 rounded text-sm mt-1 ${color}`}>{lang === 'ar' ? 'معاينة' : 'Preview'}</div>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'حفظ'}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? t('common.saving') : t('common.save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -2810,64 +3201,98 @@ function AddDisciplineDialog({ open, onOpenChange, onSaved, categories }: { open
 }
 
 function EditDisciplineDialog({ discipline, onOpenChange, onSaved, categories }: { discipline: Discipline; onOpenChange: (v: boolean) => void; onSaved: () => void; categories?: Category[] }) {
+  const { t, lang } = useI18n();
   const [label, setLabel] = useState(discipline.label);
+  const [labelEn, setLabelEn] = useState(discipline.labelEn || '');
   const [prefix, setPrefix] = useState(discipline.prefix);
   const [color, setColor] = useState(discipline.color);
   const [category, setCategory] = useState(discipline.category || 'TRANSMITTAL');
+  const [extraCategories, setExtraCategories] = useState<string[]>(
+    (discipline.allCategories || []).filter(c => c !== (discipline.category || 'TRANSMITTAL'))
+  );
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
   const colorOptions = [
-    { value: 'bg-gray-100 text-gray-700', label: 'رمادي' },
-    { value: 'bg-amber-100 text-amber-700', label: 'كهرماني' },
-    { value: 'bg-purple-100 text-purple-700', label: 'بنفسجي' },
-    { value: 'bg-cyan-100 text-cyan-700', label: 'سماوي' },
-    { value: 'bg-rose-100 text-rose-700', label: 'وردي' },
-    { value: 'bg-red-100 text-red-700', label: 'أحمر' },
-    { value: 'bg-emerald-100 text-emerald-700', label: 'أخضر' },
-    { value: 'bg-blue-100 text-blue-700', label: 'أزرق' },
-    { value: 'bg-indigo-100 text-indigo-700', label: 'نيلي' },
-    { value: 'bg-orange-100 text-orange-700', label: 'برتقالي' },
+    { value: 'bg-gray-100 text-gray-700', label: t('color.gray') },
+    { value: 'bg-amber-100 text-amber-700', label: t('color.amber') },
+    { value: 'bg-purple-100 text-purple-700', label: t('color.purple') },
+    { value: 'bg-cyan-100 text-cyan-700', label: t('color.cyan') },
+    { value: 'bg-rose-100 text-rose-700', label: t('color.rose') },
+    { value: 'bg-red-100 text-red-700', label: t('color.red') },
+    { value: 'bg-emerald-100 text-emerald-700', label: t('color.emerald') },
+    { value: 'bg-blue-100 text-blue-700', label: t('color.blue') },
+    { value: 'bg-indigo-100 text-indigo-700', label: t('color.indigo') },
+    { value: 'bg-orange-100 text-orange-700', label: t('color.orange') },
   ];
 
   const handleSave = async () => {
     setSaving(true);
     try {
+      const allCategories = [category, ...extraCategories.filter(c => c !== category)];
       const r = await fetch(`/api/disciplines/${discipline.code}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label, prefix, color, category }),
+        body: JSON.stringify({
+          label, labelEn: labelEn || null, prefix, color, category, categories: allCategories,
+        }),
       });
-      if (!r.ok) throw new Error('فشل الحفظ');
-      toast({ title: 'تم تحديث القسم', description: `${discipline.code} (${getCategoryLabel(category)})` });
+      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || 'Failed'); }
+      toast({ title: lang === 'ar' ? 'تم تحديث التخصص' : 'Updated', description: discipline.code });
       onSaved();
-    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: t('common.error'), description: e.message, variant: 'destructive' }); }
     finally { setSaving(false); }
+  };
+
+  const toggleExtraCategory = (catCode: string) => {
+    if (catCode === category) return;
+    setExtraCategories(prev => prev.includes(catCode) ? prev.filter(c => c !== catCode) : [...prev, catCode]);
   };
 
   return (
     <Dialog open={true} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader><DialogTitle>تعديل القسم: {discipline.code}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{t('dialog.editDiscipline.title')}: {discipline.code}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label className="text-sm">القسم الرئيسي</Label>
-            <Select value={category} onValueChange={setCategory}>
+            <Label className="text-sm">{t('dialog.addDiscipline.mainCategory')}</Label>
+            <Select value={category} onValueChange={(v) => {
+              setCategory(v);
+              setExtraCategories(prev => prev.filter(c => c !== v));
+            }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {(categories || CATEGORIES).map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {c.label}</SelectItem>)}
+                {(categories || (CATEGORIES as readonly Category[])).map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm">الاسم (عربي)</Label>
-            <Input value={label} onChange={(e) => setLabel(e.target.value)} />
+            <Label className="text-sm">{t('dialog.addDiscipline.extraCategories')}</Label>
+            <div className="flex flex-wrap gap-1.5 p-2 border border-slate-200 rounded-lg max-h-32 overflow-y-auto">
+              {(categories || (CATEGORIES as readonly Category[])).filter(c => c.code !== category).map(c => (
+                <label key={c.code} className="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 cursor-pointer text-xs">
+                  <input type="checkbox" checked={extraCategories.includes(c.code)} onChange={() => toggleExtraCategory(c.code)} className="w-3 h-3" />
+                  <span>{c.icon}</span>
+                  <span>{(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-sm">{lang === 'ar' ? 'الاسم (عربي)' : 'Label (AR)'}</Label>
+              <Input value={label} onChange={(e) => setLabel(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">{t('common.labelEn')}</Label>
+              <Input value={labelEn} onChange={(e) => setLabelEn(e.target.value)} dir="ltr" />
+            </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm">البادئة</Label>
+            <Label className="text-sm">{lang === 'ar' ? 'البادئة' : 'Prefix'}</Label>
             <Input value={prefix} onChange={(e) => setPrefix(e.target.value)} className="font-mono" />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm">اللون</Label>
+            <Label className="text-sm">{lang === 'ar' ? 'اللون' : 'Color'}</Label>
             <Select value={color} onValueChange={setColor}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -2877,14 +3302,13 @@ function EditDisciplineDialog({ discipline, onOpenChange, onSaved, categories }:
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'حفظ'}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? t('common.saving') : t('common.save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
-
 
 /* ============ SEND TO MOH DIALOG ============ */
 function SendToMohDialog({ target, onClose, onConfirm }: {
