@@ -1739,17 +1739,11 @@ function AddRevisionDialog({ open, onOpenChange, transmittalId, nextRevNumber, o
   transmittalId: string; nextRevNumber: number; onSaved: () => void;
 }) {
   const [submitDate, setSubmitDate] = useState('');
-  const [replyDate, setReplyDate] = useState('');
-  const [action, setAction] = useState('');
-  const [approvalType, setApprovalType] = useState('');
-  const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Auto-set submit date to today when dialog opens
   useEffect(() => {
     if (open) {
       setSubmitDate(new Date().toISOString().slice(0, 10));
-      setReplyDate(''); setAction(''); setApprovalType(''); setNotes('');
     }
   }, [open]);
 
@@ -1761,10 +1755,10 @@ function AddRevisionDialog({ open, onOpenChange, transmittalId, nextRevNumber, o
         body: JSON.stringify({
           revNumber: nextRevNumber,
           submitDate: submitDate || null,
-          replyDate: replyDate || null,
-          action: action || null,
-          approvalType: action === 'approved' ? (approvalType || null) : null,
-          notes: notes || null,
+          replyDate: null,
+          action: null,
+          approvalType: null,
+          notes: null,
         }),
       });
       if (!r.ok) throw new Error('فشل الحفظ');
@@ -1773,68 +1767,28 @@ function AddRevisionDialog({ open, onOpenChange, transmittalId, nextRevNumber, o
     finally { setSaving(false); }
   };
 
-  const handleActionChange = (v: string) => {
-    setAction(v);
-    if (v !== 'approved') setApprovalType('');
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>إضافة مراجعة جديدة - REV.{nextRevNumber}</DialogTitle>
-          <DialogDescription>رقم المراجعة مقترح تلقائياً (آخر رقم + 1). سجّل تاريخ الإرسال والرد والإجراء.</DialogDescription>
+          <DialogTitle>تقديم مراجعة جديدة - REV.{nextRevNumber}</DialogTitle>
+          <DialogDescription>سيتم تسجيل تاريخ التقديم الآن. الرد والإجراء يُسجّلان لاحقاً عند ورود رد الاستشاري.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="bg-emerald-50 border border-emerald-200 rounded p-2 text-sm">
             <strong>رقم المراجعة:</strong> REV.{nextRevNumber} (تلقائي)
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-sm">تاريخ الإرسال</Label>
-              <Input type="date" value={submitDate} onChange={(e) => setSubmitDate(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm">تاريخ الرد</Label>
-              <Input type="date" value={replyDate} onChange={(e) => setReplyDate(e.target.value)} />
-            </div>
-          </div>
           <div className="space-y-1.5">
-            <Label className="text-sm">الإجراء</Label>
-            <Select value={action} onValueChange={handleActionChange}>
-              <SelectTrigger><SelectValue placeholder="اختر الإجراء" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="approved">✅ مقبول</SelectItem>
-                <SelectItem value="rejected">❌ مرفوض</SelectItem>
-                <SelectItem value="withdrawn">🚫 مسحوب</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label className="text-sm">تاريخ التقديم *</Label>
+            <Input type="date" value={submitDate} onChange={(e) => setSubmitDate(e.target.value)} />
           </div>
-          {action === 'approved' && (
-            <div className="space-y-1.5 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-              <Label className="text-sm font-semibold text-emerald-800">نوع القبول *</Label>
-              <Select value={approvalType} onValueChange={setApprovalType}>
-                <SelectTrigger className="!w-full !h-auto !min-h-[36px] !whitespace-normal !break-words text-left [&_[data-slot=select-value]]:!line-clamp-none [&_[data-slot=select-value]]:!whitespace-normal [&_[data-slot=select-value]]:!break-words"><SelectValue placeholder="اختر نوع القبول" className="whitespace-normal break-words leading-snug" /></SelectTrigger>
-                <SelectContent>
-                  {APPROVAL_TYPES.map(at => (
-                    <SelectItem key={at.code} value={at.code} className="whitespace-normal break-words leading-snug py-2">
-                      <span className="font-bold">({at.letter})</span> {at.label}
-                      <br />
-                      <span className="text-xs text-slate-500">{at.description}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          <div className="space-y-1.5">
-            <Label className="text-sm">ملاحظات</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="ملاحظات إضافية..." />
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+            ℹ️ بعد التقديم، ستظهر الحالة "بانتظار الرد". عند ورود رد الاستشاري، استخدم زر "تسجيل رد الاستشاري" لإدخال الإجراء وتاريخ الرد.
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
-          <Button onClick={handleSave} disabled={saving || (action === 'approved' && !approvalType)} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'حفظ REV.' + nextRevNumber}</Button>
+          <Button onClick={handleSave} disabled={saving || !submitDate} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'تقديم REV.' + nextRevNumber}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

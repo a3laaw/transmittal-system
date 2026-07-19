@@ -67,11 +67,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .replace(/\s+/g, '_')
     .slice(0, 200);
 
-  // Build folder path: storage/uploads/{categoryCode}/{disciplineCode}/{transmittalId}/
-  // Organized by category → discipline → transmittal for easy file management
+  // Build folder path: {customPath or storageRoot}/uploads/{categoryCode}/{disciplineCode}/{transmittalId}/
+  // If user chose a custom save path via Electron dialog, use it; otherwise use default storage
   const categoryCode = t.category || 'TRANSMITTAL';
   const disciplineCode = t.disciplineCode || t.discipline || 'UNKNOWN';
-  const storageRoot = getStorageRoot();
+  // Check for custom storage path (set by Electron IPC or env var)
+  const customPath = process.env.CUSTOM_STORAGE_PATH || '';
+  const storageRoot = customPath || getStorageRoot();
   const uploadDir = path.join(storageRoot, 'uploads', categoryCode, disciplineCode, id);
   if (!existsSync(uploadDir)) {
     await mkdir(uploadDir, { recursive: true });
