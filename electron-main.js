@@ -109,6 +109,21 @@ function createWindow() {
       });
     });
   });
+  // Handle IPC for choosing save path (first time only)
+  ipcMain.handle('choose-save-path', async function() {
+    var result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory', 'createDirectory'],
+      title: 'اختر مجلد حفظ الملفات',
+      defaultPath: app.getPath('documents'),
+    });
+    if (!result.canceled && result.filePaths.length > 0) {
+      var chosenPath = result.filePaths[0];
+      // Save to localStorage via env var so server can read it
+      process.env.CUSTOM_STORAGE_PATH = chosenPath;
+      return chosenPath;
+    }
+    return null;
+  });
   mainWindow.on('closed', function() { mainWindow = null; });
 }
 

@@ -2276,64 +2276,146 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
   };
 
   const handlePrint = () => {
-    // Build the full HTML content for printing
+    // Build the full HTML content for printing — EXACT replica of the on-screen table
     const catLabel = filterCategory !== 'all'
       ? (categories.find(c => c.code === filterCategory)?.label || filterCategory)
       : 'جميع الأقسام';
     const dateStr = dateTo || new Date().toISOString().slice(0, 10);
 
-    let tableHtml = '<table style="border-collapse:collapse;width:100%;font-size:9px;table-layout:auto;"><thead><tr>';
-    tableHtml += '<th style="border:1px solid #333;padding:4px;background:#1d4ed8;color:white;min-width:80px;">المرجع</th>';
-    tableHtml += '<th style="border:1px solid #333;padding:4px;background:#1d4ed8;color:white;min-width:120px;">الوصف</th>';
-    revColumns.forEach(rev => {
-      tableHtml += `<th style="border:1px solid #333;padding:4px;background:#1d4ed8;color:white;min-width:150px;">REV.${rev}</th>`;
+    // Build table with EXACT same structure as the on-screen table
+    let tableHtml = '<table style="border-collapse:collapse;width:100%;font-size:8px;table-layout:auto;"><thead><tr>';
+    // Reference column
+    tableHtml += '<th style="border:2px solid #cbd5e1;padding:4px;background:#1d4ed8;color:white;min-width:80px;text-align:right;position:sticky;right:0;z-index:2;">المرجع</th>';
+    // Description column
+    tableHtml += '<th style="border:2px solid #cbd5e1;padding:4px;background:#1d4ed8;color:white;min-width:150px;text-align:right;">الوصف</th>';
+    // REV columns — with sub-headers (تقديم/رد/إجراء)
+    revColumns.forEach((rev, revIdx) => {
+      const borderColor = revIdx === 0 ? '#94a3b8' : '#3b82f6';
+      tableHtml += `<th style="border:2px solid ${borderColor};padding:0;min-width:200px;text-align:center;">`;
+      tableHtml += `<div style="background:#1d4ed8;color:white;padding:4px;font-weight:bold;font-size:10px;">REV.${rev}</div>`;
+      tableHtml += '<div style="display:flex;background:#dbeafe;font-size:7px;">';
+      tableHtml += '<div style="flex:1;padding:2px;border-left:1px solid #93c5fd;">تقديم</div>';
+      tableHtml += '<div style="flex:1;padding:2px;border-left:1px solid #93c5fd;">رد</div>';
+      tableHtml += '<div style="flex:1;padding:2px;">إجراء</div>';
+      tableHtml += '</div></th>';
     });
-    tableHtml += '<th style="border:1px solid #333;padding:4px;background:#059669;color:white;">الاستشاري</th>';
-    tableHtml += '<th style="border:1px solid #333;padding:4px;background:#7c3aed;color:white;">الوزارة</th>';
+    // Consultant column
+    tableHtml += '<th style="border:2px solid #10b981;padding:4px;background:#10b981;color:white;min-width:80px;">الاستشاري</th>';
+    // MOH column
+    tableHtml += '<th style="border:2px solid #8b5cf6;padding:4px;background:#8b5cf6;color:white;min-width:80px;">الوزارة</th>';
     tableHtml += '</tr></thead><tbody>';
 
+    // Data rows
     items.forEach(item => {
       tableHtml += '<tr style="page-break-inside:avoid;">';
-      tableHtml += `<td style="border:1px solid #999;padding:3px;font-family:monospace;font-weight:bold;">${item.reference || '—'}</td>`;
-      tableHtml += `<td style="border:1px solid #999;padding:3px;word-wrap:break-word;">${(item as any).alternativeTitle || item.description || '—'}</td>`;
-      revColumns.forEach(rev => {
-        const r = (item.revisions as any)[rev];
+      // Reference
+      tableHtml += `<td style="border:1px solid #cbd5e1;padding:3px;font-family:monospace;font-weight:bold;background:white;position:sticky;right:0;z-index:1;">${item.reference || '—'}</td>`;
+      // Description
+      tableHtml += `<td style="border:1px solid #cbd5e1;padding:3px;font-size:7px;max-width:150px;word-wrap:break-word;">${(item as any).alternativeTitle || item.description || '—'}</td>`;
+      // REV cells
+      revColumns.forEach((rev, revIdx) => {
+        const r = item.revisions[rev];
+        const borderColor = revIdx === 0 ? '#94a3b8' : '#3b82f6';
         if (!r || (!r.submitDate && !r.action)) {
-          tableHtml += '<td style="border:1px solid #999;padding:3px;text-align:center;color:#ccc;">—</td>';
+          tableHtml += `<td style="border:2px solid ${borderColor};padding:0;">`;
+          tableHtml += '<div style="display:flex;min-height:30px;font-size:7px;">';
+          tableHtml += '<div style="flex:1;padding:2px;border-left:1px solid #e2e8f0;text-align:center;color:#cbd5e1;">—</div>';
+          tableHtml += '<div style="flex:1;padding:2px;border-left:1px solid #e2e8f0;text-align:center;color:#cbd5e1;">—</div>';
+          tableHtml += '<div style="flex:1;padding:2px;text-align:center;color:#cbd5e1;">—</div>';
+          tableHtml += '</div></td>';
         } else {
-          const s = r.submitDate ? new Date(r.submitDate).toLocaleDateString('en-GB') : '—';
-          const rp = r.replyDate ? new Date(r.replyDate).toLocaleDateString('en-GB') : '—';
-          const a = actionLabel(r.action, r.approvalType);
-          tableHtml += `<td style="border:1px solid #999;padding:3px;font-size:8px;"><div>تقديم: ${s}</div><div>رد: ${rp}</div><div style="font-weight:bold;">${a}</div></td>`;
+          const sDate = r.submitDate ? new Date(r.submitDate).toLocaleDateString('en-GB') : '—';
+          const rDate = r.replyDate ? new Date(r.replyDate).toLocaleDateString('en-GB') : '—';
+          const aLabel = actionLabel(r.action, r.approvalType);
+          // Color based on action
+          let aColor = '#64748b';
+          let aBg = '';
+          if (r.action === 'approved') {
+            if (r.approvalType === 'NOT_APPROVED') { aColor = '#b91c1c'; aBg = 'background:#fef2f2;'; }
+            else if (r.approvalType === 'FOR_INFORMATION' || r.approvalType === 'APPROVED_AS_NOTED_RESUBMIT') { aColor = '#c2410c'; aBg = 'background:#fff7ed;'; }
+            else { aColor = '#047857'; aBg = 'background:#ecfdf5;'; }
+          } else if (r.action === 'rejected') { aColor = '#b91c1c'; aBg = 'background:#fef2f2;'; }
+          else if (r.action === 'withdrawn') { aColor = '#374151'; aBg = 'background:#f3f4f6;'; }
+          else if (r.action === 'pending') { aColor = '#a16207'; aBg = 'background:#fefce8;'; }
+
+          // Days open color
+          let daysColor = '#64748b';
+          if (r.daysOpen !== null) {
+            if (r.daysOpen > 30) daysColor = '#b91c1c';
+            else if (r.daysOpen > 14) daysColor = '#a16207';
+            else daysColor = '#047857';
+          }
+
+          tableHtml += `<td style="border:2px solid ${borderColor};padding:0;">`;
+          tableHtml += '<div style="display:flex;min-height:30px;font-size:7px;">';
+          // Submit date + days
+          tableHtml += '<div style="flex:1;padding:2px;border-left:1px solid #e2e8f0;text-align:center;">';
+          if (r.submitDate) {
+            tableHtml += `<div style="font-weight:500;color:#334155;">${sDate}</div>`;
+            if (r.daysOpen !== null) {
+              tableHtml += `<div style="font-size:6px;font-weight:bold;color:${daysColor};">${r.daysOpen}ي</div>`;
+            }
+          } else {
+            tableHtml += '<span style="color:#cbd5e1;">—</span>';
+          }
+          tableHtml += '</div>';
+          // Reply date
+          tableHtml += '<div style="flex:1;padding:2px;border-left:1px solid #e2e8f0;text-align:center;">';
+          tableHtml += r.replyDate ? `<div style="font-weight:500;color:#334155;">${rDate}</div>` : '<span style="color:#cbd5e1;">—</span>';
+          tableHtml += '</div>';
+          // Action
+          tableHtml += `<div style="flex:1;padding:2px;text-align:center;font-weight:bold;${aBg}color:${aColor};">${aLabel}</div>`;
+          tableHtml += '</div></td>';
         }
       });
-      const ce = item.consultantStatus === 'Approved' ? '✅' : item.consultantStatus === 'Overdue' ? '🔴' : item.consultantStatus === 'Under Review' ? '⏳' : '—';
-      const me = item.mohStatus === 'Approved' ? '✅' : item.mohStatus === 'Under Review' ? '⏳' : item.mohStatus === 'Overdue' ? '🔴' : item.mohStatus === 'Rejected' ? '❌' : '—';
-      tableHtml += `<td style="border:1px solid #999;padding:3px;text-align:center;">${ce}</td>`;
-      tableHtml += `<td style="border:1px solid #999;padding:3px;text-align:center;">${me}</td>`;
+      // Consultant
+      const ce = item.consultantStatus === 'Approved' ? '✅' : item.consultantStatus === 'Overdue' ? '🔴' : item.consultantStatus === 'Under Review' ? '⏳' : item.consultantStatus === 'Cancelled' ? '🚫' : '—';
+      tableHtml += `<td style="border:2px solid #10b981;padding:3px;text-align:center;background:#ecfdf5;">${ce}</td>`;
+      // MOH
+      let me = '—';
+      if (item.mohStatus === 'Approved') me = '✅';
+      else if (item.mohStatus === 'Under Review') me = '⏳';
+      else if (item.mohStatus === 'Overdue') me = '🔴';
+      else if (item.mohStatus === 'Rejected') me = '❌';
+      let mohExtra = '';
+      if (item.mohSubmitDate) {
+        mohExtra = `<div style="font-size:6px;color:#64748b;margin-top:2px;">${new Date(item.mohSubmitDate).toLocaleDateString('en-GB')}</div>`;
+      }
+      tableHtml += `<td style="border:2px solid #8b5cf6;padding:3px;text-align:center;background:#f5f3ff;">${me}${mohExtra}</td>`;
       tableHtml += '</tr>';
     });
     tableHtml += '</tbody></table>';
 
     const fullHtml = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>تقرير ${catLabel}</title>
     <style>
-      @page { size: A4 landscape; margin: 0.5cm; }
-      body { font-family: Tahoma, Arial, sans-serif; margin: 0; padding: 10px; }
-      .header { text-align: center; border: 2px solid #0f172a; padding: 10px; margin-bottom: 10px; }
-      .header h1 { font-size: 18px; margin: 0; }
-      .header p { font-size: 12px; margin: 4px 0 0; color: #475569; }
+      @page { size: A3 landscape; margin: 0.5cm; }
+      body { font-family: Tahoma, Arial, sans-serif; margin: 0; padding: 10px; direction: rtl; }
+      .header { text-align: center; border: 2px solid #0f172a; padding: 10px; margin-bottom: 10px; background: #f8fafc; }
+      .header h1 { font-size: 16px; margin: 0; color: #0f172a; }
+      .header p { font-size: 11px; margin: 4px 0 0; color: #475569; }
       table { width: 100%; border-collapse: collapse; table-layout: auto; }
-      th { background: #f1f5f9; }
-      tr { page-break-inside: avoid; }
       thead { display: table-header-group; }
-      td, th { font-size: 9px; }
+      tr { page-break-inside: avoid; }
+      .legend { margin-top: 10px; font-size: 8px; color: #475569; }
+      .legend span { margin-left: 10px; }
     </style>
     </head><body>
     <div class="header">
-      <h1>تقرير عن ${catLabel}</h1>
-      <p>وحتى تاريخ: ${dateStr} · ${items.length} ترانسميتال</p>
+      <h1>تقرير الجدول الزمني - ${catLabel}</h1>
+      <p>وحتى تاريخ: ${dateStr} · ${items.length} ترانسميتال · ${revColumns.length} مراجعة (<span dir="ltr">REV.0 - REV.${maxRevNumber}</span>)</p>
     </div>
     ${tableHtml}
+    <div class="legend">
+      <strong>دليل الألوان:</strong>
+      <span style="background:#ecfdf5;padding:1px 4px;border:1px solid #10b981;">A: APPROVED</span>
+      <span style="background:#ecfdf5;padding:1px 4px;border:1px solid #10b981;">B: APPROVED AS NOTED</span>
+      <span style="background:#fff7ed;padding:1px 4px;border:1px solid #c2410c;">C: APPROVED AS NOTED & RESUBMIT</span>
+      <span style="background:#fef2f2;padding:1px 4px;border:1px solid #b91c1c;">D: NOT APPROVED</span>
+      <span style="background:#fff7ed;padding:1px 4px;border:1px solid #c2410c;">E: FOR INFORMATION</span>
+      <span style="background:#fef2f2;padding:1px 4px;border:1px solid #b91c1c;">❌ مرفوض</span>
+      <span style="background:#f3f4f6;padding:1px 4px;border:1px solid #374151;">🚫 مسحوب</span>
+      <span style="color:#64748b;">· Xي = عدد الأيام من التقديم حتى الرد</span>
+    </div>
     </body></html>`;
 
     // If running in Electron, use IPC for native printing (avoids pop-up blocker)
@@ -2602,9 +2684,35 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
   useEffect(() => {
     onRefreshDisciplines();
     onRefreshCategories();
-    // Fetch storage path
-    fetch('/api/config/storage-path').then(r => r.json()).then(d => setStoragePath(d.path || 'storage/uploads/')).catch(() => setStoragePath('storage/uploads/'));
+    // Check localStorage first for custom save path
+    const savedPath = typeof window !== 'undefined' ? localStorage.getItem('customStoragePath') : null;
+    if (savedPath) {
+      setStoragePath(savedPath);
+    } else {
+      // Fetch default storage path
+      fetch('/api/config/storage-path').then(r => r.json()).then(d => setStoragePath(d.path || 'storage/uploads/')).catch(() => setStoragePath('storage/uploads/'));
+    }
   }, []);
+
+  const handleChooseSavePath = async () => {
+    // If in Electron, use native dialog
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.chooseSavePath) {
+      const chosenPath = await (window as any).electronAPI.chooseSavePath();
+      if (chosenPath) {
+        localStorage.setItem('customStoragePath', chosenPath);
+        setStoragePath(chosenPath);
+        toast({ title: 'تم حفظ المسار', description: chosenPath });
+      }
+    } else {
+      // Browser fallback: manual input
+      const inputPath = prompt('أدخل مسار حفظ الملفات (مثال: C:\\Users\\Dell\\Documents\\SiteFiles):', storagePath);
+      if (inputPath) {
+        localStorage.setItem('customStoragePath', inputPath);
+        setStoragePath(inputPath);
+        toast({ title: 'تم حفظ المسار', description: inputPath });
+      }
+    }
+  };
 
   const handleDelete = async (code: string) => {
     if (!confirm(lang === 'ar' ? `هل أنت متأكد من حذف التخصص ${code}؟` : `Delete discipline ${code}?`)) return;
@@ -2693,7 +2801,10 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
         </CardTitle></CardHeader>
         <CardContent>
           <p className="text-sm text-slate-600 mb-2">{t('settings.storagePathHint')}</p>
-          <code className="block bg-white border border-slate-200 rounded p-2 text-xs font-mono text-slate-800 break-all">{storagePath}</code>
+          <code className="block bg-white border border-slate-200 rounded p-2 text-xs font-mono text-slate-800 break-all mb-3">{storagePath}</code>
+          <Button onClick={handleChooseSavePath} variant="outline" size="sm" className="gap-1.5">
+            <Folder className="w-4 h-4" /> {lang === 'ar' ? 'اختيار مسار الحفظ' : 'Choose Save Path'}
+          </Button>
         </CardContent>
       </Card>
 
