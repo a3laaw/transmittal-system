@@ -53,3 +53,47 @@ Work Log:
 Stage Summary:
 - جميع الميزات المطلوبة مُنفّذة ومُختبَرة
 - نسخة ويندوز جاهزة للتحميل
+
+---
+Task ID: final-clean-build
+Agent: Main (Super Z)
+Task: إصلاح مشكلة zip بداخل zip + بناء نسخة ويندوز نظيفة
+
+Work Log:
+- اكتشفت أن النسخة السابقة (261 MB) كانت تحتوي على:
+  * download/Site-Secretary-Windows.zip (نسخة قديمة بداخلها!)
+  * download/transmittal-system.zip (نسخة قديمة أخرى)
+  * مجلد skills/ كامل (100+ MB غير ضروري)
+  * لا يوجد RUN.bat
+
+الإصلاحات:
+1. إنشاء FEATURE_LOG.md شامل لكل 20 ميزة
+2. إنشاء RUN.bat (مشغل ويندوز مع fallback للمتصفح)
+3. إنشاء README.md شامل (دليل الاستخدام + استكشاف الأخطاء)
+4. إعادة كتابة scripts/build_windows_zip.sh:
+   * حذف download/, skills/, scripts/, .git, examples/, mini-services/ من النسخة
+   * حذف ملفات log غير ضرورية
+   * إضافة RUN.bat + README.md + electron-main.js + preload.js في الجذر
+   * فحص تلقائي للـ nested zips وحذفها
+   * نسخ Prisma Windows engine
+5. تنظيف storage/uploads/ من بيانات الاختبار
+
+النتيجة:
+- الحجم: 70 MB (بدلاً من 261 MB — تقليل 73%)
+- لا توجد أي ملفات zip بداخلها ✅
+- RUN.bat موجود في الجذر ✅
+- electron-main.js + preload.js موجودان ✅
+- README.md موجود ✅
+- 5 أقسام + 22 تخصص + 10 أنواع مستندات (مع labelEn) ✅
+
+اختبار شامل:
+- ✅ الصفحة تُحمّل (200)
+- ✅ 5 categories, 22 disciplines, 10 doc types
+- ✅ Create + Edit (reference + alternativeTitle) + Delete transmittal
+- ✅ Upload file → مجلد منفصل لكل ترانسميتال
+- ✅ Wipe-data route مع كلمة المرور
+
+النسخة النهائية:
+- /home/z/my-project/download/Site-Secretary-Windows.zip (70 MB)
+- نظيفة تماماً بدون zip بداخل zip
+- جاهزة للاستخدام على ويندوز
