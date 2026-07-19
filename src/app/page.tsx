@@ -864,7 +864,7 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
         <CardContent className="p-0">
           <Table>
             <TableHeader><TableRow>
-              <TableHead className="text-right">التخصص</TableHead>
+              <TableHead className="text-right">{t("dashboard.col.discipline")}</TableHead>
               <TableHead className="text-right">القسم الرئيسي</TableHead>
               <TableHead className="text-center">الإجمالي</TableHead>
               <TableHead className="text-center">معتمد</TableHead>
@@ -912,8 +912,8 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
           <CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
-                <TableHead className="text-right">المرجع</TableHead><TableHead className="text-right">التخصص</TableHead>
-                <TableHead className="text-right">الوصف</TableHead><TableHead className="text-center">الحالة</TableHead>
+                <TableHead className="text-right">{t("reports.col.reference")}</TableHead><TableHead className="text-right">{t("dashboard.col.discipline")}</TableHead>
+                <TableHead className="text-right">{t("reports.col.description")}</TableHead><TableHead className="text-center">{t("dashboard.col.status")}</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {data.consultantOverdueList.map((t) => (
@@ -936,9 +936,9 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
           <CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
-                <TableHead className="text-right">المرجع</TableHead><TableHead className="text-right">التخصص</TableHead>
-                <TableHead className="text-right">الوصف</TableHead><TableHead className="text-center">الحالة</TableHead>
-                <TableHead className="text-center">إجراء</TableHead>
+                <TableHead className="text-right">{t("reports.col.reference")}</TableHead><TableHead className="text-right">{t("dashboard.col.discipline")}</TableHead>
+                <TableHead className="text-right">{t("reports.col.description")}</TableHead><TableHead className="text-center">{t("dashboard.col.status")}</TableHead>
+                <TableHead className="text-center">{t("dashboard.col.action")}</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {data.mohOverdueList.map((t) => (
@@ -1932,7 +1932,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
         </div>
 
         <div className="space-y-1.5">
-          <Label>الوصف</Label>
+          <Label>{t("common.description")}</Label>
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="مثال: Excavation Plan & Excavation Section" />
         </div>
 
@@ -2243,24 +2243,24 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
     // Build table with EXACT same structure as the on-screen table
     let tableHtml = '<table style="border-collapse:collapse;width:100%;font-size:8px;table-layout:auto;"><thead><tr>';
     // Reference column
-    tableHtml += '<th style="border:2px solid #cbd5e1;padding:4px;background:#1d4ed8;color:white;min-width:80px;text-align:right;position:sticky;right:0;z-index:2;">المرجع</th>';
+    tableHtml += '<th style="border:2px solid #cbd5e1;padding:4px;background:#1d4ed8;color:white;min-width:80px;text-align:right;position:sticky;right:0;z-index:2;">' + t("reports.col.reference") + '</th>';
     // Description column
-    tableHtml += '<th style="border:2px solid #cbd5e1;padding:4px;background:#1d4ed8;color:white;min-width:150px;text-align:right;">الوصف</th>';
+    tableHtml += '<th style="border:2px solid #cbd5e1;padding:4px;background:#1d4ed8;color:white;min-width:150px;text-align:right;">' + t("reports.col.description") + '</th>';
     // REV columns — with sub-headers (تقديم/رد/إجراء)
     revColumns.forEach((rev, revIdx) => {
       const borderColor = revIdx === 0 ? '#94a3b8' : '#3b82f6';
       tableHtml += `<th style="border:2px solid ${borderColor};padding:0;min-width:200px;text-align:center;">`;
       tableHtml += `<div style="background:#1d4ed8;color:white;padding:4px;font-weight:bold;font-size:10px;">REV.${rev}</div>`;
       tableHtml += '<div style="display:flex;background:#dbeafe;font-size:7px;">';
-      tableHtml += '<div style="flex:1;padding:2px;border-left:1px solid #93c5fd;">تقديم</div>';
-      tableHtml += '<div style="flex:1;padding:2px;border-left:1px solid #93c5fd;">رد</div>';
-      tableHtml += '<div style="flex:1;padding:2px;">إجراء</div>';
+      tableHtml += '<div style="flex:1;padding:2px;border-left:1px solid #93c5fd;">' + t("reports.rev.submit") + '</div>';
+      tableHtml += '<div style="flex:1;padding:2px;border-left:1px solid #93c5fd;">' + t("reports.rev.reply") + '</div>';
+      tableHtml += '<div style="flex:1;padding:2px;">' + t("reports.rev.action") + '</div>';
       tableHtml += '</div></th>';
     });
     // Consultant column
-    tableHtml += '<th style="border:2px solid #10b981;padding:4px;background:#10b981;color:white;min-width:80px;">الاستشاري</th>';
+    tableHtml += '<th style="border:2px solid #10b981;padding:4px;background:#10b981;color:white;min-width:80px;">' + t("reports.col.consultant") + '</th>';
     // MOH column
-    tableHtml += '<th style="border:2px solid #8b5cf6;padding:4px;background:#8b5cf6;color:white;min-width:80px;">الوزارة</th>';
+    tableHtml += '<th style="border:2px solid #8b5cf6;padding:4px;background:#8b5cf6;color:white;min-width:80px;">' + t("reports.col.moh") + '</th>';
     tableHtml += '</tr></thead><tbody>';
 
     // Data rows
@@ -2359,8 +2359,8 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
     </style>
     </head><body>
     <div class="header">
-      <h1>تقرير الجدول الزمني - ${catLabel}</h1>
-      <p>وحتى تاريخ: ${dateStr} · ${items.length} ترانسميتال · ${revColumns.length} مراجعة (<span dir="ltr">REV.0 - REV.${maxRevNumber}</span>)</p>
+      <h1>${t("reports.title")} - ${catLabel}</h1>
+      <p>${t("reports.printUntil")}: ${dateStr} · ${items.length} ترانسميتال · ${revColumns.length} مراجعة (<span dir="ltr">REV.0 - REV.${maxRevNumber}</span>)</p>
     </div>
     ${tableHtml}
     <div class="legend">
@@ -2489,8 +2489,8 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
               <Table className="border-collapse">
                 <TableHeader className="sticky top-0 bg-white z-10">
                   <TableRow>
-                    <TableHead className="text-right sticky right-0 bg-white z-20 min-w-[120px] border-l-2 border-slate-300">المرجع</TableHead>
-                    <TableHead className="text-right min-w-[180px] border-l-2 border-slate-300">الوصف</TableHead>
+                    <TableHead className="text-right sticky right-0 bg-white z-20 min-w-[120px] border-l-2 border-slate-300">{t("reports.col.reference")}</TableHead>
+                    <TableHead className="text-right min-w-[180px] border-l-2 border-slate-300">{t("reports.col.description")}</TableHead>
                     {revColumns.map((rev, revIdx) => (
                       <TableHead
                         key={rev}
@@ -2499,14 +2499,14 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
                         {/* REV group header — colored band on top */}
                         <div className="bg-blue-700 text-white py-1.5 px-2 font-bold text-sm"><span dir="ltr">REV.{rev}</span></div>
                         <div className="flex text-xs font-normal mt-0 bg-blue-50">
-                          <div className="flex-1 py-1 border-l border-blue-200">تقديم</div>
-                          <div className="flex-1 py-1 border-l border-blue-200">رد</div>
-                          <div className="flex-1 py-1 border-l border-blue-200">إجراء</div>
+                          <div className="flex-1 py-1 border-l border-blue-200">{t("reports.rev.submit")}</div>
+                          <div className="flex-1 py-1 border-l border-blue-200">{t("reports.rev.reply")}</div>
+                          <div className="flex-1 py-1 border-l border-blue-200">{t("reports.rev.action")}</div>
                         </div>
                       </TableHead>
                     ))}
-                    <TableHead className="text-center min-w-[100px] border-l-4 border-emerald-500 bg-emerald-50">الاستشاري</TableHead>
-                    <TableHead className="text-center min-w-[100px] border-l-2 border-purple-500 bg-purple-50">الوزارة</TableHead>
+                    <TableHead className="text-center min-w-[100px] border-l-4 border-emerald-500 bg-emerald-50">{t("reports.col.consultant")}</TableHead>
+                    <TableHead className="text-center min-w-[100px] border-l-2 border-purple-500 bg-purple-50">{t("reports.col.moh")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

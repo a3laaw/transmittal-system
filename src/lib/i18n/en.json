@@ -246,5 +246,10 @@
   "settings.notesTitle": "Notes",
   "dialog.addLink.title": "Add External Link",
   "dialog.addLink.desc": "Add a direct link to an external file or image",
-  "dialog.addCategory.desc": "Add a new main category"
+  "dialog.addCategory.desc": "Add a new main category",
+  "dashboard.col.reference": "Reference",
+  "dashboard.col.discipline": "Discipline",
+  "dashboard.col.description": "Description",
+  "dashboard.col.status": "Status",
+  "dashboard.col.action": "Action"
 }

@@ -246,5 +246,10 @@
   "settings.notesTitle": "ملاحظات",
   "dialog.addLink.title": "إضافة رابط خارجي",
   "dialog.addLink.desc": "أضف أي رابط مباشر لملف أو صورة خارجية",
-  "dialog.addCategory.desc": "أضف قسماً رئيسياً جديداً"
+  "dialog.addCategory.desc": "أضف قسماً رئيسياً جديداً",
+  "dashboard.col.reference": "المرجع",
+  "dashboard.col.discipline": "التخصص",
+  "dashboard.col.description": "الوصف",
+  "dashboard.col.status": "الحالة",
+  "dashboard.col.action": "إجراء"
 }
