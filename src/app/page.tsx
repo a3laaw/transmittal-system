@@ -2606,14 +2606,16 @@ function AddDisciplineDialog({ open, onOpenChange, onSaved, categories }: { open
   const { t, lang } = useI18n();
   const [code, setCode] = useState('');
   const [label, setLabel] = useState('');
+  const [labelEn, setLabelEn] = useState('');
   const [prefix, setPrefix] = useState('');
   const [color, setColor] = useState('bg-gray-100 text-gray-700');
   const [category, setCategory] = useState('TRANSMITTAL');
+  const [extraCategories, setExtraCategories] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    if (open) { setCode(''); setLabel(''); setPrefix(''); setColor('bg-gray-100 text-gray-700'); setCategory('TRANSMITTAL'); }
+    if (open) { setCode(''); setLabel(''); setLabelEn(''); setPrefix(''); setColor('bg-gray-100 text-gray-700'); setCategory('TRANSMITTAL'); setExtraCategories([]); }
   }, [open]);
 
   const colorOptions = [
@@ -2635,52 +2637,72 @@ function AddDisciplineDialog({ open, onOpenChange, onSaved, categories }: { open
     }
     setSaving(true);
     try {
+      const allCategories = [category, ...extraCategories.filter(c => c !== category)];
       const r = await fetch('/api/disciplines', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: code.toUpperCase(), label, prefix, color, category }),
+        body: JSON.stringify({ code: code.toUpperCase(), label, labelEn: labelEn || undefined, prefix, color, category, categories: allCategories }),
       });
       if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الحفظ'); }
-      toast({ title: 'تم إضافة القسم', description: `${code.toUpperCase()} - ${label} (${getCategoryLabel(category)})` });
+      toast({ title: 'تم إضافة القسم', description: `${code.toUpperCase()} - ${label}` });
       onSaved();
     } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
     finally { setSaving(false); }
   };
 
-  // Auto-suggest prefix based on code
   useEffect(() => {
-    if (code && !prefix) {
-      setPrefix(`${code.toUpperCase()}-`);
-    }
+    if (code && !prefix) setPrefix(`${code.toUpperCase()}-`);
   }, [code, prefix]);
+
+  const toggleExtraCategory = (catCode: string) => {
+    if (catCode === category) return;
+    setExtraCategories(prev => prev.includes(catCode) ? prev.filter(c => c !== catCode) : [...prev, catCode]);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader><DialogTitle>إضافة قسم جديد</DialogTitle>
-          <DialogDescription>أضف تخصصاً جديداً تحت أحد الأقسام الرئيسية</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>إضافة تخصص فرعي جديد</DialogTitle>
+          <DialogDescription>أضف تخصصاً جديداً مع إمكانية ربطه بأكثر من قسم رئيسي</DialogDescription></DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label className="text-sm">{t("common.mainCategory")} *</Label>
-            <Select value={category} onValueChange={setCategory}>
+            <Label className="text-sm">القسم الرئيسي الافتراضي *</Label>
+            <Select value={category} onValueChange={(v) => { setCategory(v); setExtraCategories(prev => prev.filter(c => c !== v)); }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {(categories || CATEGORIES).map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {c.label}</SelectItem>)}
+                {(categories || (CATEGORIES as any)).map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</SelectItem>)}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">أقسام إضافية (اختياري - متعدد)</Label>
+            <p className="text-xs text-slate-500">ربط هذا التخصص بأقسام رئيسية أخرى</p>
+            <div className="flex flex-wrap gap-1.5 p-2 border border-slate-200 rounded-lg max-h-32 overflow-y-auto">
+              {(categories || (CATEGORIES as any)).filter(c => c.code !== category).map(c => (
+                <label key={c.code} className="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 cursor-pointer text-xs">
+                  <input type="checkbox" checked={extraCategories.includes(c.code)} onChange={() => toggleExtraCategory(c.code)} className="w-3 h-3" />
+                  <span>{c.icon}</span>
+                  <span>{(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</span>
+                </label>
+              ))}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-sm">الكود *</Label>
-              <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="مثال: ELV" className="font-mono" maxLength={10} />
+              <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="ELV" className="font-mono" maxLength={10} />
             </div>
             <div className="space-y-1.5">
               <Label className="text-sm">الاسم (عربي) *</Label>
-              <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="مثال: المصاعد" />
+              <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="المصاعد" />
             </div>
           </div>
           <div className="space-y-1.5">
+            <Label className="text-sm">الاسم (English)</Label>
+            <Input value={labelEn} onChange={(e) => setLabelEn(e.target.value)} placeholder="Elevators" dir="ltr" />
+          </div>
+          <div className="space-y-1.5">
             <Label className="text-sm">البادئة * (تُستخدم في رقم المرجع)</Label>
-            <Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="مثال: ELV-" className="font-mono" />
+            <Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="ELV-" className="font-mono" />
             <p className="text-xs text-slate-500">مثال: <code className="bg-slate-100 px-1 rounded">{prefix || 'CIV-'}171</code></p>
           </div>
           <div className="space-y-1.5">
@@ -2749,7 +2771,7 @@ function EditDisciplineDialog({ discipline, onOpenChange, onSaved, categories }:
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {(categories || CATEGORIES).map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {c.label}</SelectItem>)}
+                {(categories || (CATEGORIES as any)).map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {c.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
