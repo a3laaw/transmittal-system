@@ -26,6 +26,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   let fn = safeName, i = 1;
   while (existsSync(path.join(dir, fn))) { const e = path.extname(safeName); fn = `${path.basename(safeName, e)}_${i}${e}`; i++; }
   await writeFile(path.join(dir, fn), new Uint8Array(await file.arrayBuffer()));
-  const url = `/api/files/${id}/${fn}`;
+  // Store RELATIVE path from storage root so file-data API can resolve it
+  // Format: /api/files/{cat}/{disc}/{id}/{filename}
+  const url = `/api/files/${cat}/${disc}/${id}/${fn}`;
   return NextResponse.json(await db.attachment.create({ data: { transmittalId: id, fileName: file.name, filePath: url, fileType: file.type || path.extname(file.name).slice(1), fileSize: file.size } }), { status: 201 });
 }

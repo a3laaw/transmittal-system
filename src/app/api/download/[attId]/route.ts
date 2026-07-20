@@ -34,33 +34,48 @@ export async function GET(
       return NextResponse.json({ error: 'مسار الملف غير موجود' }, { status: 404 });
     }
 
-    // Extract transmittalId and filename from filePath
-    // filePath format: /api/files/{transmittalId}/{filename}
-    const match = att.filePath.match(/\/api\/files\/([^/]+)\/(.+)$/);
+    // Extract relative path from filePath (strip /api/files/ prefix)
+    // Supports: /api/files/{cat}/{disc}/{id}/{filename} OR /api/files/{id}/{filename}
+    const match = att.filePath.match(/\/api\/files\/(.+)$/);
     if (!match) {
       return NextResponse.json({ error: 'مسار الملف غير صالح' }, { status: 400 });
     }
 
-    const [, transmittalId, filename] = match;
+    const relPath = match[1];
     const storageRoot = getStorageRoot();
-    const absPath = path.join(storageRoot, 'uploads', transmittalId, filename);
+    const absPath = path.join(storageRoot, 'uploads', ...relPath.split('/'));
 
+    let resolvedPath = absPath;
     if (!existsSync(absPath)) {
-      // Try legacy path
-      const legacyPath = path.join('/home/z/my-project', 'public', 'uploads', transmittalId, filename);
-      if (!existsSync(legacyPath)) {
-        return NextResponse.json({ error: 'الملف غير موجود على القرص' }, { status: 404 });
+      // Try legacy paths
+      const parts = relPath.split('/');
+      const legacyCandidates: string[] = [];
+      if (parts.length >= 2) {
+        const transmittalId = parts[parts.length - 2];
+        const filename = parts[parts.length - 1];
+        legacyCandidates.push(
+          path.join(storageRoot, 'uploads', transmittalId, filename),
+          path.join(process.cwd(), 'public', 'uploads', transmittalId, filename),
+          path.join(process.cwd(), 'storage', 'uploads', transmittalId, filename),
+        );
       }
+      const found = legacyCandidates.find(p => existsSync(p));
+      if (!found) {
+        return NextResponse.json({
+          error: 'الملف غير موجود على القرص',
+          searched: [absPath, ...legacyCandidates],
+          storedPath: att.filePath,
+        }, { status: 404 });
+      }
+      resolvedPath = found;
     }
-
-    const resolvedPath = existsSync(absPath) ? absPath : path.join('/home/z/my-project', 'public', 'uploads', transmittalId, filename);
 
     // Read file
     const buffer = await readFile(resolvedPath) as Buffer;
     const stat = statSync(resolvedPath);
 
     // Use application/octet-stream to avoid any content-type blocking
-    // Force download with attachment disposition
+    const filename = relPath.split('/').pop() || 'download';
     const safeName = (att.fileName || filename).replace(/[^\w.\u0600-\u06FF-]/g, '_');
 
     return new NextResponse(new Uint8Array(buffer), {

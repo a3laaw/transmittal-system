@@ -183,7 +183,7 @@ export default function Home() {
       setDashboard(d);
       if (d.disciplines && d.disciplines.length > 0) setDisciplines(d.disciplines);
     } catch (e: any) {
-      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+      toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -231,7 +231,7 @@ export default function Home() {
       const mohStatus = computeMohStatus(moh);
       setDetail({ ...d, computedStatus: overall, consultantStatus, mohStatus } as TransmittalDetail);
     } catch (e: any) {
-      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+      toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -281,7 +281,7 @@ export default function Home() {
       else if (view === 'list') fetchList();
       else fetchDashboard();
     } catch (e: any) {
-      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+      toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
     }
   };
 
@@ -304,7 +304,7 @@ export default function Home() {
       }
       const data = await r.json();
       toast({
-        title: 'تم نسخ البيانات',
+        title: t('msg.dataCopied'),
         description: `${data.sourceReference} → ${data.newReference}`,
       });
       setCopyTarget(null);
@@ -312,7 +312,7 @@ export default function Home() {
       setSelectedId(data.newTransmittal.id);
       setView('detail');
     } catch (e: any) {
-      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+      toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
     }
   };
 
@@ -348,7 +348,7 @@ export default function Home() {
       if (view === 'list') fetchList();
       else fetchDashboard();
     } catch (e: any) {
-      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+      toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
     }
   };
 
@@ -406,7 +406,7 @@ export default function Home() {
       if (view === 'list') fetchList();
       else fetchDashboard();
     } catch (e: any) {
-      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+      toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
     }
   };
 
@@ -437,7 +437,7 @@ export default function Home() {
       if (view === 'list') fetchList();
       else fetchDashboard();
     } catch (e: any) {
-      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+      toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
     }
   };
 
@@ -568,7 +568,7 @@ export default function Home() {
           <NewTransmittalView
             disciplines={disciplines}
             categories={categories}
-            onCreated={(t) => { toast({ title: 'تم إنشاء الترانسميتال', description: t.reference }); setSelectedId(t.id); setView('detail'); }}
+            onCreated={(t) => { toast({ title: t('msg.transmittalCreated'), description: t.reference }); setSelectedId(t.id); setView('detail'); }}
             onDownloadTemplate={async (ref, discipline, desc) => {
               const today = new Date().toISOString().slice(0, 10);
               toast({ title: t('msg.generatingExcel'), description: t('msg.willDownload', {ref: ref}) });
@@ -666,18 +666,18 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
   if (!data) return <div className="text-center py-20 text-slate-500">{t('dashboard.noData')}</div>;
 
   const kpis = [
-    { label: 'إجمالي', value: data.kpis.total, color: 'bg-slate-700', icon: <FileText className="w-5 h-5" /> },
-    { label: 'معتمد', value: data.kpis.approved, color: 'bg-emerald-600', icon: <CheckCircle2 className="w-5 h-5" /> },
-    { label: 'بانتظار', value: data.kpis.pending, color: 'bg-yellow-500', icon: <Clock className="w-5 h-5" /> },
-    { label: 'متأخر استشاري', value: data.kpis.overdue, color: 'bg-red-600', icon: <AlertCircle className="w-5 h-5" /> },
-    { label: 'إعادة إرسال', value: data.kpis.resubmit, color: 'bg-orange-500', icon: <RefreshCw className="w-5 h-5" /> },
-    { label: 'ملغى', value: data.kpis.cancelled, color: 'bg-gray-500', icon: <XCircle className="w-5 h-5" /> },
+    { label: t('common.total'), value: data.kpis.total, color: 'bg-slate-700', icon: <FileText className="w-5 h-5" /> },
+    { label: t('status.approved_short'), value: data.kpis.approved, color: 'bg-emerald-600', icon: <CheckCircle2 className="w-5 h-5" /> },
+    { label: t('status.pending_short'), value: data.kpis.pending, color: 'bg-yellow-500', icon: <Clock className="w-5 h-5" /> },
+    { label: t('status.consultantOverdue'), value: data.kpis.overdue, color: 'bg-red-600', icon: <AlertCircle className="w-5 h-5" /> },
+    { label: t('status.resubmit_short'), value: data.kpis.resubmit, color: 'bg-orange-500', icon: <RefreshCw className="w-5 h-5" /> },
+    { label: t('status.cancelled_short'), value: data.kpis.cancelled, color: 'bg-gray-500', icon: <XCircle className="w-5 h-5" /> },
   ];
   const mohKpis = [
-    { label: 'مُرسل للوزارة', value: data.mohKpis.sent, color: 'bg-blue-600', icon: <Send className="w-5 h-5" /> },
-    { label: 'معتمد بالوزارة', value: data.mohKpis.approved, color: 'bg-emerald-600', icon: <CheckCircle2 className="w-5 h-5" /> },
-    { label: 'قيد المراجعة', value: data.mohKpis.underReview, color: 'bg-yellow-500', icon: <Clock className="w-5 h-5" /> },
-    { label: 'متأخر بالوزارة', value: data.mohKpis.overdue, color: 'bg-red-600', icon: <AlertCircle className="w-5 h-5" /> },
+    { label: t('status.sentToMoh'), value: data.mohKpis.sent, color: 'bg-blue-600', icon: <Send className="w-5 h-5" /> },
+    { label: t('status.mohApproved_short'), value: data.mohKpis.approved, color: 'bg-emerald-600', icon: <CheckCircle2 className="w-5 h-5" /> },
+    { label: t('status.underReview'), value: data.mohKpis.underReview, color: 'bg-yellow-500', icon: <Clock className="w-5 h-5" /> },
+    { label: t('status.mohOverdue'), value: data.mohKpis.overdue, color: 'bg-red-600', icon: <AlertCircle className="w-5 h-5" /> },
   ];
 
   return (
@@ -958,12 +958,12 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
               <SelectTrigger><SelectValue placeholder={t('common.all')} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t('list.allStatuses')}</SelectItem>
-                <SelectItem value="approved">✅ معتمد</SelectItem>
-                <SelectItem value="pending">⏳ بانتظار الرد</SelectItem>
-                <SelectItem value="overdue">🔴 متأخر</SelectItem>
-                <SelectItem value="resubmit">🔔 إعادة إرسال</SelectItem>
-                <SelectItem value="cancelled">🚫 ملغى</SelectItem>
-                <SelectItem value="draft">📝 مسودة</SelectItem>
+                <SelectItem value="approved">{`✅ ${t('status.approved_short')}`}</SelectItem>
+                <SelectItem value="pending">{`⏳ ${t('status.pending_reply')}`}</SelectItem>
+                <SelectItem value="overdue">{`🔴 ${t('status.overdue')}`}</SelectItem>
+                <SelectItem value="resubmit">{`🔔 ${t('status.resubmit_short')}`}</SelectItem>
+                <SelectItem value="cancelled">{`🚫 ${t('status.cancelled_short')}`}</SelectItem>
+                <SelectItem value="draft">{`📝 ${t('status.draft')}`}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1017,7 +1017,7 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
                             disabled={item.computedStatus.status === 'cancelled' || item.revisionsCount === 0 || item.lastReplyDate === null}
                           >
                             <History className="w-4 h-4 ml-2" /> {t('dialog.registerRevision', {count: item.revisionsCount})}
-                            {item.computedStatus.status === 'cancelled' ? <span className="text-[10px] text-slate-400 mr-1">(مسحوب)</span> :
+                            {item.computedStatus.status === 'cancelled' ? <span className="text-[10px] text-slate-400 mr-1">({t('status.cancelled_short')})</span> :
                              (item.revisionsCount === 0 || item.lastReplyDate === null) && <span className="text-[10px] text-slate-400 mr-1">(بانتظار الرد)</span>}
                           </DropdownMenuItem>
                           <DropdownMenuItem
@@ -1110,8 +1110,8 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
   const handleUpload = async (file: File) => {
     if (!isAllowedFile(file)) {
       toast({
-        title: 'نوع الملف غير مدعوم',
-        description: 'يُسمح فقط بالصور (PNG, JPG, GIF, WebP) و PDF و Word',
+        title: t('msg.fileTypeUnsupported'),
+        description: t('msg.allowedFileTypes'),
         variant: 'destructive',
       });
       return;
@@ -1125,10 +1125,10 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
         body: fd,
       });
       if (!r.ok) throw new Error(t('msg.uploadFailed'));
-      toast({ title: 'تم رفع الملف', description: file.name });
+      toast({ title: t('msg.fileUploaded'), description: file.name });
       fetchAttachments();
     } catch (e: any) {
-      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+      toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
     } finally {
       setUploading(false);
     }
@@ -1144,13 +1144,13 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
         body: JSON.stringify({ url: linkUrl.trim(), fileName: linkName.trim(), urlSource: linkSource }),
       });
       if (!r.ok) throw new Error(t('msg.addLinkFailed'));
-      toast({ title: 'تم إضافة الرابط', description: linkName });
+      toast({ title: t('msg.linkAdded'), description: linkName });
       setShowLinkDialog(false);
       setLinkUrl('');
       setLinkName('');
       fetchAttachments();
     } catch (e: any) {
-      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+      toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
     } finally {
       setUploading(false);
     }
@@ -1161,10 +1161,10 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
     try {
       const r = await fetch(`/api/transmittals/${detail.id}/attachments?attId=${attId}`, { method: 'DELETE' });
       if (!r.ok) throw new Error(t('msg.deleteFailed'));
-      toast({ title: 'تم حذف المرفق' });
+      toast({ title: t('msg.attachmentDeleted') });
       fetchAttachments();
     } catch (e: any) {
-      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+      toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
     }
   };
 
@@ -1173,7 +1173,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
   // This bypasses ALL proxy/server issues with direct file serving
   const handleDownloadFile = async (att: any) => {
     if (!att.id) {
-      toast({ title: 'خطأ', description: 'معرف الملف غير موجود', variant: 'destructive' });
+      toast({ title: t('msg.error'), description: t('msg.fileIdMissing'), variant: 'destructive' });
       return;
     }
     try {
@@ -1198,7 +1198,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
       a.click();
       document.body.removeChild(a);
       
-      toast({ title: 'تم التنزيل', description: att.fileName });
+      toast({ title: t('msg.downloaded'), description: att.fileName });
     } catch (e: any) {
       console.error('Download error:', e);
       toast({ title: t('msg.downloadError'), description: e.message || t('msg.downloadFailed'), variant: 'destructive' });
@@ -1206,7 +1206,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
   };
 
   const sourceConfig: Record<string, { label: string; icon: string; color: string }> = {
-    link: { label: 'رابط', icon: '🔗', color: 'bg-blue-600 text-white' },
+    link: { label: t('common.link'), icon: '🔗', color: 'bg-blue-600 text-white' },
   };
 
   return (
@@ -1386,7 +1386,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
       <AddRevisionDialog
         open={showRevDialog} onOpenChange={setShowRevDialog}
         transmittalId={detail.id} nextRevNumber={detail.revisions.length}
-        onSaved={() => { setShowRevDialog(false); onRefresh(); toast({ title: 'تم حفظ المراجعة' }); }}
+        onSaved={() => { setShowRevDialog(false); onRefresh(); toast({ title: t('msg.revSaved') }); }}
       />
 
       {/* Attachments Section */}
@@ -1466,7 +1466,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                 // File type badge info
                 const typeBadge = isPdf ? { label: 'PDF', color: 'bg-red-100 text-red-700', icon: '📄' }
                   : isDoc ? { label: 'Word', color: 'bg-blue-100 text-blue-700', icon: '📝' }
-                  : isImage ? { label: 'صورة', color: 'bg-emerald-100 text-emerald-700', icon: '🖼️' }
+                  : isImage ? { label: t('common.image'), color: 'bg-emerald-100 text-emerald-700', icon: '🖼️' }
                   : null;
 
                 return (
@@ -1602,17 +1602,17 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Edit Transmittal Dialog — edit description, type, alternative title */}
+      {showEditDialog && (
+        <EditTransmittalDialog
+          transmittal={detail}
+          onOpenChange={(v) => !v && setShowEditDialog(false)}
+          onSaved={() => { setShowEditDialog(false); onRefresh(); }}
+        />
+      )}
     </div>
   );
-
-  {/* Edit Transmittal Dialog — edit description, type, alternative title */}
-  {showEditDialog && (
-    <EditTransmittalDialog
-      transmittal={detail}
-      onOpenChange={(v) => !v && setShowEditDialog(false)}
-      onSaved={() => { setShowEditDialog(false); onRefresh(); }}
-    />
-  )}
 }
 
 /* ============ EDIT TRANSMITTAL DIALOG ============ */
@@ -1711,6 +1711,7 @@ function AddRevisionDialog({ open, onOpenChange, transmittalId, nextRevNumber, o
   transmittalId: string; nextRevNumber: number; onSaved: () => void;
 }) {
   const { t, lang } = useI18n();
+  const { toast } = useToast();
   const [submitDate, setSubmitDate] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
@@ -1738,9 +1739,14 @@ function AddRevisionDialog({ open, onOpenChange, transmittalId, nextRevNumber, o
           notes: notes || null,
         }),
       });
-      if (!r.ok) throw new Error(t('msg.saveFailed'));
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || t('msg.saveFailed'));
+      }
       onSaved();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) {
+      toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
+    }
     finally { setSaving(false); }
   };
 
@@ -1803,7 +1809,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
     setLoadingRef(true);
     try {
       const r = await fetch(`/api/transmittals/next-ref?discipline=${encodeURIComponent(d)}`);
-      if (!r.ok) throw new Error('فشل جلب الرقم التالي');
+      if (!r.ok) throw new Error(t('msg.loadNextRefFailed'));
       const data = await r.json();
       setReference(data.nextReference);
       setRefInfo({
@@ -1818,7 +1824,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
 
   const handleCreate = async () => {
     if (!reference || !discipline) {
-      toast({ title: 'خطأ', description: 'المرجع والتخصص مطلوبان', variant: 'destructive' }); return;
+      toast({ title: t('msg.error'), description: t('msg.refAndDiscRequired'), variant: 'destructive' }); return;
     }
     setSaving(true);
     try {
@@ -1826,7 +1832,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reference, discipline, type: type || undefined, description: description || undefined, parentTransmittalId: parentTransmittalId || undefined }),
       });
-      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الإنشاء'); }
+      if (!r.ok) { const err = await r.json(); throw new Error(err.error || t('msg.createFailed')); }
       const created = await r.json();
       if (submitDate) {
         await fetch(`/api/transmittals/${created.id}/revisions`, {
@@ -1835,7 +1841,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
         });
       }
       onCreated(created);
-    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: t('msg.error'), description: e.message, variant: 'destructive' }); }
     finally { setSaving(false); }
   };
 
@@ -1980,7 +1986,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
         <Button variant="outline" onClick={() => onDownloadTemplate(reference, discipline, description)} disabled={!reference}>
           <Download className="w-4 h-4" /> {t('new.downloadTemplate')}</Button>
         <Button onClick={handleCreate} disabled={saving || !reference || !discipline} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
-          <Plus className="w-4 h-4" /> {saving ? 'جاري الإنشاء...' : 'إنشاء الترانسميتال'}
+          <Plus className="w-4 h-4" /> {saving ? t('msg.creating') : t('button.createTransmittal')}
         </Button>
       </div>
 
@@ -2012,11 +2018,11 @@ function ImportView({ onDone }: { onDone: () => void }) {
     try {
       const fd = new FormData(); fd.append('file', file);
       const r = await fetch('/api/import', { method: 'POST', body: fd });
-      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الاستيراد'); }
+      if (!r.ok) { const err = await r.json(); throw new Error(err.error || t('msg.importFailed')); }
       const data = await r.json();
       setResult(data);
       toast({ title: t('msg.importSuccess'), description: t('msg.importResult', {imported: data.imported, skipped: data.skipped}) });
-    } catch (e: any) { toast({ title: 'فشل الاستيراد', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: t('msg.importFailed'), description: e.message, variant: 'destructive' }); }
     finally { setImporting(false); }
   };
 
@@ -2121,11 +2127,11 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
       if (dateFrom) params.set('from', dateFrom);
       if (dateTo) params.set('to', dateTo);
       const r = await fetch(`/api/reports/timeline?${params}`);
-      if (!r.ok) throw new Error('فشل تحميل التقرير');
+      if (!r.ok) throw new Error(t('msg.loadReportFailed'));
       const data = await r.json();
       setItems(data.items);
     } catch (e: any) {
-      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+      toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -2383,20 +2389,34 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
                   <TableRow>
                     <TableHead className="text-right sticky right-0 bg-white z-20 min-w-[120px] border-l-2 border-slate-300">{t('common.reference')}</TableHead>
                     <TableHead className="text-right min-w-[180px] border-l-2 border-slate-300">{t('common.description')}</TableHead>
-                    {revColumns.map((rev, revIdx) => (
-                      <TableHead
-                        key={rev}
-                        className={`text-center min-w-[260px] p-0 border-l-4 ${revIdx === 0 ? 'border-l-2 border-slate-400' : 'border-l-4 border-blue-500'}`}
-                      >
-                        {/* REV group header — colored band on top */}
-                        <div className="bg-blue-700 text-white py-1.5 px-2 font-bold text-sm">REV.{rev}</div>
-                        <div className="flex text-xs font-normal mt-0 bg-blue-50">
-                          <div className="flex-1 py-1 border-l border-blue-200">{t('reports.rev.submit')}</div>
-                          <div className="flex-1 py-1 border-l border-blue-200">{t('reports.rev.reply')}</div>
-                          <div className="flex-1 py-1 border-l border-blue-200">{t('common.action')}</div>
-                        </div>
-                      </TableHead>
-                    ))}
+                    {revColumns.map((rev, revIdx) => {
+                      // Static color palette — Tailwind JIT requires literal class names
+                      const revColors = [
+                        { header: 'bg-blue-700', light: 'bg-blue-50', border: 'border-blue-200', borderL: 'border-blue-500' },
+                        { header: 'bg-emerald-700', light: 'bg-emerald-50', border: 'border-emerald-200', borderL: 'border-emerald-500' },
+                        { header: 'bg-amber-700', light: 'bg-amber-50', border: 'border-amber-200', borderL: 'border-amber-500' },
+                        { header: 'bg-purple-700', light: 'bg-purple-50', border: 'border-purple-200', borderL: 'border-purple-500' },
+                        { header: 'bg-rose-700', light: 'bg-rose-50', border: 'border-rose-200', borderL: 'border-rose-500' },
+                        { header: 'bg-cyan-700', light: 'bg-cyan-50', border: 'border-cyan-200', borderL: 'border-cyan-500' },
+                        { header: 'bg-indigo-700', light: 'bg-indigo-50', border: 'border-indigo-200', borderL: 'border-indigo-500' },
+                        { header: 'bg-orange-700', light: 'bg-orange-50', border: 'border-orange-200', borderL: 'border-orange-500' },
+                      ];
+                      const c = revColors[rev % revColors.length];
+                      return (
+                        <TableHead
+                          key={rev}
+                          className={`text-center min-w-[260px] p-0 border-l-4 ${revIdx === 0 ? 'border-l-2 border-slate-400' : `border-l-4 ${c.borderL}`}`}
+                        >
+                          {/* REV group header — colored band on top, distinct color per rev */}
+                          <div className={`${c.header} text-white py-1.5 px-2 font-bold text-sm`}>REV.{rev}</div>
+                          <div className={`flex text-xs font-normal mt-0 ${c.light}`}>
+                            <div className={`flex-1 py-1 border-l ${c.border}`}>{t('reports.rev.submit')}</div>
+                            <div className={`flex-1 py-1 border-l ${c.border}`}>{t('reports.rev.reply')}</div>
+                            <div className={`flex-1 py-1 border-l ${c.border}`}>{t('common.action')}</div>
+                          </div>
+                        </TableHead>
+                      );
+                    })}
                     <TableHead className="text-center min-w-[100px] border-l-4 border-emerald-500 bg-emerald-50">{t('detail.consultant')}</TableHead>
                     <TableHead className="text-center min-w-[100px] border-l-2 border-purple-500 bg-purple-50">{t('detail.moh')}</TableHead>
                   </TableRow>
@@ -2412,25 +2432,36 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
                       </TableCell>
                       {revColumns.map((rev, revIdx) => {
                         const r = item.revisions[rev];
+                        const revColors = [
+                          { border: 'border-blue-200', borderL: 'border-blue-500', bg: 'bg-blue-50/30' },
+                          { border: 'border-emerald-200', borderL: 'border-emerald-500', bg: 'bg-emerald-50/30' },
+                          { border: 'border-amber-200', borderL: 'border-amber-500', bg: 'bg-amber-50/30' },
+                          { border: 'border-purple-200', borderL: 'border-purple-500', bg: 'bg-purple-50/30' },
+                          { border: 'border-rose-200', borderL: 'border-rose-500', bg: 'bg-rose-50/30' },
+                          { border: 'border-cyan-200', borderL: 'border-cyan-500', bg: 'bg-cyan-50/30' },
+                          { border: 'border-indigo-200', borderL: 'border-indigo-500', bg: 'bg-indigo-50/30' },
+                          { border: 'border-orange-200', borderL: 'border-orange-500', bg: 'bg-orange-50/30' },
+                        ];
+                        const c = revColors[rev % revColors.length];
                         if (!r || (!r.submitDate && !r.action)) {
                           return (
-                            <TableCell key={rev} className={`p-0 border-l-4 ${revIdx === 0 ? 'border-l-2 border-slate-400' : 'border-l-4 border-blue-500'}`}>
-                              <div className="flex text-xs min-h-[44px] items-center">
-                                <div className="flex-1 p-2 border-l border-slate-200 text-center text-slate-300">—</div>
-                                <div className="flex-1 p-2 border-l border-slate-200 text-center text-slate-300">—</div>
-                                <div className="flex-1 p-2 border-l border-slate-200 text-center text-slate-300">—</div>
+                            <TableCell key={rev} className={`p-0 border-l-4 ${revIdx === 0 ? 'border-l-2 border-slate-400' : `border-l-4 ${c.borderL}`}`}>
+                              <div className={`flex text-xs min-h-[44px] items-center ${c.bg}`}>
+                                <div className={`flex-1 p-2 border-l ${c.border} text-center text-slate-300`}>—</div>
+                                <div className={`flex-1 p-2 border-l ${c.border} text-center text-slate-300`}>—</div>
+                                <div className={`flex-1 p-2 border-l ${c.border} text-center text-slate-300`}>—</div>
                               </div>
                             </TableCell>
                           );
                         }
                         return (
-                          <TableCell key={rev} className={`p-0 border-l-4 ${revIdx === 0 ? 'border-l-2 border-slate-400' : 'border-l-4 border-blue-500'}`}>
-                            <div className="flex text-xs min-h-[44px]">
-                              <div className="flex-1 p-2 border-l border-slate-200 text-center">
+                          <TableCell key={rev} className={`p-0 border-l-4 ${revIdx === 0 ? 'border-l-2 border-slate-400' : `border-l-4 ${c.borderL}`}`}>
+                            <div className={`flex text-xs min-h-[44px] ${c.bg}`}>
+                              <div className={`flex-1 p-2 border-l ${c.border} text-center`}>
                                 {r.submitDate ? (
                                   <div>
                                     <div className="font-medium text-slate-700">{fmtDate(r.submitDate)}</div>
-                                    {r.daysOpen !== null && (
+                                    {r.daysOpen !== null && r.daysOpen !== undefined && (
                                       <div className={`text-[10px] mt-0.5 font-semibold ${r.daysOpen > 30 ? 'text-red-700' : r.daysOpen > 14 ? 'text-yellow-700' : 'text-emerald-700'}`}>
                                         {r.daysOpen}ي
                                       </div>
@@ -2438,12 +2469,12 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
                                   </div>
                                 ) : <span className="text-slate-300">—</span>}
                               </div>
-                              <div className="flex-1 p-2 border-l border-slate-200 text-center">
+                              <div className={`flex-1 p-2 border-l ${c.border} text-center`}>
                                 {r.replyDate ? (
                                   <div className="font-medium text-slate-700">{fmtDate(r.replyDate)}</div>
                                 ) : <span className="text-slate-300">—</span>}
                               </div>
-                              <div className={`flex-1 p-2 border-l border-slate-200 text-center font-bold ${actionColor(r.action, r.approvalType)}`}>
+                              <div className={`flex-1 p-2 border-l ${c.border} text-center font-bold ${actionColor(r.action, r.approvalType)}`}>
                                 {actionLabel(r.action, r.approvalType)}
                               </div>
                             </div>
@@ -2494,8 +2525,8 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
             <span className="flex items-center gap-1"><span className="w-3 h-3 bg-orange-50 border border-orange-300 inline-block"></span> C: APPROVED AS NOTED & RESUBMIT</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-50 border border-red-300 inline-block"></span> D: NOT APPROVED</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 bg-orange-50 border border-orange-300 inline-block"></span> E: FOR INFORMATION</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-50 border border-red-300 inline-block"></span> ❌ مرفوض</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 bg-gray-100 border border-gray-300 inline-block"></span> 🚫 مسحوب</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-50 border border-red-300 inline-block"></span> ❌ {t('status.rejected')}</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 bg-gray-100 border border-gray-300 inline-block"></span> 🚫 {t('status.cancelled_short')}</span>
             <span className="text-slate-500">·</span>
             <span className="text-slate-600">Xي = عدد الأيام من التقديم حتى الرد</span>
             <span className="text-slate-500">·</span>
@@ -2543,9 +2574,9 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
     try {
       const r = await fetch(`/api/disciplines/${code}`, { method: 'DELETE' });
       if (!r.ok) { const err = await r.json(); throw new Error(err.error || t('msg.deleteFailed')); }
-      toast({ title: 'تم حذف القسم', description: code });
+      toast({ title: t('msg.disciplineDeleted'), description: code });
       onRefreshDisciplines();
-    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: t('msg.error'), description: e.message, variant: 'destructive' }); }
   };
 
   const handleDeleteCategory = async (code: string) => {
@@ -2553,9 +2584,9 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
     try {
       const r = await fetch(`/api/categories/${code}`, { method: 'DELETE' });
       if (!r.ok) { const err = await r.json(); throw new Error(err.error || t('msg.deleteFailed')); }
-      toast({ title: 'تم حذف القسم الرئيسي', description: code });
+      toast({ title: t('msg.categoryDeleted'), description: code });
       onRefreshCategories();
-    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: t('msg.error'), description: e.message, variant: 'destructive' }); }
   };
 
   const handleDeleteDocType = async (id: string, code: string) => {
@@ -2563,9 +2594,9 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
     try {
       const r = await fetch(`/api/doc-types/${id}`, { method: 'DELETE' });
       if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || t('msg.deleteFailed')); }
-      toast({ title: 'تم حذف النوع', description: code });
+      toast({ title: t('msg.typeDeleted'), description: code });
       onRefreshDocTypes();
-    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: t('msg.error'), description: e.message, variant: 'destructive' }); }
   };
 
   const handleAddDocType = async () => {
@@ -2977,21 +3008,21 @@ function AddDisciplineDialog({ open, onOpenChange, onSaved, categories }: { open
   }, [open]);
 
   const colorOptions = [
-    { value: 'bg-gray-100 text-gray-700', label: 'رمادي' },
-    { value: 'bg-amber-100 text-amber-700', label: 'كهرماني' },
-    { value: 'bg-purple-100 text-purple-700', label: 'بنفسجي' },
-    { value: 'bg-cyan-100 text-cyan-700', label: 'سماوي' },
-    { value: 'bg-rose-100 text-rose-700', label: 'وردي' },
-    { value: 'bg-red-100 text-red-700', label: 'أحمر' },
-    { value: 'bg-emerald-100 text-emerald-700', label: 'أخضر' },
-    { value: 'bg-blue-100 text-blue-700', label: 'أزرق' },
-    { value: 'bg-indigo-100 text-indigo-700', label: 'نيلي' },
-    { value: 'bg-orange-100 text-orange-700', label: 'برتقالي' },
+    { value: 'bg-gray-100 text-gray-700', label: t('color.gray') },
+    { value: 'bg-amber-100 text-amber-700', label: t('color.amber') },
+    { value: 'bg-purple-100 text-purple-700', label: t('color.purple') },
+    { value: 'bg-cyan-100 text-cyan-700', label: t('color.cyan') },
+    { value: 'bg-rose-100 text-rose-700', label: t('color.rose') },
+    { value: 'bg-red-100 text-red-700', label: t('color.red') },
+    { value: 'bg-emerald-100 text-emerald-700', label: t('color.green') },
+    { value: 'bg-blue-100 text-blue-700', label: t('color.blue') },
+    { value: 'bg-indigo-100 text-indigo-700', label: t('color.indigo') },
+    { value: 'bg-orange-100 text-orange-700', label: t('color.orange') },
   ];
 
   const handleSave = async () => {
     if (!code || !label || !prefix) {
-      toast({ title: 'خطأ', description: 'كل الحقول مطلوبة', variant: 'destructive' }); return;
+      toast({ title: t('msg.error'), description: t('msg.allFieldsRequired'), variant: 'destructive' }); return;
     }
     setSaving(true);
     try {
@@ -3000,10 +3031,10 @@ function AddDisciplineDialog({ open, onOpenChange, onSaved, categories }: { open
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: code.toUpperCase(), label, labelEn: labelEn || undefined, prefix, color, category, categories: allCategories }),
       });
-      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الحفظ'); }
-      toast({ title: 'تم إضافة القسم', description: `${code.toUpperCase()} - ${label}` });
+      if (!r.ok) { const err = await r.json(); throw new Error(err.error || t('msg.saveFailed')); }
+      toast({ title: t('msg.disciplineAdded'), description: `${code.toUpperCase()} - ${label}` });
       onSaved();
-    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: t('msg.error'), description: e.message, variant: 'destructive' }); }
     finally { setSaving(false); }
   };
 
@@ -3076,7 +3107,7 @@ function AddDisciplineDialog({ open, onOpenChange, onSaved, categories }: { open
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'حفظ'}</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? t('msg.saving') : t('common.save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -3099,16 +3130,16 @@ function EditDisciplineDialog({ discipline, onOpenChange, onSaved, categories }:
   const { toast } = useToast();
 
   const colorOptions = [
-    { value: 'bg-gray-100 text-gray-700', label: 'رمادي' },
-    { value: 'bg-amber-100 text-amber-700', label: 'كهرماني' },
-    { value: 'bg-purple-100 text-purple-700', label: 'بنفسجي' },
-    { value: 'bg-cyan-100 text-cyan-700', label: 'سماوي' },
-    { value: 'bg-rose-100 text-rose-700', label: 'وردي' },
-    { value: 'bg-red-100 text-red-700', label: 'أحمر' },
-    { value: 'bg-emerald-100 text-emerald-700', label: 'أخضر' },
-    { value: 'bg-blue-100 text-blue-700', label: 'أزرق' },
-    { value: 'bg-indigo-100 text-indigo-700', label: 'نيلي' },
-    { value: 'bg-orange-100 text-orange-700', label: 'برتقالي' },
+    { value: 'bg-gray-100 text-gray-700', label: t('color.gray') },
+    { value: 'bg-amber-100 text-amber-700', label: t('color.amber') },
+    { value: 'bg-purple-100 text-purple-700', label: t('color.purple') },
+    { value: 'bg-cyan-100 text-cyan-700', label: t('color.cyan') },
+    { value: 'bg-rose-100 text-rose-700', label: t('color.rose') },
+    { value: 'bg-red-100 text-red-700', label: t('color.red') },
+    { value: 'bg-emerald-100 text-emerald-700', label: t('color.green') },
+    { value: 'bg-blue-100 text-blue-700', label: t('color.blue') },
+    { value: 'bg-indigo-100 text-indigo-700', label: t('color.indigo') },
+    { value: 'bg-orange-100 text-orange-700', label: t('color.orange') },
   ];
 
   const toggleExtraCategory = (catCode: string) => {
@@ -3286,16 +3317,16 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
 
   const iconOptions = ['📄', '🔍', '❓', '📚', '📋', '📝', '🏗️', '⚡', '🔥', '💧', '❄️', '📡', '🚪', '🛡️', '🔧', '📦'];
   const colorOptions = [
-    { value: 'bg-blue-100 text-blue-700', label: 'أزرق' },
-    { value: 'bg-orange-100 text-orange-700', label: 'برتقالي' },
-    { value: 'bg-purple-100 text-purple-700', label: 'بنفسجي' },
-    { value: 'bg-emerald-100 text-emerald-700', label: 'أخضر' },
-    { value: 'bg-red-100 text-red-700', label: 'أحمر' },
-    { value: 'bg-amber-100 text-amber-700', label: 'كهرماني' },
-    { value: 'bg-cyan-100 text-cyan-700', label: 'سماوي' },
-    { value: 'bg-rose-100 text-rose-700', label: 'وردي' },
-    { value: 'bg-indigo-100 text-indigo-700', label: 'نيلي' },
-    { value: 'bg-gray-100 text-gray-700', label: 'رمادي' },
+    { value: 'bg-blue-100 text-blue-700', label: t('color.blue') },
+    { value: 'bg-orange-100 text-orange-700', label: t('color.orange') },
+    { value: 'bg-purple-100 text-purple-700', label: t('color.purple') },
+    { value: 'bg-emerald-100 text-emerald-700', label: t('color.green') },
+    { value: 'bg-red-100 text-red-700', label: t('color.red') },
+    { value: 'bg-amber-100 text-amber-700', label: t('color.amber') },
+    { value: 'bg-cyan-100 text-cyan-700', label: t('color.cyan') },
+    { value: 'bg-rose-100 text-rose-700', label: t('color.rose') },
+    { value: 'bg-indigo-100 text-indigo-700', label: t('color.indigo') },
+    { value: 'bg-gray-100 text-gray-700', label: t('color.gray') },
   ];
 
   const handleSave = async () => {
@@ -3419,16 +3450,16 @@ function EditCategoryDialog({ category, onOpenChange, onSaved }: { category: Cat
 
   const iconOptions = ['📄', '🔍', '❓', '📚', '📋', '📝', '🏗️', '⚡', '🔥', '💧', '❄️', '📡', '🚪', '🛡️', '🔧', '📦'];
   const colorOptions = [
-    { value: 'bg-blue-100 text-blue-700', label: 'أزرق' },
-    { value: 'bg-orange-100 text-orange-700', label: 'برتقالي' },
-    { value: 'bg-purple-100 text-purple-700', label: 'بنفسجي' },
-    { value: 'bg-emerald-100 text-emerald-700', label: 'أخضر' },
-    { value: 'bg-red-100 text-red-700', label: 'أحمر' },
-    { value: 'bg-amber-100 text-amber-700', label: 'كهرماني' },
-    { value: 'bg-cyan-100 text-cyan-700', label: 'سماوي' },
-    { value: 'bg-rose-100 text-rose-700', label: 'وردي' },
-    { value: 'bg-indigo-100 text-indigo-700', label: 'نيلي' },
-    { value: 'bg-gray-100 text-gray-700', label: 'رمادي' },
+    { value: 'bg-blue-100 text-blue-700', label: t('color.blue') },
+    { value: 'bg-orange-100 text-orange-700', label: t('color.orange') },
+    { value: 'bg-purple-100 text-purple-700', label: t('color.purple') },
+    { value: 'bg-emerald-100 text-emerald-700', label: t('color.green') },
+    { value: 'bg-red-100 text-red-700', label: t('color.red') },
+    { value: 'bg-amber-100 text-amber-700', label: t('color.amber') },
+    { value: 'bg-cyan-100 text-cyan-700', label: t('color.cyan') },
+    { value: 'bg-rose-100 text-rose-700', label: t('color.rose') },
+    { value: 'bg-indigo-100 text-indigo-700', label: t('color.indigo') },
+    { value: 'bg-gray-100 text-gray-700', label: t('color.gray') },
   ];
 
   const handleSave = async () => {
@@ -3500,7 +3531,7 @@ function EditCategoryDialog({ category, onOpenChange, onSaved }: { category: Cat
             {(category as any).templatePath && !removeTemplate ? (
               <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-emerald-50 border border-emerald-200">
                 <span className="text-sm text-emerald-700 flex items-center gap-1">
-                  ✓ قالب مخصص محفوظ ({(category as any).templateType || 'غير معروف'})
+                  ✓ قالب مخصص محفوظ ({(category as any).templateType || t('common.unknown')})
                 </span>
                 <Button size="sm" variant="ghost" onClick={() => setRemoveTemplate(true)} className="text-red-600">
                   {t('settings.deleteTemplate')}</Button>
@@ -3664,9 +3695,9 @@ function ConsultantReplyDialog({ target, onClose, onConfirm }: {
               <Select value={action} onValueChange={handleActionChange}>
                 <SelectTrigger><SelectValue placeholder={t('field.selectAction')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="approved">✅ مقبول</SelectItem>
-                  <SelectItem value="rejected">❌ مرفوض</SelectItem>
-                  <SelectItem value="withdrawn">🚫 مسحوب</SelectItem>
+                  <SelectItem value="approved">✅ {t('status.approved_short')}</SelectItem>
+                  <SelectItem value="rejected">❌ {t('status.rejected')}</SelectItem>
+                  <SelectItem value="withdrawn">🚫 {t('status.cancelled_short')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -3701,7 +3732,7 @@ function ConsultantReplyDialog({ target, onClose, onConfirm }: {
           <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
           <Button onClick={handleConfirm} disabled={saving || !replyDate || !action || (action === 'approved' && !approvalType)} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
             <Building2 className="w-4 h-4" />
-            {saving ? t('msg.registering') : 'تسجيل الرد'}
+            {saving ? t('msg.registering') : t('button.registerReply')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -3757,10 +3788,10 @@ function MohReplyDialog({ target, onClose, onConfirm }: {
               <Select value={status} onValueChange={setStatus}>
                 <SelectTrigger><SelectValue placeholder={t('field.selectStatus')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Approved">✅ معتمد</SelectItem>
-                  <SelectItem value="Rejected">❌ مرفوض</SelectItem>
-                  <SelectItem value="Under Review">⏳ قيد المراجعة</SelectItem>
-                  <SelectItem value="Cancelled">🚫 ملغى</SelectItem>
+                  <SelectItem value="Approved">{`✅ ${t('status.approved_short')}`}</SelectItem>
+                  <SelectItem value="Rejected">❌ {t('status.rejected')}</SelectItem>
+                  <SelectItem value="Under Review">⏳ {t('status.underReview')}</SelectItem>
+                  <SelectItem value="Cancelled">{`🚫 ${t('status.cancelled_short')}`}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -3776,7 +3807,7 @@ function MohReplyDialog({ target, onClose, onConfirm }: {
           <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
           <Button onClick={handleConfirm} disabled={saving || !reviewDate || !status} className="bg-purple-700 hover:bg-purple-800 gap-1.5">
             <Hospital className="w-4 h-4" />
-            {saving ? t('msg.registering') : 'تسجيل رد الوزارة'}
+            {saving ? t('msg.registering') : t('button.registerMohReply')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -3837,7 +3868,7 @@ function CopyTransmittalDialog({ target, onClose, onConfirm }: {
           <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
           <Button onClick={handleConfirm} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
             <Copy className="w-4 h-4" />
-            {saving ? 'جاري النسخ...' : 'نسخ برقم جديد'}
+            {saving ? t('msg.copying') : t('detail.copyNew')}
           </Button>
         </DialogFooter>
       </DialogContent>

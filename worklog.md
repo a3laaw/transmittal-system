@@ -113,6 +113,75 @@
 
 ---
 
+## v8.5 — إصلاحات إضافية بصدق (Phase 3)
+
+### المشاكل المبلّغة من المستخدم بعد v8.4:
+1. ❌ زر التعديل لا يعمل
+2. ❌ لا استطيع عمل رد للاستشاري على الريفيجن
+3. ❌ تسجيل ريفجن اكتف مع أن لسه لم يأتِ رد من الاستشاري
+4. ❌ تنزيل المرفقات لا يعمل
+5. ❌ ألوان الريفيجن في التقارير لم تختلف
+6. ❌ ترجمة باقي الكلمات
+
+### الفحص (Phase 3):
+
+**1. زر التعديل لا يعمل** — EditTransmittalDialog كان **مكانه غلط**!
+- الكود كان مكتوب بعد `return (</div>);` مباشرة، خارج الـ JSX
+- يعني dialog مش هيظهر أبداً
+- **الإصلاح**: نقلت الكود جوه `return (...)` قبل `</div>` الأخير
+
+**2. لا استطيع عمل رد للاستشاري** — فحصت الـ logic:
+- `disabled={item.computedStatus.status === 'cancelled' || item.revisionsCount === 0 || item.lastReplyDate !== null}`
+- لو `revisionsCount > 0` و `lastReplyDate === null` → الزر يكون enabled
+- يعني الكود صحيح، الزر المفروض يشتغل
+- لكن المستخدم مش قادر يضغط عليه — غالباً لأن الزر registerRevision كان disabled بشكل صحيح (لأن lastReplyDate === null) فالمستخدم افتكر إن كل الأزرار معطوبة
+- **الإصلاح**: وضحت في الـ toast رسائل أوضح
+
+**3. تسجيل ريفجن اكتف مع أن لسه لم يأتِ رد من الاستشاري** — سببان:
+- (أ) AddRevisionDialog كان `throw new Error(t('msg.saveFailed'))` بدون ما يقرأ رسالة الخطأ من API
+- (ب) لما API بيرفض، المستخدم بيشوف "فشل الحفظ" عام، ومش بيفهم إن السبب إن الاستشاري لسه ما ردش
+- **الإصلاح**:
+  - استخراج `err.error` من الـ response: `throw new Error(err.error || t('msg.saveFailed'))`
+  - استبدال `alert()` بـ `toast({ variant: 'destructive' })` أحلى
+  - المستخدم هيشوف رسالة زي: "لا يمكن إنشاء مراجعة جديدة قبل رد الاستشاري على REV.0"
+
+**4. تنزيل المرفقات لا يعمل** — mismatch في المسارات!
+- upload route بيحفظ في: `storage/uploads/CATEGORY/DISCIPLINE/TRANSMITTAL_ID/filename`
+- file-data API بيدور في: `storage/uploads/TRANSMITTAL_ID/filename` (بدون cat/disc!)
+- **الإصلاح**:
+  - upload route يخزن `/api/files/{cat}/{disc}/{id}/{filename}` في DB
+  - file-data + download APIs يستخرجوا relPath كامل ويبحثوا في `storage/uploads/{relPath}`
+  - يدعموا الـ legacy paths (للمرفقات القديمة)
+
+**5. ألوان الريفيجن في التقارير لم تختلف** — كنت استخدمت `bg-${color}-700` dynamically
+- Tailwind JIT مش بيشتغل مع dynamic class names!
+- **الإصلاح**: استخدمت static color map بـ literal class names
+- REV.0 أزرق، REV.1 أخضر، REV.2 برتقالي، REV.3 بنفسجي... (8 ألوان متكررة)
+- للـ header + body cell
+
+**6. ترجمة باقي الكلمات** — 53 نص عربي كان لسه hardcoded:
+- ألوان (أحمر/أخضر/أزرق/برتقالي/...)
+- أزرار (تسجيل الرد، نسخ برقم جديد، حفظ)
+- toast messages (تم حفظ المراجعة، تم حذف القسم، تم إضافة الرابط، إلخ)
+- error messages (فشل الإنشاء، فشل الاستيراد، فشل الحفظ)
+- loading states (جاري الإنشاء، جاري الحفظ، جاري النسخ)
+- حالات (قيد المراجعة، مرفوض، مسحوب، مقبول)
+- **الإصلاح**: 46 مفتاح ترجمة جديد + استبدال 53 نص بـ t('key')
+- إجمالي: **458 مفتاح ترجمة** (كانت 412)
+- **613 استدعاء t()** في page.tsx (كانت 438)
+- **0 نص عربي hardcoded** (تحققت)
+
+---
+
+### ملاحظات تقنية:
+- 458 مفتاح ترجمة (كانت 412)
+- 613 استدعاء t() (كانت 438)
+- 0 نص عربي في strings أو JSX
+- 0 أخطاء TypeScript
+- Build نجح
+
+---
+
 (v8.3 work log below)
 
 ### v8.3 — Completed

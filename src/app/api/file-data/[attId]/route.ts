@@ -32,35 +32,52 @@ export async function GET(
       return NextResponse.json({ error: 'مسار الملف غير موجود' }, { status: 404 });
     }
 
-    // Extract transmittalId and filename from filePath
-    const match = att.filePath.match(/\/api\/files\/([^/]+)\/(.+)$/);
+    // Extract relative path from filePath (strip /api/files/ prefix)
+    // Supports two formats:
+    //   Old: /api/files/{transmittalId}/{filename}        → uploads/{transmittalId}/{filename}
+    //   New: /api/files/{cat}/{disc}/{id}/{filename}      → uploads/{cat}/{disc}/{id}/{filename}
+    const match = att.filePath.match(/\/api\/files\/(.+)$/);
     if (!match) {
       return NextResponse.json({ error: 'مسار الملف غير صالح' }, { status: 400 });
     }
 
-    const [, transmittalId, filename] = match;
+    const relPath = match[1]; // "cat/disc/id/filename" OR "id/filename"
     const storageRoot = getStorageRoot();
-    const absPath = path.join(storageRoot, 'uploads', transmittalId, filename);
+    const absPath = path.join(storageRoot, 'uploads', ...relPath.split('/'));
 
     let resolvedPath = absPath;
     if (!existsSync(absPath)) {
-      // Try legacy paths (old install locations)
-      const legacyCandidates = [
-        path.join(process.cwd(), 'public', 'uploads', transmittalId, filename),
-        path.join(process.cwd(), 'storage', 'uploads', transmittalId, filename),
-      ];
+      // Try legacy paths (old install locations) — backwards compat
+      const parts = relPath.split('/');
+      const legacyCandidates: string[] = [];
+      // Try last 2 parts as {transmittalId}/{filename} (old format)
+      if (parts.length >= 2) {
+        const transmittalId = parts[parts.length - 2];
+        const filename = parts[parts.length - 1];
+        legacyCandidates.push(
+          path.join(storageRoot, 'uploads', transmittalId, filename),
+          path.join(process.cwd(), 'public', 'uploads', transmittalId, filename),
+          path.join(process.cwd(), 'storage', 'uploads', transmittalId, filename),
+        );
+      }
       const found = legacyCandidates.find(p => existsSync(p));
       if (found) {
         resolvedPath = found;
       } else {
-        return NextResponse.json({ error: 'الملف غير موجود على القرص', searched: [absPath, ...legacyCandidates] }, { status: 404 });
+        return NextResponse.json({
+          error: 'الملف غير موجود على القرص',
+          searched: [absPath, ...legacyCandidates],
+          storedPath: att.filePath,
+          storageRoot,
+        }, { status: 404 });
       }
     }
 
     const buffer = await readFile(resolvedPath);
     const base64 = buffer.toString('base64');
-    
+
     // Determine MIME type
+    const filename = relPath.split('/').pop() || 'download';
     const ext = path.extname(att.fileName || filename).toLowerCase();
     const mimeTypes: Record<string, string> = {
       '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
