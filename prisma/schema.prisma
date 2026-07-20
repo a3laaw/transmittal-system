@@ -1,6 +1,4 @@
-// Prisma schema for Transmittal Management System
-// Supports both SQLite (development) and PostgreSQL (Supabase production)
-
+// Prisma schema for Nova EDMS (Site Secretary)
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
@@ -11,53 +9,76 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Top-level categories (Transmittal, MIR, RFI, Books, etc.) — user-editable
 model Category {
   id            String   @id @default(cuid())
-  code          String   @unique // e.g. "TRANSMITTAL", "MIR", "RFI", "BOOKS"
-  label         String   // Arabic label: "ترانسميتال"
-  icon          String   @default("📄") // emoji icon
-  color         String   @default("bg-blue-100 text-blue-700") // tailwind classes
-  templatePath  String?  // path to custom template (if uploaded)
-  templateType  String?  // template file type: "xlsx", "docx", "pdf", etc.
+  code          String   @unique
+  label         String
+  labelEn       String?
+  icon          String   @default("📄")
+  color         String   @default("bg-blue-100 text-blue-700")
+  templatePath  String?
+  templateType  String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   disciplines  Discipline[]
+  disciplineCategories DisciplineCategory[]
   transmittals Transmittal[]
+  docTypes     DocType[]
 }
 
-// Document types (SHOP DRAWINGS, SAMPLE, SOURCE APPROVAL, etc.) — user-editable
 model DocType {
   id        String   @id @default(cuid())
-  code      String   @unique // e.g. "SHOP_DRAWINGS", "SAMPLE"
-  label     String   // Arabic label: "رسم تنفيذي"
+  code      String   @unique
+  label     String
+  labelEn   String?
+  categoryCode String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  category  Category? @relation(fields: [categoryCode], references: [code], onDelete: SetNull)
 }
 
 model Discipline {
   id         String   @id @default(cuid())
-  code       String   @unique // e.g. "CIV", "EL", "PL", "HVAC", "FF", "ELVE"
-  label      String   // Arabic label: "المدنية"
-  color      String   // tailwind classes: "bg-amber-100 text-amber-700"
-  prefix     String   // prefix used in references: "CIV-", "ELEV "
-  categoryCode String? // links to Category.code (nullable for migration)
+  code       String   @unique
+  label      String
+  labelEn    String?
+  color      String
+  prefix     String
+  categoryCode String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  category   Category? @relation(fields: [categoryCode], references: [code], onDelete: Restrict)
+  category      Category?           @relation(fields: [categoryCode], references: [code], onDelete: Restrict)
+  categories    DisciplineCategory[]
+}
+
+// Many-to-many: a discipline can belong to multiple categories
+model DisciplineCategory {
+  id            String   @id @default(cuid())
+  disciplineId  String
+  categoryCode  String
+  createdAt     DateTime @default(now())
+
+  discipline  Discipline @relation(fields: [disciplineId], references: [id], onDelete: Cascade)
+  category    Category   @relation(fields: [categoryCode], references: [code], onDelete: Cascade)
+
+  @@unique([disciplineId, categoryCode])
+  @@index([disciplineId])
+  @@index([categoryCode])
 }
 
 model Transmittal {
   id          String   @id @default(cuid())
-  reference   String   @unique // e.g. "CIV-001", "EL-018"
-  discipline  String   // CIV, EL, PL, HVAC, FF, ELVE (legacy field, kept for compatibility)
-  disciplineCode String? // links to Discipline.code (nullable for migration)
-  category    String   @default("TRANSMITTAL") // category code (mirrors discipline's category)
-  type        String?  // SHOP DRAWINGS, SAMPLE, SOURCE APPROVAL, etc.
+  reference   String   @unique
+  discipline  String
+  disciplineCode String?
+  category    String   @default("TRANSMITTAL")
+  type        String?
   description String?
-  parentTransmittalId String? // links to another transmittal (e.g., incoming letter linked to outgoing)
+  alternativeTitle String?
+  parentTransmittalId String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -78,11 +99,11 @@ model Transmittal {
 model Revision {
   id            String   @id @default(cuid())
   transmittalId String
-  revNumber     Int      // 0, 1, 2, ... 7
+  revNumber     Int
   submitDate    DateTime?
   replyDate     DateTime?
-  action        String?  // approved, rejected, withdrawn (3 main actions only)
-  approvalType  String?  // when action=approved: APPROVED(A), APPROVED_AS_NOTED(B), APPROVED_AS_NOTED_RESUBMIT(C), NOT_APPROVED(D), FOR_INFORMATION(E)
+  action        String?
+  approvalType  String?
   notes         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -93,15 +114,14 @@ model Revision {
   @@index([transmittalId])
 }
 
-// Reviews per party (Consultant / MOH)
 model Review {
   id            String   @id @default(cuid())
   transmittalId String
-  party         String   // "CONSULTANT" or "MOH"
-  status        String?  // "Approved", "Rejected", "Pending", "Overdue", "Under Review", "Cancelled"
-  submitDate    DateTime? // when submitted to this party (for MOH: when "Send to MOH" was clicked)
-  submitRev     Int?      // which rev was sent to this party (for MOH)
-  reviewDate    DateTime? // when this party replied
+  party         String
+  status        String?
+  submitDate    DateTime?
+  submitRev     Int?
+  reviewDate    DateTime?
   notes         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -112,16 +132,15 @@ model Review {
   @@index([transmittalId])
 }
 
-// Attachments (images/files) linked to a transmittal
 model Attachment {
   id            String   @id @default(cuid())
   transmittalId String
-  fileName      String   // display name
-  filePath      String   @default("") // relative path for uploaded files
-  fileType      String   @default("") // MIME type
-  fileSize      Int      @default(0)  // bytes
-  url           String?  // external URL (GitHub, Supabase, Vercel, direct link)
-  urlSource     String?  // "github" | "supabase" | "vercel" | "link"
+  fileName      String
+  filePath      String   @default("")
+  fileType      String   @default("")
+  fileSize      Int      @default(0)
+  url           String?
+  urlSource     String?
   createdAt     DateTime @default(now())
 
   transmittal   Transmittal @relation(fields: [transmittalId], references: [id], onDelete: Cascade)
