@@ -112,6 +112,7 @@ const fmtDate = (s: string | null) => {
 };
 
 export default function Home() {
+  const { t, lang, toggleLang } = useI18n();
   const [view, setView] = useState<'dashboard' | 'list' | 'detail' | 'new' | 'import' | 'settings' | 'reports'>('dashboard');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
@@ -480,6 +481,7 @@ export default function Home() {
               <NavButton active={view === 'reports'} onClick={() => setView('reports')} icon={<BarChart3 className="w-4 h-4" />} label="تقارير" />
               <NavButton active={view === 'settings'} onClick={() => setView('settings')} icon={<Settings className="w-4 h-4" />} label="الإعدادات" />
               <NavButton active={view === 'import'} onClick={() => setView('import')} icon={<Upload className="w-4 h-4" />} label="استيراد" />
+            <Button onClick={toggleLang} variant="outline" size="sm" className="gap-1.5 px-3"><span className="text-base">{lang === "ar" ? "🇬🇧" : "🇸🇦"}</span><span className="hidden sm:inline text-xs font-semibold">{lang === "ar" ? "EN" : "ع"}</span></Button>
             </nav>
           </div>
         </div>

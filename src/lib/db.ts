@@ -95,3 +95,14 @@ export async function ensureSeedData(): Promise<void> {
 if (process.env.NODE_ENV === 'production') {
   ensureSeedData().catch(() => {});
 }
+
+export async function ensureMigrations(): Promise<void> {
+  try {
+    const colExists = async (table: string, col: string): Promise<boolean> => {
+      try { const r = await db.$queryRawUnsafe(`PRAGMA table_info("${table}")`) as any[]; return r.some((x: any) => x.name === col); } catch { return false; }
+    };
+    for (const [t, c] of [['Transmittal','alternativeTitle'],['Transmittal','disciplineCode'],['Transmittal','parentTransmittalId'],['Category','labelEn'],['Category','templatePath'],['Category','templateType'],['Discipline','labelEn'],['DocType','labelEn'],['DocType','categoryCode'],['Attachment','url'],['Attachment','urlSource']]) {
+      if (!(await colExists(t, c))) await db.$executeRawUnsafe(`ALTER TABLE "${t}" ADD COLUMN "${c}" TEXT`);
+    }
+  } catch (e) { console.error('[migrations]', e); }
+}
