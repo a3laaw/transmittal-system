@@ -367,5 +367,12 @@
   "msg.saveFailed": "فشل الحفظ",
   "msg.error": "خطأ",
   "msg.saving": "جاري الحفظ...",
-  "msg.codeLabelRequired": "الكود والاسم مطلوبان"
+  "msg.codeLabelRequired": "الكود والاسم مطلوبان",
+  "field.submitDateOnlyHint": "أدخل تاريخ إرسال المراجعة فقط. الإجراء وتاريخ الرد يتم تسجيلهم عند رد الاستشاري.",
+  "dialog.addRevisionNote": "ملاحظة: سيتم تسجيل المراجعة بانتظار رد الاستشاري. عند الرد، استخدم \"تسجيل رد الاستشاري\" لإضافة الإجراء وتاريخ الرد.",
+  "dialog.editTransmittal": "تعديل المستند",
+  "dialog.editTransmittalDesc": "تعديل الوصف والنوع والعنوان البديل",
+  "field.alternativeTitle": "عنوان بديل",
+  "field.alternativeTitlePlaceholder": "عنوان بديل للمرجع (اختياري)",
+  "field.alternativeTitleHint": "يظهر في التقارير بدلاً من المرجع لو وُجد"
 }

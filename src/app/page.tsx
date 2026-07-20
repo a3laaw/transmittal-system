@@ -47,6 +47,7 @@ type Transmittal = {
   category?: string;
   type: string | null;
   description: string | null;
+  alternativeTitle?: string | null;
   createdAt: string;
   revisionsCount: number;
   lastSubmitDate: string | null;
@@ -1036,6 +1037,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
 }) {
   const { t, lang } = useI18n();
   const [showRevDialog, setShowRevDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const { toast } = useToast();
 
   const latestRevNumber = detail.revisions.length > 0 ? detail.revisions[detail.revisions.length - 1].revNumber : 0;
@@ -1183,6 +1185,8 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> {t('common.refresh')}</Button>
           <Button variant="outline" size="sm" onClick={onCopy} className="gap-1.5">
             <Copy className="w-4 h-4" /> {t('detail.copyNew')}</Button>
+          <Button variant="outline" size="sm" onClick={() => setShowEditDialog(true)} className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50">
+            <Pencil className="w-4 h-4" /> {t('common.edit')}</Button>
           <Button variant="outline" size="sm" onClick={onSendToMoh}
             disabled={detail.mohStatus.status !== 'not_sent' && detail.mohStatus.status !== 'reviewed'}
             className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50">
@@ -1551,6 +1555,106 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
       )}
     </div>
   );
+
+  {/* Edit Transmittal Dialog — edit description, type, alternative title */}
+  {showEditDialog && (
+    <EditTransmittalDialog
+      transmittal={detail}
+      onOpenChange={(v) => !v && setShowEditDialog(false)}
+      onSaved={() => { setShowEditDialog(false); onRefresh(); }}
+    />
+  )}
+}
+
+/* ============ EDIT TRANSMITTAL DIALOG ============ */
+function EditTransmittalDialog({ transmittal, onOpenChange, onSaved }: {
+  transmittal: TransmittalDetail;
+  onOpenChange: (v: boolean) => void;
+  onSaved: () => void;
+}) {
+  const { t } = useI18n();
+  const { toast } = useToast();
+  const [description, setDescription] = useState(transmittal.description || '');
+  const [type, setType] = useState(transmittal.type || '');
+  const [alternativeTitle, setAlternativeTitle] = useState(transmittal.alternativeTitle || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const r = await fetch(`/api/transmittals/${transmittal.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: description.trim() || null,
+          type: type.trim() || null,
+          alternativeTitle: alternativeTitle.trim() || null,
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || t('msg.saveFailed'));
+      }
+      toast({ title: t('msg.updated'), description: transmittal.reference });
+      onSaved();
+    } catch (e: any) {
+      toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={true} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="w-5 h-5 text-amber-700" />
+            {t('dialog.editTransmittal')} — {transmittal.reference}
+          </DialogTitle>
+          <DialogDescription>{t('dialog.editTransmittalDesc')}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-sm font-semibold">{t('common.description')}</Label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              placeholder={t('new.descExample1')}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm font-semibold">{t('common.type')}</Label>
+            <Input
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              placeholder={t('new.typeExample1')}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm font-semibold">{t('field.alternativeTitle')}</Label>
+            <Input
+              value={alternativeTitle}
+              onChange={(e) => setAlternativeTitle(e.target.value)}
+              placeholder={t('field.alternativeTitlePlaceholder')}
+            />
+            <p className="text-xs text-slate-500">{t('field.alternativeTitleHint')}</p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-amber-700 hover:bg-amber-800 gap-1.5"
+          >
+            {saving ? t('msg.saving') : <><Pencil className="w-4 h-4" /> {t('common.save')}</>}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function AddRevisionDialog({ open, onOpenChange, transmittalId, nextRevNumber, onSaved }: {
@@ -1559,9 +1663,6 @@ function AddRevisionDialog({ open, onOpenChange, transmittalId, nextRevNumber, o
 }) {
   const { t, lang } = useI18n();
   const [submitDate, setSubmitDate] = useState('');
-  const [replyDate, setReplyDate] = useState('');
-  const [action, setAction] = useState('');
-  const [approvalType, setApprovalType] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -1569,33 +1670,29 @@ function AddRevisionDialog({ open, onOpenChange, transmittalId, nextRevNumber, o
   useEffect(() => {
     if (open) {
       setSubmitDate(new Date().toISOString().slice(0, 10));
-      setReplyDate(''); setAction(''); setApprovalType(''); setNotes('');
+      setNotes('');
     }
   }, [open]);
 
   const handleSave = async () => {
+    if (!submitDate) return;
     setSaving(true);
     try {
       const r = await fetch(`/api/transmittals/${transmittalId}/revisions`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           revNumber: nextRevNumber,
-          submitDate: submitDate || null,
-          replyDate: replyDate || null,
-          action: action || null,
-          approvalType: action === 'approved' ? (approvalType || null) : null,
+          submitDate: submitDate,
+          replyDate: null,
+          action: null,
+          approvalType: null,
           notes: notes || null,
         }),
       });
-      if (!r.ok) throw new Error('فشل الحفظ');
+      if (!r.ok) throw new Error(t('msg.saveFailed'));
       onSaved();
     } catch (e: any) { alert(e.message); }
     finally { setSaving(false); }
-  };
-
-  const handleActionChange = (v: string) => {
-    setAction(v);
-    if (v !== 'approved') setApprovalType('');
   };
 
   return (
@@ -1603,58 +1700,27 @@ function AddRevisionDialog({ open, onOpenChange, transmittalId, nextRevNumber, o
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('dialog.addRevisionTitle', {next: nextRevNumber})}</DialogTitle>
-          <DialogDescription>{t('field.revNumberHint')}</DialogDescription>
+          <DialogDescription>{t('field.submitDateOnlyHint')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="bg-emerald-50 border border-emerald-200 rounded p-2 text-sm">
-            <strong>{t('field.revNumber')}</strong> REV.{nextRevNumber} (تلقائي)
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-sm">{t('field.submitDate')}</Label>
-              <Input type="date" value={submitDate} onChange={(e) => setSubmitDate(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm">{t('field.replyDate')}</Label>
-              <Input type="date" value={replyDate} onChange={(e) => setReplyDate(e.target.value)} />
-            </div>
+            <strong>{t('field.revNumber')}</strong> REV.{nextRevNumber} ({t('common.auto')})
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm">{t('field.action')}</Label>
-            <Select value={action} onValueChange={handleActionChange}>
-              <SelectTrigger><SelectValue placeholder={t('field.selectAction')} /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="approved">✅ مقبول</SelectItem>
-                <SelectItem value="rejected">❌ مرفوض</SelectItem>
-                <SelectItem value="withdrawn">🚫 مسحوب</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label className="text-sm">{t('field.submitDateReq')}</Label>
+            <Input type="date" value={submitDate} onChange={(e) => setSubmitDate(e.target.value)} autoFocus />
           </div>
-          {action === 'approved' && (
-            <div className="space-y-1.5 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-              <Label className="text-sm font-semibold text-emerald-800">{t('field.acceptTypeReq')}</Label>
-              <Select value={approvalType} onValueChange={setApprovalType}>
-                <SelectTrigger className="!w-full !h-auto !min-h-[36px] !whitespace-normal !break-words text-left [&_[data-slot=select-value]]:!line-clamp-none [&_[data-slot=select-value]]:!whitespace-normal [&_[data-slot=select-value]]:!break-words"><SelectValue placeholder={t('field.selectAcceptType')} className="whitespace-normal break-words leading-snug" /></SelectTrigger>
-                <SelectContent>
-                  {APPROVAL_TYPES.map(at => (
-                    <SelectItem key={at.code} value={at.code} className="whitespace-normal break-words leading-snug py-2">
-                      <span className="font-bold">({at.letter})</span> {at.label}
-                      <br />
-                      <span className="text-xs text-slate-500">{at.description}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
           <div className="space-y-1.5">
             <Label className="text-sm">{t('common.notes')}</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder={t('field.notesExtra')} />
           </div>
+          <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded p-2">
+            {t('dialog.addRevisionNote')}
+          </p>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={handleSave} disabled={saving || (action === 'approved' && !approvalType)} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'حفظ REV.' + nextRevNumber}</Button>
+          <Button onClick={handleSave} disabled={saving || !submitDate} className="bg-emerald-700 hover:bg-emerald-800">{saving ? t('msg.saving') : `${t('common.save')} REV.${nextRevNumber}`}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

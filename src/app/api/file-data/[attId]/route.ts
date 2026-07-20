@@ -44,11 +44,16 @@ export async function GET(
 
     let resolvedPath = absPath;
     if (!existsSync(absPath)) {
-      const legacyPath = path.join('/home/z/my-project', 'public', 'uploads', transmittalId, filename);
-      if (existsSync(legacyPath)) {
-        resolvedPath = legacyPath;
+      // Try legacy paths (old install locations)
+      const legacyCandidates = [
+        path.join(process.cwd(), 'public', 'uploads', transmittalId, filename),
+        path.join(process.cwd(), 'storage', 'uploads', transmittalId, filename),
+      ];
+      const found = legacyCandidates.find(p => existsSync(p));
+      if (found) {
+        resolvedPath = found;
       } else {
-        return NextResponse.json({ error: 'الملف غير موجود على القرص' }, { status: 404 });
+        return NextResponse.json({ error: 'الملف غير موجود على القرص', searched: [absPath, ...legacyCandidates] }, { status: 404 });
       }
     }
 

@@ -3,49 +3,31 @@ import path from 'path';
 import os from 'os';
 
 /**
- * Path resolution helpers that work in BOTH dev mode (`next dev`) and
- * production standalone mode (`bun .next/standalone/server.js`).
+ * Path resolution helpers that work in BOTH:
+ *  - Dev mode on Linux (`next dev` from /home/z/my-project)
+ *  - Production standalone on Windows (Electron `server.js` from C:\Nova-EDMS\)
+ *  - Production standalone on Linux (server.js from /home/z/my-project/)
  *
- * Why this is needed:
- *  - In dev, `process.cwd()` = /home/z/my-project
- *  - In standalone publish, the server may run from .next/standalone/ or the project root
- *  - Files written to `public/` at runtime are NOT served in standalone mode (404!)
- *  - The `scripts/` dir may or may not be inside the standalone bundle
- *
- * Solution: use absolute paths anchored to /home/z/my-project for source assets
- * (scripts, templates), and a dedicated /home/z/my-project/storage dir for
- * runtime-uploaded files (served via /api/files/... API route, not static).
+ * CRITICAL: Do NOT hardcode '/home/z/my-project' — Windows has no such path!
+ * Use `process.cwd()` (the directory where server.js runs from) instead.
+ * On Electron, server.js runs from the app root folder, so cwd() is correct.
  */
 
-// Absolute anchor to the project source root.
-// This is always correct on the Z.ai platform.
-const PROJECT_ROOT = '/home/z/my-project';
+// Resolve the app root dynamically:
+// - In Electron desktop: process.cwd() = the folder containing server.js (app root)
+// - In dev: process.cwd() = /home/z/my-project
+// - In standalone: process.cwd() = .next/standalone/ or the app root
+const PROJECT_ROOT = process.cwd();
 
 /**
  * Find the Python script `gen_excel_template.py`.
- * Tries the project root first (always exists in dev & standalone on Z.ai),
- * then falls back to cwd-relative paths.
+ * Only used for Excel generation; on Electron/Windows this won't be found
+ * (Excel generation will use a JS fallback or fail gracefully).
  */
 export function findExcelScript(): string {
   const candidates = [
     path.join(PROJECT_ROOT, 'scripts', 'gen_excel_template.py'),
-    path.join(process.cwd(), 'scripts', 'gen_excel_template.py'),
-    path.join(process.cwd(), '..', '..', 'scripts', 'gen_excel_template.py'),
-  ];
-  for (const c of candidates) {
-    if (existsSync(c)) return c;
-  }
-  return candidates[0]; // default; will fail with a clear error
-}
-
-/**
- * Find the Excel template file.
- */
-export function findExcelTemplate(): string {
-  const candidates = [
-    path.join(PROJECT_ROOT, 'public', 'templates', 'TRANSIMITALS_template.xlsx'),
-    path.join(process.cwd(), 'public', 'templates', 'TRANSIMITALS_template.xlsx'),
-    path.join(process.cwd(), '..', '..', 'public', 'templates', 'TRANSIMITALS_template.xlsx'),
+    path.join(PROJECT_ROOT, '.next', 'standalone', 'scripts', 'gen_excel_template.py'),
   ];
   for (const c of candidates) {
     if (existsSync(c)) return c;
@@ -54,7 +36,21 @@ export function findExcelTemplate(): string {
 }
 
 /**
- * Find the Python interpreter. Prefers the venv, falls back to system python3.
+ * Find the Excel template file.
+ */
+export function findExcelTemplate(): string {
+  const candidates = [
+    path.join(PROJECT_ROOT, 'public', 'templates', 'TRANSIMITALS_template.xlsx'),
+    path.join(PROJECT_ROOT, '.next', 'standalone', 'public', 'templates', 'TRANSIMITALS_template.xlsx'),
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  return candidates[0];
+}
+
+/**
+ * Find the Python interpreter. Only relevant on Linux dev environment.
  */
 export function findPython(): string {
   const candidates = [
@@ -66,58 +62,68 @@ export function findPython(): string {
   for (const c of candidates) {
     if (existsSync(c)) return c;
   }
-  return 'python3'; // last resort — rely on PATH
+  return 'python3';
 }
 
 /**
  * Get the persistent storage directory for uploaded files.
- * This is OUTSIDE `public/` so it survives rebuilds, and is served via
- * the /api/files/[transmittalId]/[filename] API route (not static serving).
  *
- * Creates the directory if it doesn't exist.
+ * Strategy:
+ * 1. If DATABASE_URL is set (Electron mode), use a `storage` folder
+ *    INSIDE the Electron userData directory (so it's per-user and writable).
+ * 2. Otherwise, use `<PROJECT_ROOT>/storage` (dev mode on Linux).
+ *
+ * This directory is OUTSIDE `public/` (which is read-only in standalone mode),
+ * and is served via the /api/files/[transmittalId]/[filename] API route.
  */
+let _cachedStorageRoot: string | null = null;
+
 export function getStorageRoot(): string {
-  const candidates = [
-    path.join(PROJECT_ROOT, 'storage'),
-    path.join(process.cwd(), 'storage'),
-    path.join(process.cwd(), '..', '..', 'storage'),
-  ];
+  if (_cachedStorageRoot) return _cachedStorageRoot;
+
+  // In Electron mode, DATABASE_URL is set to a path under userData
+  // We use the same parent directory for storage
+  const dbUrl = process.env.DATABASE_URL || '';
+  const candidates: string[] = [];
+
+  if (dbUrl.startsWith('file:')) {
+    // dbUrl = "file:C:\Users\TOSHIBA\AppData\Roaming\Nova EDMS\db\custom.db"
+    // We want: C:\Users\TOSHIBA\AppData\Roaming\Nova EDMS\storage
+    const dbPath = dbUrl.slice(5);
+    const dbDir = path.dirname(dbPath);
+    const userDataDir = path.dirname(dbDir); // remove "db"
+    candidates.push(path.join(userDataDir, 'storage'));
+  }
+
+  // Dev mode / Linux
+  candidates.push(path.join(PROJECT_ROOT, 'storage'));
+  candidates.push(path.join(process.cwd(), 'storage'));
+
   for (const c of candidates) {
     try {
       mkdirSync(c, { recursive: true });
-      // Verify writable
-      const testFile = path.join(c, `.write-test-${Date.now()}`);
-      try {
-        // Use a simple existence check — mkdirSync already would have thrown
-        return c;
-      } finally {
-        // no-op
-      }
+      _cachedStorageRoot = c;
+      return c;
     } catch {
       continue;
     }
   }
-  // Last resort — use OS temp dir (files will be wiped on reboot, but at least it works)
-  const tmp = path.join(os.tmpdir(), 'transmittal-storage');
+
+  // Last resort — OS temp dir (files will be wiped on reboot)
+  const tmp = path.join(os.tmpdir(), 'nova-edms-storage');
   mkdirSync(tmp, { recursive: true });
+  _cachedStorageRoot = tmp;
   return tmp;
 }
 
 /**
- * Get the IM gateway upload directory (/home/z/my-project/upload).
- *
- * This is where the IM gateway saves pasted images and dropped files
- * (e.g. `pasted_image_1783626027762.png`). These files are NOT under our
- * control — they exist on the server filesystem and may be referenced by
- * users who copied the file_name from an IM message.
- *
- * Returns the absolute path if it exists, otherwise null.
+ * Get the IM gateway upload directory (only on Z.ai Linux platform).
+ * Returns null on Windows/Electron (no such directory exists).
  */
 export function getImUploadDir(): string | null {
   const candidates = [
+    '/home/z/my-project/upload',
     path.join(PROJECT_ROOT, 'upload'),
-    path.join(process.cwd(), 'upload'),
-    path.join(process.cwd(), '..', '..', 'upload'),
   ];
   for (const c of candidates) {
     if (existsSync(c)) return c;
@@ -137,13 +143,12 @@ export function getUploadDir(transmittalId: string): string {
 
 /**
  * Convert an absolute file path on disk to the API URL that serves it.
- * Example: /home/z/my-project/storage/uploads/{id}/123-file.png
- *       →  /api/files/{id}/123-file.png
+ * Example: .../storage/uploads/{id}/123-file.png → /api/files/{id}/123-file.png
+ *          (or /api/uploads/{id}/123-file.png — both routes work)
  */
 export function filePathToApiUrl(absPath: string): string {
   const storageRoot = getStorageRoot();
   const rel = path.relative(storageRoot, absPath);
-  // rel looks like "uploads/{id}/{filename}" on all OSes after path.relative
   const normalized = rel.split(path.sep).filter(Boolean).join('/');
   return `/api/${normalized}`;
 }
@@ -153,11 +158,9 @@ export function filePathToApiUrl(absPath: string): string {
  * filesystem path. Used by the file-serving route and the delete handler.
  */
 export function apiUrlToFilePath(apiUrl: string): string {
-  // Strip leading slash, strip leading "api/"
   let rel = apiUrl.replace(/^\/+/, '');
   if (rel.startsWith('api/')) rel = rel.slice(4);
-  // Now rel = "uploads/{id}/{filename}" or "files/{id}/{filename}"
-  // We normalize "files/" → "uploads/" for backwards compatibility with old records
+  // Normalize "files/" → "uploads/" for backwards compatibility
   if (rel.startsWith('files/')) rel = 'uploads/' + rel.slice(6);
   return path.join(getStorageRoot(), rel);
 }

@@ -367,5 +367,12 @@
   "msg.saveFailed": "Save failed",
   "msg.error": "Error",
   "msg.saving": "Saving...",
-  "msg.codeLabelRequired": "Code and name are required"
+  "msg.codeLabelRequired": "Code and name are required",
+  "field.submitDateOnlyHint": "Enter only the revision submit date. Action and reply date are recorded when the consultant replies.",
+  "dialog.addRevisionNote": "Note: The revision will be recorded as awaiting consultant reply. When they reply, use \"Register Consultant Reply\" to add the action and reply date.",
+  "dialog.editTransmittal": "Edit Document",
+  "dialog.editTransmittalDesc": "Edit description, type, and alternative title",
+  "field.alternativeTitle": "Alternative Title",
+  "field.alternativeTitlePlaceholder": "Alternative title for the reference (optional)",
+  "field.alternativeTitleHint": "Shown in reports instead of reference if present"
 }

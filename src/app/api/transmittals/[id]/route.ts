@@ -44,7 +44,7 @@ export async function GET(
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
-  const { type, description, discipline, parentTransmittalId } = body;
+  const { type, description, discipline, parentTransmittalId, alternativeTitle } = body;
 
   const t = await db.transmittal.update({
     where: { id },
@@ -53,6 +53,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ...(description !== undefined && { description: description || null }),
       ...(discipline && { discipline }),
       ...(parentTransmittalId !== undefined && { parentTransmittalId: parentTransmittalId || null }),
+      ...(alternativeTitle !== undefined && { alternativeTitle: alternativeTitle || null }),
     },
   });
 

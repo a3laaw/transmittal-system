@@ -60,7 +60,8 @@ function startServer() {
 }
 
 function createWindow() {
-  mainWindow = new BrowserWindow({ width: 1400, height: 900, minWidth: 1024, minHeight: 700, title: 'Site Secretary', webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }, autoHideMenuBar: true, center: true, show: false });
+  var preloadPath = path.join(__dirname, 'preload.js');
+  mainWindow = new BrowserWindow({ width: 1400, height: 900, minWidth: 1024, minHeight: 700, title: 'Site Secretary', webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, preload: preloadPath }, autoHideMenuBar: true, center: true, show: false });
   mainWindow.loadURL(SERVER_URL);
   mainWindow.once('ready-to-show', function() { mainWindow.show(); mainWindow.focus(); });
   mainWindow.webContents.setWindowOpenHandler(function(info) { if (info.url.indexOf('http://localhost') === 0) return { action: 'allow' }; shell.openExternal(info.url); return { action: 'deny' }; });
