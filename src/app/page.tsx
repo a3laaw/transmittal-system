@@ -470,17 +470,21 @@ export default function Home() {
                 <FileText className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">سكرتير الموقع</h1>
+                <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">{t("app.name")}</h1>
                 <p className="text-xs text-slate-500 hidden sm:block">Sabah Al Salem South Health Center</p>
               </div>
             </div>
             <nav className="flex items-center gap-1 sm:gap-2 flex-wrap">
-              <NavButton active={view === 'dashboard'} onClick={() => setView('dashboard')} icon={<LayoutDashboard className="w-4 h-4" />} label="الرئيسية" />
-              <NavButton active={view === 'list'} onClick={() => setView('list')} icon={<FileSpreadsheet className="w-4 h-4" />} label="القائمة" />
-              <NavButton active={view === 'new'} onClick={() => setView('new')} icon={<FilePlus className="w-4 h-4" />} label="جديد" />
-              <NavButton active={view === 'reports'} onClick={() => setView('reports')} icon={<BarChart3 className="w-4 h-4" />} label="تقارير" />
-              <NavButton active={view === 'settings'} onClick={() => setView('settings')} icon={<Settings className="w-4 h-4" />} label="الإعدادات" />
-              <NavButton active={view === 'import'} onClick={() => setView('import')} icon={<Upload className="w-4 h-4" />} label="استيراد" />
+              <NavButton active={view === 'dashboard'} onClick={() => setView('dashboard')} icon={<LayoutDashboard className="w-4 h-4" />} label={t("nav.dashboard")} />
+              <NavButton active={view === 'list'} onClick={() => setView('list')} icon={<FileSpreadsheet className="w-4 h-4" />} label={t("nav.list")} />
+              <NavButton active={view === 'new'} onClick={() => setView('new')} icon={<FilePlus className="w-4 h-4" />} label={t("nav.new")} />
+              <NavButton active={view === 'reports'} onClick={() => setView('reports')} icon={<BarChart3 className="w-4 h-4" />} label={t("nav.reports")} />
+              <NavButton active={view === 'settings'} onClick={() => setView('settings')} icon={<Settings className="w-4 h-4" />} label={t("nav.settings")} />
+              <NavButton active={view === 'import'} onClick={() => setView('import')} icon={<Upload className="w-4 h-4" />} label={t("nav.import")} />
+              <Button onClick={toggleLang} variant="outline" size="sm" className="gap-1.5 px-3">
+                <span className="text-base">{lang === 'ar' ? '🇬🇧' : '🇸🇦'}</span>
+                <span className="hidden sm:inline text-xs font-semibold">{lang === 'ar' ? 'EN' : 'ع'}</span>
+              </Button>
             </nav>
           </div>
         </div>

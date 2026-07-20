@@ -95,3 +95,25 @@ export async function ensureSeedData(): Promise<void> {
 if (process.env.NODE_ENV === 'production') {
   ensureSeedData().catch(() => {});
 }
+
+export async function ensureMigrations(): Promise<void> {
+  try {
+    const colExists = async (table: string, col: string): Promise<boolean> => {
+      try {
+        const result = await db.$queryRawUnsafe(`PRAGMA table_info("${table}")`) as any[];
+        return result.some((r: any) => r.name === col);
+      } catch { return false; }
+    };
+    if (!(await colExists('Transmittal', 'alternativeTitle'))) await db.$executeRawUnsafe('ALTER TABLE "Transmittal" ADD COLUMN "alternativeTitle" TEXT');
+    if (!(await colExists('Transmittal', 'disciplineCode'))) await db.$executeRawUnsafe('ALTER TABLE "Transmittal" ADD COLUMN "disciplineCode" TEXT');
+    if (!(await colExists('Transmittal', 'parentTransmittalId'))) await db.$executeRawUnsafe('ALTER TABLE "Transmittal" ADD COLUMN "parentTransmittalId" TEXT');
+    if (!(await colExists('Category', 'labelEn'))) await db.$executeRawUnsafe('ALTER TABLE "Category" ADD COLUMN "labelEn" TEXT');
+    if (!(await colExists('Category', 'templatePath'))) await db.$executeRawUnsafe('ALTER TABLE "Category" ADD COLUMN "templatePath" TEXT');
+    if (!(await colExists('Category', 'templateType'))) await db.$executeRawUnsafe('ALTER TABLE "Category" ADD COLUMN "templateType" TEXT');
+    if (!(await colExists('Discipline', 'labelEn'))) await db.$executeRawUnsafe('ALTER TABLE "Discipline" ADD COLUMN "labelEn" TEXT');
+    if (!(await colExists('DocType', 'labelEn'))) await db.$executeRawUnsafe('ALTER TABLE "DocType" ADD COLUMN "labelEn" TEXT');
+    if (!(await colExists('DocType', 'categoryCode'))) await db.$executeRawUnsafe('ALTER TABLE "DocType" ADD COLUMN "categoryCode" TEXT');
+    if (!(await colExists('Attachment', 'url'))) await db.$executeRawUnsafe('ALTER TABLE "Attachment" ADD COLUMN "url" TEXT');
+    if (!(await colExists('Attachment', 'urlSource'))) await db.$executeRawUnsafe('ALTER TABLE "Attachment" ADD COLUMN "urlSource" TEXT');
+  } catch (e) { console.error('[migrations] Error:', e); }
+}
