@@ -11,6 +11,7 @@ var SERVER_URL = 'http://localhost:' + SERVER_PORT;
 
 function getServerPath() {
   var paths = [
+    path.join(__dirname, 'server.js'),
     path.join(__dirname, '.next-standalone', 'server.js'),
     path.join(__dirname, '.next', 'standalone', 'server.js'),
   ];
@@ -39,7 +40,7 @@ function waitForServer(url, max, interval) {
 function startServer() {
   return new Promise(function(resolve, reject) {
     var serverPath = getServerPath();
-    var serverDir = path.dirname(serverPath);
+    var serverDir = __dirname;
     if (!fs.existsSync(serverPath)) { reject(new Error('Server not found: ' + serverPath)); return; }
     var env = Object.assign({}, process.env, { NODE_ENV: 'production', PORT: String(SERVER_PORT), PROJECT_ROOT: __dirname });
     var pythonPath = getPythonPath();
