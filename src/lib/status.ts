@@ -1,19 +1,24 @@
 /**
  * Status computation helper — replicates LOG_Final.xlsm logic
  * Tracks Consultant status and MOH status separately
+ *
+ * IMPORTANT: status codes are language-neutral. The UI is responsible for
+ * translating them via t(`status.${status}`) with dynamic params (e.g. days).
  */
 
 export type ComputedStatus = {
-  status: string;
-  label: string;
-  color: string; // tailwind classes for badge
+  status: string;     // e.g. "approved", "pending", "overdue", "cancelled"
+  statusKey: string;  // i18n key, e.g. "status.approved"
+  label: string;      // fallback Arabic label (used by API for backward compat)
+  color: string;      // tailwind classes for badge
   emoji: string;
+  daysOpen?: number;  // for overdue/pending statuses
 };
 
 const CONSULTANT_OVERDUE_DAYS = 14;
-const MOH_OVERDUE_DAYS = 30; // MOH usually takes longer
+const MOH_OVERDUE_DAYS = 30;
 
-// Approval types (consultant action codes A-E from the original Excel template)
+// Approval types (consultant action codes A-E)
 export const APPROVAL_TYPES = [
   { code: 'APPROVED',                     label: 'APPROVED',                     letter: 'A', description: 'معتمد' },
   { code: 'APPROVED_AS_NOTED',            label: 'APPROVED AS NOTED',            letter: 'B', description: 'معتمد بملاحظات' },
@@ -38,60 +43,60 @@ export function getApprovalTypeDescription(code: string | null | undefined): str
 }
 
 /**
- * Compute Consultant status based on the latest revision's action/reply
+ * Compute Consultant status based on the latest revision's action/reply.
+ * Returns ComputedStatus with language-neutral `status` field + Arabic fallback `label`.
  */
 export function computeConsultantStatus(
   revisions: { submitDate: Date | null; replyDate: Date | null; action: string | null; approvalType?: string | null }[],
   consultantReview?: { status: string | null; reviewDate: Date | null } | null,
 ): ComputedStatus {
   if (consultantReview?.status === 'Cancelled' || consultantReview?.status === '🚫 Cancelled') {
-    return { status: 'cancelled', label: 'ملغى', color: 'bg-gray-100 text-gray-700 border-gray-300', emoji: '🚫' };
+    return { status: 'cancelled', statusKey: 'status.cancelled', label: 'ملغى', color: 'bg-gray-100 text-gray-700 border-gray-300', emoji: '🚫' };
   }
 
   const activeRevs = revisions.filter(r => r.submitDate !== null);
   if (activeRevs.length === 0) {
-    return { status: 'draft', label: 'مسودة', color: 'bg-gray-100 text-gray-600 border-gray-300', emoji: '📝' };
+    return { status: 'draft', statusKey: 'status.draft', label: 'مسودة', color: 'bg-gray-100 text-gray-600 border-gray-300', emoji: '📝' };
   }
 
   const lastRev = activeRevs[activeRevs.length - 1];
   const action = (lastRev.action || '').toLowerCase().trim();
   const approvalType = lastRev.approvalType || '';
 
-  // Approved — but check approval type: NOT_APPROVED (D) and FOR_INFORMATION (E) are not really "approved"
   if (action === 'approved') {
     if (approvalType === 'NOT_APPROVED') {
-      return { status: 'rejected', label: 'غير معتمد (D)', color: 'bg-red-100 text-red-700 border-red-300', emoji: '❌' };
+      return { status: 'rejected', statusKey: 'status.rejected_d', label: 'غير معتمد (D)', color: 'bg-red-100 text-red-700 border-red-300', emoji: '❌' };
     }
     if (approvalType === 'FOR_INFORMATION') {
-      return { status: 'resubmit', label: 'للمعلومات (E)', color: 'bg-orange-100 text-orange-700 border-orange-300', emoji: '🔔' };
+      return { status: 'resubmit', statusKey: 'status.info_e', label: 'للمعلومات (E)', color: 'bg-orange-100 text-orange-700 border-orange-300', emoji: '🔔' };
     }
     if (approvalType === 'APPROVED_AS_NOTED_RESUBMIT') {
-      return { status: 'resubmit', label: 'معتمد بملاحظات وإعادة (C)', color: 'bg-orange-100 text-orange-700 border-orange-300', emoji: '✅' };
+      return { status: 'resubmit', statusKey: 'status.approved_c', label: 'معتمد بملاحظات وإعادة (C)', color: 'bg-orange-100 text-orange-700 border-orange-300', emoji: '✅' };
     }
     if (approvalType === 'APPROVED_AS_NOTED') {
-      return { status: 'approved', label: 'معتمد بملاحظات (B)', color: 'bg-green-100 text-green-700 border-green-300', emoji: '✅' };
+      return { status: 'approved', statusKey: 'status.approved_b', label: 'معتمد بملاحظات (B)', color: 'bg-green-100 text-green-700 border-green-300', emoji: '✅' };
     }
-    return { status: 'approved', label: 'معتمد (A)', color: 'bg-green-100 text-green-700 border-green-300', emoji: '✅' };
+    return { status: 'approved', statusKey: 'status.approved_a', label: 'معتمد (A)', color: 'bg-green-100 text-green-700 border-green-300', emoji: '✅' };
   }
 
   if (consultantReview?.status === 'Approved' || consultantReview?.status === '✅ Approved') {
-    return { status: 'approved', label: 'معتمد', color: 'bg-green-100 text-green-700 border-green-300', emoji: '✅' };
+    return { status: 'approved', statusKey: 'status.approved', label: 'معتمد', color: 'bg-green-100 text-green-700 border-green-300', emoji: '✅' };
   }
 
   if (action === 'withdrawn') {
-    return { status: 'cancelled', label: 'ملغى', color: 'bg-gray-100 text-gray-700 border-gray-300', emoji: '🚫' };
+    return { status: 'cancelled', statusKey: 'status.cancelled', label: 'ملغى', color: 'bg-gray-100 text-gray-700 border-gray-300', emoji: '🚫' };
   }
 
   if (lastRev.replyDate === null && lastRev.submitDate) {
     const daysOpen = Math.floor((Date.now() - new Date(lastRev.submitDate).getTime()) / (1000 * 60 * 60 * 24));
     if (daysOpen > CONSULTANT_OVERDUE_DAYS) {
-      return { status: 'overdue', label: `متأخر (${daysOpen}ي)`, color: 'bg-red-100 text-red-700 border-red-300', emoji: '🔴' };
+      return { status: 'overdue', statusKey: 'status.overdue_days', label: `متأخر (${daysOpen}ي)`, color: 'bg-red-100 text-red-700 border-red-300', emoji: '🔴', daysOpen };
     }
-    return { status: 'pending', label: 'بانتظار الرد', color: 'bg-yellow-100 text-yellow-700 border-yellow-300', emoji: '⏳' };
+    return { status: 'pending', statusKey: 'status.pending_reply', label: 'بانتظار الرد', color: 'bg-yellow-100 text-yellow-700 border-yellow-300', emoji: '⏳' };
   }
 
   if (action === 'rejected') {
-    return { status: 'resubmit', label: 'إعادة إرسال', color: 'bg-orange-100 text-orange-700 border-orange-300', emoji: '🔔' };
+    return { status: 'resubmit', statusKey: 'status.resubmit', label: 'إعادة إرسال', color: 'bg-orange-100 text-orange-700 border-orange-300', emoji: '🔔' };
   }
 
   // Backward compat: old imported data may have action='pending'
@@ -99,52 +104,50 @@ export function computeConsultantStatus(
     if (lastRev.replyDate === null && lastRev.submitDate) {
       const daysOpen = Math.floor((Date.now() - new Date(lastRev.submitDate).getTime()) / (1000 * 60 * 60 * 24));
       if (daysOpen > CONSULTANT_OVERDUE_DAYS) {
-        return { status: 'overdue', label: `متأخر (${daysOpen}ي)`, color: 'bg-red-100 text-red-700 border-red-300', emoji: '🔴' };
+        return { status: 'overdue', statusKey: 'status.overdue_days', label: `متأخر (${daysOpen}ي)`, color: 'bg-red-100 text-red-700 border-red-300', emoji: '🔴', daysOpen };
       }
     }
-    return { status: 'pending', label: 'بانتظار الرد', color: 'bg-yellow-100 text-yellow-700 border-yellow-300', emoji: '⏳' };
+    return { status: 'pending', statusKey: 'status.pending_reply', label: 'بانتظار الرد', color: 'bg-yellow-100 text-yellow-700 border-yellow-300', emoji: '⏳' };
   }
 
-  return { status: 'pending', label: 'قيد المراجعة', color: 'bg-blue-100 text-blue-700 border-blue-300', emoji: '⏳' };
+  return { status: 'pending', statusKey: 'status.pending_review', label: 'قيد المراجعة', color: 'bg-blue-100 text-blue-700 border-blue-300', emoji: '⏳' };
 }
 
 /**
- * Compute MOH status based on the MOH review (when was it sent, was there a reply?)
+ * Compute MOH status based on the MOH review
  */
 export function computeMohStatus(
   mohReview?: { status: string | null; submitDate: Date | null; reviewDate: Date | null; submitRev: number | null } | null,
 ): ComputedStatus {
   if (!mohReview || !mohReview.submitDate) {
-    return { status: 'not_sent', label: 'لم يُرسل', color: 'bg-gray-100 text-gray-600 border-gray-300', emoji: '📭' };
+    return { status: 'not_sent', statusKey: 'status.moh_not_sent', label: 'لم يُرسل', color: 'bg-gray-100 text-gray-600 border-gray-300', emoji: '📭' };
   }
 
   if (mohReview.status === 'Approved' || mohReview.status === '✅ Approved') {
-    return { status: 'approved', label: 'معتمد بالوزارة', color: 'bg-green-100 text-green-700 border-green-300', emoji: '✅' };
+    return { status: 'approved', statusKey: 'status.moh_approved', label: 'معتمد بالوزارة', color: 'bg-green-100 text-green-700 border-green-300', emoji: '✅' };
   }
 
   if (mohReview.status === 'Cancelled' || mohReview.status === '🚫 Cancelled') {
-    return { status: 'cancelled', label: 'ملغى', color: 'bg-gray-100 text-gray-700 border-gray-300', emoji: '🚫' };
+    return { status: 'cancelled', statusKey: 'status.cancelled', label: 'ملغى', color: 'bg-gray-100 text-gray-700 border-gray-300', emoji: '🚫' };
   }
 
-  // If reviewDate is set, MOH has replied
   if (mohReview.reviewDate) {
     if (mohReview.status === 'Rejected' || mohReview.status === '❌ Rejected') {
-      return { status: 'rejected', label: 'مرفوض بالوزارة', color: 'bg-red-100 text-red-700 border-red-300', emoji: '❌' };
+      return { status: 'rejected', statusKey: 'status.moh_rejected', label: 'مرفوض بالوزارة', color: 'bg-red-100 text-red-700 border-red-300', emoji: '❌' };
     }
-    return { status: 'reviewed', label: 'تمت المراجعة', color: 'bg-blue-100 text-blue-700 border-blue-300', emoji: '📋' };
+    return { status: 'reviewed', statusKey: 'status.moh_reviewed', label: 'تمت المراجعة', color: 'bg-blue-100 text-blue-700 border-blue-300', emoji: '📋' };
   }
 
-  // No reply yet — check overdue
   const daysOpen = Math.floor((Date.now() - new Date(mohReview.submitDate).getTime()) / (1000 * 60 * 60 * 24));
   if (daysOpen > MOH_OVERDUE_DAYS) {
-    return { status: 'overdue', label: `متأخر بالوزارة (${daysOpen}ي)`, color: 'bg-red-100 text-red-700 border-red-300', emoji: '🔴' };
+    return { status: 'overdue', statusKey: 'status.moh_overdue', label: `متأخر بالوزارة (${daysOpen}ي)`, color: 'bg-red-100 text-red-700 border-red-300', emoji: '🔴', daysOpen };
   }
 
-  return { status: 'under_review', label: `قيد المراجعة (${daysOpen}ي)`, color: 'bg-yellow-100 text-yellow-700 border-yellow-300', emoji: '⏳' };
+  return { status: 'under_review', statusKey: 'status.moh_under_review', label: `قيد المراجعة (${daysOpen}ي)`, color: 'bg-yellow-100 text-yellow-700 border-yellow-300', emoji: '⏳', daysOpen };
 }
 
 /**
- * Combined overall status — shows the most critical one
+ * Combined overall status
  */
 export function computeOverallStatus(
   revisions: { submitDate: Date | null; replyDate: Date | null; action: string | null; approvalType?: string | null }[],
@@ -154,30 +157,23 @@ export function computeOverallStatus(
   const consultant = computeConsultantStatus(revisions, consultantReview);
   const moh = computeMohStatus(mohReview);
 
-  // Priority: cancelled > overdue > approved (both) > pending
   if (consultant.status === 'cancelled') return consultant;
 
-  // If consultant approved but not sent to MOH → still "approved" overall
   if (consultant.status === 'approved' && moh.status === 'not_sent') {
     return consultant;
   }
 
-  // If consultant approved and MOH overdue → show MOH overdue
   if (moh.status === 'overdue') return moh;
-
-  // If consultant overdue
   if (consultant.status === 'overdue') return consultant;
 
-  // If both approved
   if (consultant.status === 'approved' && moh.status === 'approved') {
-    return { status: 'approved', label: 'معتمد بالكل', color: 'bg-green-100 text-green-700 border-green-300', emoji: '✅' };
+    return { status: 'approved', statusKey: 'status.overall_approved', label: 'معتمد بالكل', color: 'bg-green-100 text-green-700 border-green-300', emoji: '✅' };
   }
 
-  // Otherwise show consultant status (primary)
   return consultant;
 }
 
-// Fallback for backward compatibility
+// Fallback
 export function computeStatus(
   revisions: { submitDate: Date | null; replyDate: Date | null; action: string | null; approvalType?: string | null }[],
   consultantStatus?: string | null,
@@ -190,6 +186,24 @@ export function computeStatus(
   );
 }
 
+/**
+ * Get color for a revision number — each revision gets a distinct color.
+ * Colors cycle through a palette so they're visually distinguishable.
+ */
+export function getRevisionColor(revNumber: number): string {
+  const colors = [
+    'bg-blue-100 text-blue-700 border-blue-300',       // REV.0
+    'bg-emerald-100 text-emerald-700 border-emerald-300', // REV.1
+    'bg-amber-100 text-amber-700 border-amber-300',    // REV.2
+    'bg-purple-100 text-purple-700 border-purple-300', // REV.3
+    'bg-rose-100 text-rose-700 border-rose-300',       // REV.4
+    'bg-cyan-100 text-cyan-700 border-cyan-300',       // REV.5
+    'bg-indigo-100 text-indigo-700 border-indigo-300', // REV.6
+    'bg-orange-100 text-orange-700 border-orange-300', // REV.7
+  ];
+  return colors[revNumber % colors.length];
+}
+
 // Default disciplines (used as fallback when DB is not yet seeded)
 export const DEFAULT_DISCIPLINES = [
   { code: 'CIV',  label: 'المدنية',     color: 'bg-amber-100 text-amber-700',   prefix: 'CIV-',  categoryCode: 'TRANSMITTAL' },
@@ -198,19 +212,18 @@ export const DEFAULT_DISCIPLINES = [
   { code: 'HVAC', label: 'التكييف',     color: 'bg-rose-100 text-rose-700',     prefix: 'HAVC-', categoryCode: 'TRANSMITTAL' },
   { code: 'FF',   label: 'الحريق',      color: 'bg-red-100 text-red-700',       prefix: 'FF-',   categoryCode: 'TRANSMITTAL' },
   { code: 'ELVE', label: 'المصاعد',     color: 'bg-emerald-100 text-emerald-700', prefix: 'ELEV ', categoryCode: 'TRANSMITTAL' },
-] as const;
+];
 
-// Top-level categories - fallback defaults used when DB not seeded yet
-// (the actual list is now fetched from /api/categories)
 export const DEFAULT_CATEGORIES = [
-  { code: 'TRANSMITTAL', label: 'ترانسميتال',     icon: '📄', color: 'bg-blue-100 text-blue-700' },
-  { code: 'MIR',         label: 'MIR - تفتيش مواد', icon: '🔍', color: 'bg-orange-100 text-orange-700' },
-  { code: 'RFI',         label: 'RFI - طلب معلومات', icon: '❓', color: 'bg-purple-100 text-purple-700' },
-  { code: 'BOOKS',       label: 'كتب',              icon: '📚', color: 'bg-emerald-100 text-emerald-700' },
-] as const;
+  { code: 'TRANSMITTAL', label: 'ترانسميتال', icon: '📤', color: 'bg-blue-100 text-blue-700' },
+  { code: 'MIR',         label: 'MIR',        icon: '📋', color: 'bg-purple-100 text-purple-700' },
+  { code: 'RFI',         label: 'RFI',        icon: '❓', color: 'bg-orange-100 text-orange-700' },
+  { code: 'LETTERS',     label: 'كتب',        icon: '✉️', color: 'bg-emerald-100 text-emerald-700' },
+];
 
-// Backward-compat aliases (used by older code)
+// Backward-compat aliases
 export const CATEGORIES = DEFAULT_CATEGORIES;
+export const DISCIPLINES = DEFAULT_DISCIPLINES;
 
 export function getCategoryLabel(code: string, categories?: { code: string; label: string }[]): string {
   if (categories && categories.length > 0) {
@@ -259,6 +272,3 @@ export function getDisciplinePrefix(code: string, disciplines?: { code: string; 
   }
   return DEFAULT_DISCIPLINES.find(d => d.code === code)?.prefix ?? `${code}-`;
 }
-
-// For backward compatibility with existing UI code
-export const DISCIPLINES = DEFAULT_DISCIPLINES;

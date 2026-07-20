@@ -4,7 +4,7 @@ import { computeOverallStatus, computeConsultantStatus, computeMohStatus } from 
 
 export const dynamic = 'force-dynamic';
 
-// GET /api/transmittals?discipline=CIV&type=SHOP+DRAWINGS&q=...&category=TRANSMITTAL
+// GET /api/transmittals?discipline=CIV&type=SHOP+DRAWINGS&q=...&category=TRANSMITTAL&sortBy=date&sortOrder=desc
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const discipline = searchParams.get('discipline') || '';
@@ -13,6 +13,8 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get('status') || '';
   const mohStatus = searchParams.get('mohStatus') || '';
   const category = searchParams.get('category') || '';
+  const sortBy = searchParams.get('sortBy') || 'date';
+  const sortOrder = searchParams.get('sortOrder') || 'desc';
 
   const where: any = {};
   if (discipline) where.discipline = discipline;
@@ -26,6 +28,12 @@ export async function GET(req: NextRequest) {
     ];
   }
 
+  // Determine Prisma orderBy based on sortBy
+  let prismaOrderBy: any = { reference: 'asc' };
+  if (sortBy === 'reference') prismaOrderBy = { reference: sortOrder === 'asc' ? 'asc' : 'desc' };
+  else if (sortBy === 'discipline') prismaOrderBy = { discipline: sortOrder === 'asc' ? 'asc' : 'desc' };
+  // date and status are computed after fetch — sort in JS below
+
   const transmittals = await db.transmittal.findMany({
     where,
     include: {
@@ -34,7 +42,7 @@ export async function GET(req: NextRequest) {
       parent: { select: { id: true, reference: true, description: true, category: true } },
       children: { select: { id: true, reference: true, description: true, category: true } },
     },
-    orderBy: { reference: 'asc' },
+    orderBy: prismaOrderBy,
   });
 
   const enriched = transmittals.map(t => {
@@ -87,6 +95,21 @@ export async function GET(req: NextRequest) {
   let filtered = enriched;
   if (status) filtered = filtered.filter(t => t.computedStatus.status === status);
   if (mohStatus) filtered = filtered.filter(t => t.mohStatus.status === mohStatus);
+
+  // Sort by date or status (computed fields, not in DB)
+  if (sortBy === 'date') {
+    filtered.sort((a, b) => {
+      const da = new Date(a.lastSubmitDate || a.createdAt).getTime();
+      const db_ = new Date(b.lastSubmitDate || b.createdAt).getTime();
+      return sortOrder === 'asc' ? da - db_ : db_ - da;
+    });
+  } else if (sortBy === 'status') {
+    filtered.sort((a, b) => {
+      const sa = a.computedStatus.status;
+      const sb = b.computedStatus.status;
+      return sortOrder === 'asc' ? sa.localeCompare(sb) : sb.localeCompare(sa);
+    });
+  }
 
   return NextResponse.json({ items: filtered, total: filtered.length });
 }

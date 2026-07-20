@@ -23,6 +23,7 @@ import {
   DEFAULT_DISCIPLINES, getDisciplineLabel, getDisciplineColor,
   CATEGORIES, getCategoryLabel, getCategoryColor, getCategoryIcon,
   APPROVAL_TYPES, getApprovalTypeLetter, getApprovalTypeLabel,
+  getRevisionColor,
 } from '@/lib/status';
 import { useI18n, useFmtDate } from '@/lib/i18n/useI18n';
 import {
@@ -30,7 +31,7 @@ import {
   CheckCircle2, Clock, XCircle, Bell, LayoutDashboard, FileSpreadsheet,
   ArrowLeft, RefreshCw, FilePlus, History, Send, Settings, Building2,
   Trash2, Pencil, Hospital, Building, Copy, MoreVertical, Eye, FileDown,
-  FolderPlus, Folder, FolderOpen, BarChart3, Calendar, Printer, Link,
+  FolderPlus, Folder, FolderOpen, BarChart3, Calendar, Printer, Link, ArrowUpDown,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -52,9 +53,9 @@ type Transmittal = {
   revisionsCount: number;
   lastSubmitDate: string | null;
   lastReplyDate: string | null;
-  computedStatus: { status: string; label: string; color: string; emoji: string };
-  consultantStatus: { status: string; label: string; color: string; emoji: string };
-  mohStatus: { status: string; label: string; color: string; emoji: string };
+  computedStatus: { status: string; statusKey?: string; label: string; color: string; emoji: string; daysOpen?: number };
+  consultantStatus: { status: string; statusKey?: string; label: string; color: string; emoji: string; daysOpen?: number };
+  mohStatus: { status: string; statusKey?: string; label: string; color: string; emoji: string; daysOpen?: number };
   mohSubmitDate: string | null;
   mohSubmitRev: number | null;
   mohReviewDate: string | null;
@@ -127,6 +128,8 @@ export default function Home() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
+  const [sortBy, setSortBy] = useState<'date' | 'reference' | 'discipline' | 'status'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [types, setTypes] = useState<string[]>([]);
   const [docTypes, setDocTypes] = useState<{ id: string; code: string; label: string; transmittalsCount?: number }[]>([]);
   const { toast } = useToast();
@@ -195,16 +198,18 @@ export default function Home() {
       if (search) params.set('q', search);
       if (filterStatus !== 'all') params.set('status', filterStatus);
       if (filterType !== 'all') params.set('type', filterType);
+      params.set('sortBy', sortBy);
+      params.set('sortOrder', sortOrder);
       const r = await fetch(`/api/transmittals?${params}`);
       if (!r.ok) throw new Error(t('msg.loadListFailed'));
       const data = await r.json();
       setTransmittals(data.items);
     } catch (e: any) {
-      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
+      toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
-  }, [filterCategory, filterDiscipline, search, filterStatus, filterType, toast]);
+  }, [filterCategory, filterDiscipline, search, filterStatus, filterType, sortBy, sortOrder, toast]);
 
   const fetchDetail = useCallback(async (id: string) => {
     setLoading(true);
@@ -504,6 +509,10 @@ export default function Home() {
             onFilterStatus={setFilterStatus}
             filterType={filterType}
             onFilterType={setFilterType}
+            sortBy={sortBy}
+            onSortBy={setSortBy}
+            sortOrder={sortOrder}
+            onSortOrder={setSortOrder}
             types={types}
             disciplines={disciplines}
             categories={categories}
@@ -810,7 +819,7 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
                     <TableCell className="font-mono font-semibold">{item.reference}</TableCell>
                     <TableCell><Badge variant="secondary" className={getDisciplineColor(item.discipline, disciplines)}>{getDisciplineLabel(item.discipline, disciplines)}</Badge></TableCell>
                     <TableCell className="text-sm text-slate-700 max-w-md truncate">{item.description || '—'}</TableCell>
-                    <TableCell className="text-center"><Badge variant="outline" className={item.status.color}>{item.status.emoji} {item.status.label}</Badge></TableCell>
+                    <TableCell className="text-center"><Badge variant="outline" className={item.status.color}>{item.status.emoji} {t(item.status.statusKey || 'status.' + item.status.status, item.status.daysOpen !== undefined ? {days: item.status.daysOpen} : {})}</Badge></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -835,7 +844,7 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
                     <TableCell className="font-mono font-semibold">{item.reference}</TableCell>
                     <TableCell><Badge variant="secondary" className={getDisciplineColor(item.discipline, disciplines)}>{getDisciplineLabel(item.discipline, disciplines)}</Badge></TableCell>
                     <TableCell className="text-sm text-slate-700 max-w-md truncate">{item.description || '—'}</TableCell>
-                    <TableCell className="text-center"><Badge variant="outline" className={item.status.color}>{item.status.emoji} {item.status.label}</Badge></TableCell>
+                    <TableCell className="text-center"><Badge variant="outline" className={item.status.color}>{item.status.emoji} {t(item.status.statusKey || 'status.' + item.status.status, item.status.daysOpen !== undefined ? {days: item.status.daysOpen} : {})}</Badge></TableCell>
                     <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                       <Button size="sm" variant="outline" disabled><Send className="w-3 h-3" /></Button>
                     </TableCell>
@@ -851,12 +860,16 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
 }
 
 /* ============ LIST VIEW ============ */
-function ListView({ items, loading, search, onSearch, filterCategory, onFilterCategory, filterDiscipline, onFilterDiscipline, filterStatus, onFilterStatus, filterType, onFilterType, types, disciplines, categories, onOpenDetail, onRefresh, onSendToMoh, onCopy, onDownloadExcel, onRegisterRevision, onRegisterConsultantReply, onRegisterMohReply }: {
+function ListView({ items, loading, search, onSearch, filterCategory, onFilterCategory, filterDiscipline, onFilterDiscipline, filterStatus, onFilterStatus, filterType, onFilterType, sortBy, onSortBy, sortOrder, onSortOrder, types, disciplines, categories, onOpenDetail, onRefresh, onSendToMoh, onCopy, onDownloadExcel, onRegisterRevision, onRegisterConsultantReply, onRegisterMohReply }: {
   items: Transmittal[]; loading: boolean; search: string; onSearch: (s: string) => void;
   filterCategory: string; onFilterCategory: (s: string) => void;
   filterDiscipline: string; onFilterDiscipline: (s: string) => void;
   filterStatus: string; onFilterStatus: (s: string) => void;
   filterType: string; onFilterType: (s: string) => void;
+  sortBy: 'date' | 'reference' | 'discipline' | 'status';
+  onSortBy: (s: 'date' | 'reference' | 'discipline' | 'status') => void;
+  sortOrder: 'asc' | 'desc';
+  onSortOrder: (s: 'asc' | 'desc') => void;
   types: string[]; disciplines: Discipline[]; categories: Category[];
   onOpenDetail: (id: string) => void; onRefresh: () => void; onSendToMoh: (id: string, reference?: string, latestRev?: number) => void;
   onCopy: (id: string, reference: string, description?: string) => void;
@@ -875,9 +888,29 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div><h2 className="text-2xl font-bold text-slate-900">{t('list.title')}</h2>
-          <p className="text-sm text-slate-500 mt-1">{items.length} نتيجة</p></div>
-        <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> {t('common.refresh')}</Button>
+          <p className="text-sm text-slate-500 mt-1">{items.length} {t('common.results')}</p></div>
+        <div className="flex items-center gap-2">
+          <Select value={sortBy} onValueChange={(v) => onSortBy(v as any)}>
+            <SelectTrigger className="w-[140px] h-8 text-xs"><ArrowUpDown className="w-3 h-3 ml-1" /><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="date">{t('list.sortByDate')}</SelectItem>
+              <SelectItem value="reference">{t('list.sortByRef')}</SelectItem>
+              <SelectItem value="discipline">{t('list.sortByDiscipline')}</SelectItem>
+              <SelectItem value="status">{t('list.sortByStatus')}</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-2"
+            onClick={() => onSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+            title={sortOrder === 'asc' ? t('list.sortAsc') : t('list.sortDesc')}
+          >
+            {sortOrder === 'asc' ? '↑' : '↓'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> {t('common.refresh')}</Button>
+        </div>
       </div>
 
       <Card className="border-0 shadow-sm"><CardContent className="p-4">
@@ -1032,7 +1065,7 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
 /* ============ DETAIL VIEW ============ */
 function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloadExcel, onSendToMoh, onCopy, onOpenDetail }: {
   detail: TransmittalDetail; loading: boolean; disciplines: Discipline[];
-  onBack: () => void; onRefresh: () => void; onDownloadExcel: () => void; onSendToMoh: () => void;
+  onBack: () => void; onRefresh: () => void; onDownloadExcel: (reference?: string, description?: string) => void; onSendToMoh: () => void;
   onCopy: () => void; onOpenDetail: (id: string) => void;
 }) {
   const { t, lang } = useI18n();
@@ -1192,7 +1225,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
             className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50">
             <Send className="w-4 h-4" /> {t('dialog.sendRevToMoh', {rev: latestRevNumber})}
           </Button>
-          <Button size="sm" onClick={onDownloadExcel} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
+          <Button size="sm" onClick={() => onDownloadExcel()} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
             <Download className="w-4 h-4" /> {t('detail.downloadExcel')}</Button>
         </div>
       </div>
@@ -1202,7 +1235,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-2xl font-bold text-slate-900 font-mono">{detail.reference}</h2>
             <Badge variant="secondary" className={getDisciplineColor(detail.discipline, disciplines)}>{getDisciplineLabel(detail.discipline, disciplines)} · {detail.discipline}</Badge>
-            <Badge variant="outline" className={detail.computedStatus.color}>{detail.computedStatus.emoji} {detail.computedStatus.label}</Badge>
+            <Badge variant="outline" className={detail.computedStatus.color}>{detail.computedStatus.emoji} {t(detail.computedStatus.statusKey || 'status.' + detail.computedStatus.status, detail.computedStatus.daysOpen !== undefined ? {days: detail.computedStatus.daysOpen} : {})}</Badge>
           </div>
           {detail.type && <p className="text-sm text-slate-600">{t('detail.typeLabel', {type: detail.type})}</p>}
           {detail.description && (
@@ -1256,7 +1289,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
         <Card className="border-0 shadow-sm"><CardContent className="p-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-semibold text-slate-800 flex items-center gap-2"><Building2 className="w-5 h-5" /> {t('detail.consultant')}</h3>
-            <Badge variant="outline" className={detail.consultantStatus.color}>{detail.consultantStatus.emoji} {detail.consultantStatus.label}</Badge>
+            <Badge variant="outline" className={detail.consultantStatus.color}>{detail.consultantStatus.emoji} {t(detail.consultantStatus.statusKey || 'status.' + detail.consultantStatus.status, detail.consultantStatus.daysOpen !== undefined ? {days: detail.consultantStatus.daysOpen} : {})}</Badge>
           </div>
           <dl className="space-y-1 text-sm">
             <div className="flex justify-between"><dt className="text-slate-500">{t('detail.lastSubmit')}</dt><dd>{fmtDate(detail.lastSubmitDate)}</dd></div>
@@ -1266,7 +1299,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
         <Card className="border-0 shadow-sm"><CardContent className="p-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-semibold text-slate-800 flex items-center gap-2"><Hospital className="w-5 h-5 text-blue-700" /> {t('detail.mohFull')}</h3>
-            <Badge variant="outline" className={detail.mohStatus.color}>{detail.mohStatus.emoji} {detail.mohStatus.label}</Badge>
+            <Badge variant="outline" className={detail.mohStatus.color}>{detail.mohStatus.emoji} {t(detail.mohStatus.statusKey || 'status.' + detail.mohStatus.status, detail.mohStatus.daysOpen !== undefined ? {days: detail.mohStatus.daysOpen} : {})}</Badge>
           </div>
           <dl className="space-y-1 text-sm">
             <div className="flex justify-between"><dt className="text-slate-500">{t('detail.sendToMoh')}</dt><dd>{fmtDate(detail.mohSubmitDate)}</dd></div>
@@ -1296,6 +1329,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                 <TableHead className="text-center">{t('field.replyDate')}</TableHead>
                 <TableHead className="text-center">{t('field.action')}</TableHead>
                 <TableHead className="text-right">{t('common.notes')}</TableHead>
+                <TableHead className="text-center">{t('common.download')}</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {detail.revisions.map((r) => {
@@ -1303,28 +1337,43 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                   let actionColor: string;
                   const act = (r.action || '').toLowerCase().trim();
                   if (act === 'approved') {
-                    if (r.approvalType === 'NOT_APPROVED') { actionLabel = '(D) NOT APPROVED — غير معتمد'; actionColor = 'text-red-700'; }
-                    else if (r.approvalType === 'FOR_INFORMATION') { actionLabel = '(E) FOR INFORMATION — للمعلومات'; actionColor = 'text-orange-700'; }
-                    else if (r.approvalType === 'APPROVED_AS_NOTED_RESUBMIT') { actionLabel = '(C) APPROVED AS NOTED & RESUBMIT — معتمد بملاحظات وإعادة'; actionColor = 'text-orange-700'; }
-                    else if (r.approvalType === 'APPROVED_AS_NOTED') { actionLabel = '(B) APPROVED AS NOTED — معتمد بملاحظات'; actionColor = 'text-emerald-700'; }
-                    else if (r.approvalType === 'APPROVED') { actionLabel = '(A) APPROVED — معتمد'; actionColor = 'text-emerald-700'; }
-                    else { actionLabel = '✅ معتمد'; actionColor = 'text-emerald-700'; } // old data without approvalType
+                    if (r.approvalType === 'NOT_APPROVED') { actionLabel = `(D) ${getApprovalTypeLabel('NOT_APPROVED')} — ${t('status.rejected_d')}`; actionColor = 'text-red-700'; }
+                    else if (r.approvalType === 'FOR_INFORMATION') { actionLabel = `(E) ${getApprovalTypeLabel('FOR_INFORMATION')} — ${t('status.info_e')}`; actionColor = 'text-orange-700'; }
+                    else if (r.approvalType === 'APPROVED_AS_NOTED_RESUBMIT') { actionLabel = `(C) ${getApprovalTypeLabel('APPROVED_AS_NOTED_RESUBMIT')} — ${t('status.approved_c')}`; actionColor = 'text-orange-700'; }
+                    else if (r.approvalType === 'APPROVED_AS_NOTED') { actionLabel = `(B) ${getApprovalTypeLabel('APPROVED_AS_NOTED')} — ${t('status.approved_b')}`; actionColor = 'text-emerald-700'; }
+                    else if (r.approvalType === 'APPROVED') { actionLabel = `(A) ${getApprovalTypeLabel('APPROVED')} — ${t('status.approved_a')}`; actionColor = 'text-emerald-700'; }
+                    else { actionLabel = `✅ ${t('status.approved')}`; actionColor = 'text-emerald-700'; }
                   } else if (act === 'rejected') {
-                    actionLabel = '❌ مرفوض'; actionColor = 'text-red-700';
+                    actionLabel = `❌ ${t('status.resubmit')}`; actionColor = 'text-red-700';
                   } else if (act === 'withdrawn') {
-                    actionLabel = '🚫 مسحوب'; actionColor = 'text-gray-600';
+                    actionLabel = `🚫 ${t('status.cancelled')}`; actionColor = 'text-gray-600';
                   } else if (act === 'pending') {
-                    actionLabel = '⏳ بانتظار الرد'; actionColor = 'text-yellow-700'; // backward compat with old data
+                    actionLabel = `⏳ ${t('status.pending_reply')}`; actionColor = 'text-yellow-700';
                   } else {
                     actionLabel = r.action || '—'; actionColor = 'text-yellow-700';
                   }
+                  // Distinct color per revision number
+                  const revColor = getRevisionColor(r.revNumber);
                   return (
                     <TableRow key={r.id}>
-                      <TableCell className="text-center font-bold">REV.{r.revNumber}</TableCell>
+                      <TableCell className="text-center">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${revColor}`}>REV.{r.revNumber}</span>
+                      </TableCell>
                       <TableCell className="text-center text-sm">{fmtDate(r.submitDate)}</TableCell>
                       <TableCell className="text-center text-sm">{fmtDate(r.replyDate)}</TableCell>
                       <TableCell className={`text-center font-semibold ${actionColor}`}>{actionLabel}</TableCell>
                       <TableCell className="text-sm text-slate-600">{r.notes || '—'}</TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 gap-1 text-xs"
+                          onClick={() => onDownloadExcel(`${detail.reference}-REV.${r.revNumber}`, detail.description || '')}
+                          title={`${t('detail.downloadExcelForRev')} REV.${r.revNumber}`}
+                        >
+                          <FileDown className="w-3 h-3" /> REV.{r.revNumber}
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   );
                 })}
@@ -2095,7 +2144,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
     if (dateFrom) params.set('from', dateFrom);
     if (dateTo) params.set('to', dateTo);
     params.set('_', String(Date.now())); // cache-buster
-    toast({ title: 'جاري توليد التقرير', description: 'سيتم تنزيل ملف Excel خلال لحظات' });
+    toast({ title: t('msg.generatingExcel'), description: t('reports.willDownloadSoon') });
     try {
       const res = await fetch(`/api/reports/export?${params}`, { cache: 'no-store' });
       if (!res.ok) {
@@ -2113,6 +2162,89 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
       setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
     } catch (e: any) {
       toast({ title: t('msg.downloadError'), description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const handlePrintReport = async () => {
+    // Build a clean printable HTML with the report table
+    const printHtml = `
+<!DOCTYPE html>
+<html lang="${lang}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}">
+<head>
+<meta charset="utf-8">
+<title>${t('reports.title')}</title>
+<style>
+  body { font-family: 'Cairo', 'Segoe UI', sans-serif; padding: 20px; color: #1e293b; }
+  h1 { color: #0f766e; margin-bottom: 8px; }
+  .meta { color: #64748b; font-size: 13px; margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: ${lang === 'ar' ? 'right' : 'left'}; }
+  th { background: #f1f5f9; font-weight: 700; }
+  tr:nth-child(even) { background: #fafafa; }
+  .header-row { background: #ecfeff !important; font-weight: 700; }
+  @media print { body { padding: 0; } }
+</style>
+</head>
+<body>
+  <h1>${t('reports.title')}</h1>
+  <div class="meta">
+    ${t('common.mainCategory')}: ${filterCategory === 'all' ? t('common.all') : filterCategory} ·
+    ${t('common.discipline')}: ${filterDiscipline === 'all' ? t('common.all') : filterDiscipline} ·
+    ${t('reports.dateFrom')}: ${dateFrom || '—'} · ${t('reports.dateTo')}: ${dateTo || '—'} ·
+    ${items.length} ${t('common.results')}
+  </div>
+  <table>
+    <thead>
+      <tr class="header-row">
+        <th>${t('common.reference')}</th>
+        <th>${t('common.description')}</th>
+        <th>${t('common.discipline')}</th>
+        <th>${t('common.type')}</th>
+        <th>${t('reports.rev.submit')}</th>
+        <th>${t('reports.rev.reply')}</th>
+        <th>${t('reports.rev.action')}</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${items.map((it: any) => {
+        const latestRev = it.revisions && it.revisions.length > 0
+          ? it.revisions[it.revisions.length - 1]
+          : null;
+        return `<tr>
+          <td style="font-family: monospace; font-weight: 700;">${it.reference}</td>
+          <td>${(it.description || '').replace(/</g, '&lt;')}</td>
+          <td>${it.discipline || '—'}</td>
+          <td>${it.type || '—'}</td>
+          <td>${latestRev?.submitDate ? new Date(latestRev.submitDate).toLocaleDateString() : '—'}</td>
+          <td>${latestRev?.replyDate ? new Date(latestRev.replyDate).toLocaleDateString() : '—'}</td>
+          <td>${latestRev?.action || '—'}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>
+</body>
+</html>`;
+
+    // Use Electron's printContent IPC if available (cleaner output)
+    const electronAPI = (window as any).electronAPI;
+    if (electronAPI && electronAPI.printContent) {
+      try {
+        await electronAPI.printContent(printHtml);
+        return;
+      } catch (e) {
+        console.warn('Electron print failed, falling back to window.print()', e);
+      }
+    }
+    // Fallback: open new window and print
+    const printWin = window.open('', '_blank', 'width=1024,height=768');
+    if (printWin) {
+      printWin.document.write(printHtml);
+      printWin.document.close();
+      printWin.focus();
+      setTimeout(() => printWin.print(), 500);
+    } else {
+      // Last resort — print current page
+      window.print();
     }
   };
 
@@ -2173,8 +2305,8 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={fetchReport} disabled={loading}>
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> {t('common.refresh')}</Button>
-          <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-1.5">
-            <Printer className="w-4 h-4" /> {t('common.print')}</Button>
+          <Button variant="outline" size="sm" onClick={handlePrintReport} className="gap-1.5">
+            <Printer className="w-4 h-4" /> {t('reports.printFull')}</Button>
           <Button size="sm" onClick={handleExportExcel} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
             <FileDown className="w-4 h-4" /> {t('reports.exportExcel')}</Button>
         </div>
@@ -3411,22 +3543,15 @@ function RegisterRevisionDialog({ target, onClose, onConfirm }: {
 }) {
   const { t, lang } = useI18n();
   const [submitDate, setSubmitDate] = useState(new Date().toISOString().slice(0, 10));
-  const [replyDate, setReplyDate] = useState('');
-  const [action, setAction] = useState('');
-  const [approvalType, setApprovalType] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
   const handleConfirm = async () => {
+    if (!submitDate) return;
     setSaving(true);
-    await onConfirm(submitDate, replyDate, action, approvalType, notes);
+    // Only submit date + notes — action/replyDate are recorded via ConsultantReplyDialog
+    await onConfirm(submitDate, '', '', '', notes);
     setSaving(false);
-  };
-
-  // When action changes, reset approvalType if not "approved"
-  const handleActionChange = (v: string) => {
-    setAction(v);
-    if (v !== 'approved') setApprovalType('');
   };
 
   return (
@@ -3438,7 +3563,7 @@ function RegisterRevisionDialog({ target, onClose, onConfirm }: {
             {t('dialog.registerRevisionTitle', {ref: target.reference})}
           </DialogTitle>
           <DialogDescription>
-            {t('dialog.registerRevisionDesc', {next: target.nextRev})}
+            {t('field.submitDateOnlyHint')}
           </DialogDescription>
         </DialogHeader>
 
@@ -3450,57 +3575,24 @@ function RegisterRevisionDialog({ target, onClose, onConfirm }: {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-sm">{t('field.submitDateReq')}</Label>
-              <Input type="date" value={submitDate} onChange={(e) => setSubmitDate(e.target.value)} required />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm">{t('field.replyDateOptional')}</Label>
-              <Input type="date" value={replyDate} onChange={(e) => setReplyDate(e.target.value)} />
-            </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm font-semibold">{t('field.submitDateReq')}</Label>
+            <Input type="date" value={submitDate} onChange={(e) => setSubmitDate(e.target.value)} required autoFocus />
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-sm">{t('field.action')}</Label>
-            <Select value={action} onValueChange={handleActionChange}>
-              <SelectTrigger><SelectValue placeholder={t('field.selectAction')} /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="approved">✅ مقبول</SelectItem>
-                <SelectItem value="rejected">❌ مرفوض</SelectItem>
-                <SelectItem value="withdrawn">🚫 مسحوب</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label className="text-sm">{t('common.notes')}</Label>
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder={t('field.notesExtra')} />
           </div>
 
-          {/* Approval type sub-dropdown — only visible when action=approved */}
-          {action === 'approved' && (
-            <div className="space-y-1.5 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-              <Label className="text-sm font-semibold text-emerald-800">{t('field.acceptTypeReq')}</Label>
-              <Select value={approvalType} onValueChange={setApprovalType}>
-                <SelectTrigger className="!w-full !h-auto !min-h-[36px] !whitespace-normal !break-words text-left [&_[data-slot=select-value]]:!line-clamp-none [&_[data-slot=select-value]]:!whitespace-normal [&_[data-slot=select-value]]:!break-words"><SelectValue placeholder={t('field.selectAcceptType')} className="whitespace-normal break-words leading-snug" /></SelectTrigger>
-                <SelectContent>
-                  {APPROVAL_TYPES.map(at => (
-                    <SelectItem key={at.code} value={at.code} className="whitespace-normal break-words leading-snug py-2">
-                      <span className="font-bold">({at.letter})</span> {at.label}
-                      <br />
-                      <span className="text-xs text-slate-500">{at.description}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <Label className="text-sm">{t('field.notesOptional')}</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder={t('field.reviewNotes')} />
-          </div>
+          <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded p-2">
+            {t('dialog.addRevisionNote')}
+          </p>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button onClick={handleConfirm} disabled={saving || !submitDate || (action === 'approved' && !approvalType)} className="bg-blue-700 hover:bg-blue-800 gap-1.5">
+          <Button onClick={handleConfirm} disabled={saving || !submitDate} className="bg-blue-700 hover:bg-blue-800 gap-1.5">
             <History className="w-4 h-4" />
             {saving ? t('msg.registering') : t('msg.registerRev', {rev: target.nextRev})}
           </Button>
@@ -3524,10 +3616,16 @@ function ConsultantReplyDialog({ target, onClose, onConfirm }: {
   const [saving, setSaving] = useState(false);
 
   const handleConfirm = async () => {
-    if (!replyDate || !action) return;
-    if (action === 'approved' && !approvalType) return;
+    if (!replyDate || !action) {
+      alert(t('dialog.replyRequiredFields'));
+      return;
+    }
+    if (action === 'approved' && !approvalType) {
+      alert(t('dialog.approvalTypeRequired'));
+      return;
+    }
     setSaving(true);
-    await onConfirm(replyDate, action, approvalType, notes);
+    await onConfirm(replyDate, action, approvalType, notes || '');
     setSaving(false);
   };
 
