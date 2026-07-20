@@ -18,14 +18,20 @@ build/
 *.db-journal
 db/
 
-# Uploads (user files — don't commit to git)
-public/uploads/
+# Storage
+storage/
+upload/
 
-# Python scripts cache
-__pycache__/
-*.pyc
+# Downloads
+download/
 
-# OS files
+# Logs
+*.log
+dev.log
+build.log
+server.log
+
+# OS
 .DS_Store
 Thumbs.db
 
@@ -33,20 +39,6 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Logs
-*.log
-dev.log
-server.log
-
-# Vercel
-.vercel
-
-# Prisma
-prisma/migrations/
-
-# Scripts output
-scripts/output/
-download/
-download/
-storage/
+# Build artifacts
 *.zip
+tsconfig.tsbuildinfo
