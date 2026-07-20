@@ -44,41 +44,16 @@ export async function GET(
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
-  const { reference, type, description, alternativeTitle, discipline, disciplineCode, category, parentTransmittalId } = body;
-
-  // Validate reference uniqueness if updating
-  if (reference !== undefined) {
-    const ref = (reference || '').trim();
-    if (!ref) {
-      return NextResponse.json({ error: 'المرجع لا يمكن أن يكون فارغاً' }, { status: 400 });
-    }
-    const existing = await db.transmittal.findFirst({ where: { reference: ref, NOT: { id } } });
-    if (existing) {
-      return NextResponse.json({ error: `المرجع ${ref} مستخدم بالفعل` }, { status: 409 });
-    }
-  }
-
-  // If discipline is changing, also update category if not explicitly provided
-  let effectiveCategory = category;
-  if (discipline && category === undefined) {
-    const disc = await db.discipline.findUnique({ where: { code: discipline } });
-    if (disc?.categoryCode) effectiveCategory = disc.categoryCode;
-  }
+  const { type, description, discipline, parentTransmittalId } = body;
 
   const t = await db.transmittal.update({
     where: { id },
     data: {
-      ...(reference !== undefined && { reference: reference.trim() }),
       ...(type !== undefined && { type: type || null }),
       ...(description !== undefined && { description: description || null }),
-      ...(alternativeTitle !== undefined && { alternativeTitle: alternativeTitle || null }),
       ...(discipline && { discipline }),
-      ...(discipline && disciplineCode === undefined && { disciplineCode: discipline }),
-      ...(disciplineCode !== undefined && { disciplineCode: disciplineCode || null }),
-      ...(effectiveCategory !== undefined && { category: effectiveCategory }),
       ...(parentTransmittalId !== undefined && { parentTransmittalId: parentTransmittalId || null }),
     },
-    include: { revisions: { orderBy: { revNumber: 'asc' } } },
   });
 
   return NextResponse.json(t);

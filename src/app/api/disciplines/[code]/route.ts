@@ -7,18 +7,16 @@ export const dynamic = 'force-dynamic';
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
   const body = await req.json();
-  const { label, labelEn, color, prefix, category, categories } = body;
+  const { label, color, prefix, category } = body;
 
-  const existing = await db.discipline.findUnique({
-    where: { code },
-    include: { categories: true },
-  });
+  const existing = await db.discipline.findUnique({ where: { code } });
   if (!existing) {
     return NextResponse.json({ error: 'القسم غير موجود' }, { status: 404 });
   }
 
   // If category is changing, update all transmittals of this discipline too
   if (category && category !== existing.categoryCode) {
+    // Verify new category exists
     const cat = await db.category.findUnique({ where: { code: category } });
     if (!cat) {
       return NextResponse.json({ error: `القسم الرئيسي ${category} غير موجود` }, { status: 400 });
@@ -29,43 +27,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
     });
   }
 
-  // If categories[] is provided, sync the many-to-many DisciplineCategory records
-  if (Array.isArray(categories)) {
-    const existingCatCodes = existing.categories.map(c => c.categoryCode);
-    const toAdd = categories.filter((c: string) => c !== category && !existingCatCodes.includes(c));
-    const toRemove = existingCatCodes.filter(c => c !== category && !categories.includes(c));
-    if (toAdd.length > 0) {
-      // Delete first to avoid unique constraint, then add
-      await db.disciplineCategory.deleteMany({
-        where: { disciplineId: existing.id, categoryCode: { in: toAdd } },
-      });
-      await db.disciplineCategory.createMany({
-        data: toAdd.map((c: string) => ({ disciplineId: existing.id, categoryCode: c })),
-      });
-    }
-    if (toRemove.length > 0) {
-      await db.disciplineCategory.deleteMany({
-        where: { disciplineId: existing.id, categoryCode: { in: toRemove } },
-      });
-    }
-  }
-
   const d = await db.discipline.update({
     where: { code },
     data: {
       ...(label !== undefined && { label: String(label).trim() }),
-      ...(labelEn !== undefined && { labelEn: labelEn ? String(labelEn).trim() : null }),
       ...(color !== undefined && { color }),
       ...(prefix !== undefined && { prefix: String(prefix).trim() }),
       ...(category !== undefined && { categoryCode: category }),
     },
-    include: { categories: { select: { categoryCode: true } } },
   });
-  return NextResponse.json({
-    ...d,
-    category: d.categoryCode,
-    allCategories: [d.categoryCode, ...d.categories.map(c => c.categoryCode)].filter(Boolean),
-  });
+  return NextResponse.json({ ...d, category: d.categoryCode });
 }
 
 // DELETE /api/disciplines/[code]

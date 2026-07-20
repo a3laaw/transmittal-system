@@ -11,7 +11,6 @@ var SERVER_URL = 'http://localhost:' + SERVER_PORT;
 
 function getServerPath() {
   var paths = [
-    path.join(__dirname, 'server.js'),
     path.join(__dirname, '.next-standalone', 'server.js'),
     path.join(__dirname, '.next', 'standalone', 'server.js'),
   ];
@@ -40,90 +39,30 @@ function waitForServer(url, max, interval) {
 function startServer() {
   return new Promise(function(resolve, reject) {
     var serverPath = getServerPath();
-    // Use __dirname as the server working directory (where .next lives)
-    var serverDir = __dirname;
+    var serverDir = path.dirname(serverPath);
     if (!fs.existsSync(serverPath)) { reject(new Error('Server not found: ' + serverPath)); return; }
-    var env = Object.assign({}, process.env, {
-      NODE_ENV: 'production',
-      PORT: String(SERVER_PORT),
-      PROJECT_ROOT: __dirname,
-      // Clear DATABASE_URL so we can set it to userData path
-      DATABASE_URL: ''
-    });
-    delete env.DATABASE_URL;
+    var env = Object.assign({}, process.env, { NODE_ENV: 'production', PORT: String(SERVER_PORT), PROJECT_ROOT: __dirname });
     var pythonPath = getPythonPath();
     if (fs.existsSync(pythonPath)) env.PYTHON_PATH = pythonPath;
-    // Use Electron's userData directory for the database (persists across updates)
     var userDataPath = app.getPath('userData');
     var dbDir = path.join(userDataPath, 'db');
     if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
     var dbPath = path.join(dbDir, 'custom.db');
     env.DATABASE_URL = 'file:' + dbPath;
-    // Seed the DB on first run from the bundled seed DB
-    if (!fs.existsSync(dbPath)) {
-      var seeds = [
-        path.join(__dirname, 'db', 'custom.db'),
-        path.join(serverDir, 'db', 'custom.db')
-      ];
-      for (var i = 0; i < seeds.length; i++) {
-        if (fs.existsSync(seeds[i])) { fs.copyFileSync(seeds[i], dbPath); break; }
-      }
-    }
-    // Use Electron's bundled Node.js to run server.js
-    // process.execPath = electron.exe — passing a JS file makes it run as Node
-    var nodeExe = process.execPath;
-    // For Electron, we need ELECTRON_RUN_AS_NODE=1 to make it behave as pure Node.js
-    env.ELECTRON_RUN_AS_NODE = '1';
-    serverProcess = spawn(nodeExe, [serverPath], { env: env, stdio: ['ignore', 'pipe', 'pipe'], cwd: serverDir });
+    if (!fs.existsSync(dbPath)) { var seeds = [path.join(__dirname, 'db', 'custom.db'), path.join(serverDir, 'db', 'custom.db')]; for (var i = 0; i < seeds.length; i++) { if (fs.existsSync(seeds[i])) { fs.copyFileSync(seeds[i], dbPath); break; } } }
+    serverProcess = spawn(process.execPath, [serverPath], { env: env, stdio: ['ignore', 'pipe', 'pipe'], cwd: serverDir });
     serverProcess.stdout.on('data', function(d) { console.log('[server]', d.toString().trim()); });
-    serverProcess.stderr.on('data', function(d) { console.error('[server-err]', d.toString().trim()); });
-    serverProcess.on('error', function(err) {
-      console.error('[server-error]', err.message);
-      reject(err);
-    });
+    serverProcess.stderr.on('data', function(d) { console.error('[server]', d.toString().trim()); });
+    serverProcess.on('error', function(err) { reject(err); });
     waitForServer(SERVER_URL).then(function() { resolve(); }).catch(reject);
   });
 }
 
 function createWindow() {
-  mainWindow = new BrowserWindow({ width: 1400, height: 900, minWidth: 1024, minHeight: 700, title: 'Site Secretary', webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, preload: path.join(__dirname, 'preload.js') }, autoHideMenuBar: true, center: true, show: false });
+  mainWindow = new BrowserWindow({ width: 1400, height: 900, minWidth: 1024, minHeight: 700, title: 'Site Secretary', webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }, autoHideMenuBar: true, center: true, show: false });
   mainWindow.loadURL(SERVER_URL);
   mainWindow.once('ready-to-show', function() { mainWindow.show(); mainWindow.focus(); });
-  // Allow window.open for localhost (print windows), deny external
-  mainWindow.webContents.setWindowOpenHandler(function(info) {
-    if (info.url.indexOf('http://localhost') === 0 || info.url === 'about:blank') return { action: 'allow' };
-    shell.openExternal(info.url);
-    return { action: 'deny' };
-  });
-  // Handle IPC for printing
-  var { ipcMain } = require('electron');
-  ipcMain.handle('print-content', function(event, htmlContent) {
-    return new Promise(function(resolve, reject) {
-      var printWin = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: true, contextIsolation: false } });
-      printWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
-      printWin.webContents.on('did-finish-load', function() {
-        printWin.webContents.print({ landscape: true, printBackground: true }, function(success) {
-          printWin.close();
-          resolve(success);
-        });
-      });
-    });
-  });
-  // Handle IPC for choosing save path (first time only)
-  ipcMain.handle('choose-save-path', async function() {
-    var result = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openDirectory', 'createDirectory'],
-      title: 'اختر مجلد حفظ الملفات',
-      defaultPath: app.getPath('documents'),
-    });
-    if (!result.canceled && result.filePaths.length > 0) {
-      var chosenPath = result.filePaths[0];
-      // Save to localStorage via env var so server can read it
-      process.env.CUSTOM_STORAGE_PATH = chosenPath;
-      return chosenPath;
-    }
-    return null;
-  });
+  mainWindow.webContents.setWindowOpenHandler(function(info) { if (info.url.indexOf('http://localhost') === 0) return { action: 'allow' }; shell.openExternal(info.url); return { action: 'deny' }; });
   mainWindow.on('closed', function() { mainWindow = null; });
 }
 

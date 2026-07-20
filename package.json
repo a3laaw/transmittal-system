@@ -1,8 +1,7 @@
 {
-  "name": "site-secretary",
-  "version": "0.3.0",
+  "name": "nextjs_tailwind_shadcn_ts",
+  "version": "0.2.0",
   "private": true,
-  "main": "electron-main.js",
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
     "build": "bash scripts/verify_routes.sh && next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",

@@ -37,9 +37,8 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-type Discipline = { code: string; label: string; labelEn?: string; color: string; prefix: string; categoryCode?: string; category?: string; transmittalsCount?: number; allCategories?: string[] };
-type Category = { id?: string; code: string; label: string; labelEn?: string; icon: string; color: string; templatePath?: string; templateType?: string; disciplinesCount?: number; transmittalsCount?: number };
-type DocType = { id: string; code: string; label: string; labelEn?: string; categoryCode?: string | null; transmittalsCount?: number };
+type Discipline = { code: string; label: string; color: string; prefix: string; categoryCode?: string; category?: string; transmittalsCount?: number };
+type Category = { id?: string; code: string; label: string; icon: string; color: string; disciplinesCount?: number; transmittalsCount?: number };
 
 type Transmittal = {
   id: string;
@@ -48,7 +47,6 @@ type Transmittal = {
   category?: string;
   type: string | null;
   description: string | null;
-  alternativeTitle?: string | null;
   createdAt: string;
   revisionsCount: number;
   lastSubmitDate: string | null;
@@ -126,12 +124,10 @@ export default function Home() {
   const [search, setSearch] = useState('');
   const [filterDiscipline, setFilterDiscipline] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [sortBy, setSortBy] = useState<'date' | 'reference' | 'discipline'>('date');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [filterType, setFilterType] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [types, setTypes] = useState<string[]>([]);
-  const [docTypes, setDocTypes] = useState<DocType[]>([]);
+  const [docTypes, setDocTypes] = useState<{ id: string; code: string; label: string; transmittalsCount?: number }[]>([]);
   const { toast } = useToast();
 
   const fetchCategories = useCallback(async () => {
@@ -253,8 +249,6 @@ export default function Home() {
   const [consultantReplyTarget, setConsultantReplyTarget] = useState<{ id: string; reference: string } | null>(null);
   const [mohReplyTarget, setMohReplyTarget] = useState<{ id: string; reference: string } | null>(null);
   const [copyTarget, setCopyTarget] = useState<{ id: string; reference: string; description: string } | null>(null);
-  const [editTarget, setEditTarget] = useState<Transmittal | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Transmittal | null>(null);
 
   const handleSendToMoh = (id: string, reference?: string, latestRev?: number) => {
     setSendToMohTarget({ id, reference: reference || '', latestRev: latestRev ?? 0 });
@@ -441,56 +435,6 @@ export default function Home() {
     }
   };
 
-  const handleEditTransmittal = (item: Transmittal) => setEditTarget(item);
-  const confirmEditTransmittal = async (data: { reference: string; discipline: string; type: string; description: string; alternativeTitle: string }) => {
-    if (!editTarget) return;
-    const { id } = editTarget;
-    try {
-      const r = await fetch(`/api/transmittals/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reference: data.reference.trim(),
-          discipline: data.discipline,
-          type: data.type || null,
-          description: data.description || null,
-          alternativeTitle: data.alternativeTitle || null,
-        }),
-      });
-      if (!r.ok) {
-        const err = await r.json();
-        throw new Error(err.error || 'فشل التعديل');
-      }
-      toast({ title: 'تم تعديل البيانات' });
-      setEditTarget(null);
-      if (view === 'list') fetchList();
-      else if (view === 'detail' && selectedId === id) fetchDetail(id);
-      else fetchDashboard();
-    } catch (e: any) {
-      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
-    }
-  };
-
-  const handleDeleteTransmittal = (item: Transmittal) => setDeleteTarget(item);
-  const confirmDeleteTransmittal = async () => {
-    if (!deleteTarget) return;
-    const { id, reference } = deleteTarget;
-    try {
-      const r = await fetch(`/api/transmittals/${id}`, { method: 'DELETE' });
-      if (!r.ok) {
-        const err = await r.json();
-        throw new Error(err.error || 'فشل الحذف');
-      }
-      toast({ title: 'تم حذف الترانسميتال', description: reference });
-      setDeleteTarget(null);
-      if (view === 'detail' && selectedId === id) setView('list');
-      if (view === 'list') fetchList();
-      else fetchDashboard();
-    } catch (e: any) {
-      toast({ title: 'خطأ', description: e.message, variant: 'destructive' });
-    }
-  };
-
   const handleDownloadExcel = async (reference: string, description: string, category?: string) => {
     const today = new Date().toISOString().slice(0, 10);
     toast({ title: 'جاري توليد ملف Excel', description: `سيتم تنزيل ${reference}.xlsx` });
@@ -526,27 +470,17 @@ export default function Home() {
                 <FileText className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">{t('app.name')}</h1>
+                <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">سكرتير الموقع</h1>
                 <p className="text-xs text-slate-500 hidden sm:block">Sabah Al Salem South Health Center</p>
               </div>
             </div>
             <nav className="flex items-center gap-1 sm:gap-2 flex-wrap">
-              <NavButton active={view === 'dashboard'} onClick={() => setView('dashboard')} icon={<LayoutDashboard className="w-4 h-4" />} label={t('nav.dashboard')} />
-              <NavButton active={view === 'list'} onClick={() => setView('list')} icon={<FileSpreadsheet className="w-4 h-4" />} label={t('nav.list')} />
-              <NavButton active={view === 'new'} onClick={() => setView('new')} icon={<FilePlus className="w-4 h-4" />} label={t('nav.new')} />
-              <NavButton active={view === 'reports'} onClick={() => setView('reports')} icon={<BarChart3 className="w-4 h-4" />} label={t('nav.reports')} />
-              <NavButton active={view === 'settings'} onClick={() => setView('settings')} icon={<Settings className="w-4 h-4" />} label={t('nav.settings')} />
-              <NavButton active={view === 'import'} onClick={() => setView('import')} icon={<Upload className="w-4 h-4" />} label={t('nav.import')} />
-              <Button
-                onClick={toggleLang}
-                variant="outline"
-                size="sm"
-                className="gap-1.5 px-3 border-slate-300 text-slate-700 hover:bg-slate-100"
-                title={lang === 'ar' ? 'Switch to English' : 'التبديل للعربية'}
-              >
-                <span className="text-base">{lang === 'ar' ? '🇬🇧' : '🇸🇦'}</span>
-                <span className="hidden sm:inline text-xs font-semibold">{lang === 'ar' ? 'EN' : 'ع'}</span>
-              </Button>
+              <NavButton active={view === 'dashboard'} onClick={() => setView('dashboard')} icon={<LayoutDashboard className="w-4 h-4" />} label="الرئيسية" />
+              <NavButton active={view === 'list'} onClick={() => setView('list')} icon={<FileSpreadsheet className="w-4 h-4" />} label="القائمة" />
+              <NavButton active={view === 'new'} onClick={() => setView('new')} icon={<FilePlus className="w-4 h-4" />} label="جديد" />
+              <NavButton active={view === 'reports'} onClick={() => setView('reports')} icon={<BarChart3 className="w-4 h-4" />} label="تقارير" />
+              <NavButton active={view === 'settings'} onClick={() => setView('settings')} icon={<Settings className="w-4 h-4" />} label="الإعدادات" />
+              <NavButton active={view === 'import'} onClick={() => setView('import')} icon={<Upload className="w-4 h-4" />} label="استيراد" />
             </nav>
           </div>
         </div>
@@ -579,12 +513,6 @@ export default function Home() {
             onRegisterRevision={handleRegisterRevision}
             onRegisterConsultantReply={handleRegisterConsultantReply}
             onRegisterMohReply={handleRegisterMohReply}
-            onEdit={handleEditTransmittal}
-            onDelete={handleDeleteTransmittal}
-            sortBy={sortBy}
-            sortOrder={sortOrder}
-            onSortByChange={setSortBy}
-            onSortOrderChange={setSortOrder}
           />
         )}
         {view === 'detail' && detail && (
@@ -622,8 +550,6 @@ export default function Home() {
             }}
             onSendToMoh={() => handleSendToMoh(detail.id, detail.reference, detail.revisions.length > 0 ? detail.revisions[detail.revisions.length - 1].revNumber : 0)}
             onCopy={() => handleCopyTransmittal(detail.id, detail.reference, detail.description || '')}
-            onEdit={() => handleEditTransmittal(detail as any)}
-            onDelete={() => handleDeleteTransmittal(detail as any)}
           />
         )}
         {view === 'detail' && !detail && !loading && <div className="text-center py-20 text-slate-500">لا توجد بيانات</div>}
@@ -703,21 +629,6 @@ export default function Home() {
           onConfirm={confirmCopyTransmittal}
         />
       )}
-      {editTarget && (
-        <EditTransmittalDialog
-          target={editTarget}
-          disciplines={disciplines}
-          onClose={() => setEditTarget(null)}
-          onConfirm={confirmEditTransmittal}
-        />
-      )}
-      {deleteTarget && (
-        <DeleteTransmittalDialog
-          target={deleteTarget}
-          onClose={() => setDeleteTarget(null)}
-          onConfirm={confirmDeleteTransmittal}
-        />
-      )}
     </div>
   );
 }
@@ -739,58 +650,34 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
   onDownloadExcel: (reference: string, description: string) => void;
 }) {
   const { t, lang } = useI18n();
-  const [activeTab, setActiveTab] = useState<string>('all');
   if (loading && !data) return <div className="space-y-4"><Skeleton className="h-24 w-full" /><Skeleton className="h-64 w-full" /></div>;
-  if (!data) return <div className="text-center py-20 text-slate-500">{t('dashboard.noData')}</div>;
+  if (!data) return <div className="text-center py-20 text-slate-500">لا توجد بيانات. قم باستيراد ملف Excel أولاً.</div>;
 
   const kpis = [
-    { label: t('dashboard.total'), value: data.kpis.total, color: 'bg-slate-700', icon: <FileText className="w-5 h-5" /> },
-    { label: t('dashboard.approved'), value: data.kpis.approved, color: 'bg-emerald-600', icon: <CheckCircle2 className="w-5 h-5" /> },
-    { label: t('dashboard.pending'), value: data.kpis.pending, color: 'bg-yellow-500', icon: <Clock className="w-5 h-5" /> },
-    { label: t('dashboard.overdue'), value: data.kpis.overdue, color: 'bg-red-600', icon: <AlertCircle className="w-5 h-5" /> },
-    { label: t('dashboard.resubmit'), value: data.kpis.resubmit, color: 'bg-orange-500', icon: <RefreshCw className="w-5 h-5" /> },
-    { label: t('dashboard.cancelled'), value: data.kpis.cancelled, color: 'bg-gray-500', icon: <XCircle className="w-5 h-5" /> },
+    { label: 'إجمالي', value: data.kpis.total, color: 'bg-slate-700', icon: <FileText className="w-5 h-5" /> },
+    { label: 'معتمد', value: data.kpis.approved, color: 'bg-emerald-600', icon: <CheckCircle2 className="w-5 h-5" /> },
+    { label: 'بانتظار', value: data.kpis.pending, color: 'bg-yellow-500', icon: <Clock className="w-5 h-5" /> },
+    { label: 'متأخر استشاري', value: data.kpis.overdue, color: 'bg-red-600', icon: <AlertCircle className="w-5 h-5" /> },
+    { label: 'إعادة إرسال', value: data.kpis.resubmit, color: 'bg-orange-500', icon: <RefreshCw className="w-5 h-5" /> },
+    { label: 'ملغى', value: data.kpis.cancelled, color: 'bg-gray-500', icon: <XCircle className="w-5 h-5" /> },
   ];
   const mohKpis = [
-    { label: t('dashboard.mohSent'), value: data.mohKpis.sent, color: 'bg-blue-600', icon: <Send className="w-5 h-5" /> },
-    { label: t('dashboard.mohApproved'), value: data.mohKpis.approved, color: 'bg-emerald-600', icon: <CheckCircle2 className="w-5 h-5" /> },
-    { label: t('dashboard.mohUnderReview'), value: data.mohKpis.underReview, color: 'bg-yellow-500', icon: <Clock className="w-5 h-5" /> },
-    { label: t('dashboard.mohOverdue'), value: data.mohKpis.overdue, color: 'bg-red-600', icon: <AlertCircle className="w-5 h-5" /> },
+    { label: 'مُرسل للوزارة', value: data.mohKpis.sent, color: 'bg-blue-600', icon: <Send className="w-5 h-5" /> },
+    { label: 'معتمد بالوزارة', value: data.mohKpis.approved, color: 'bg-emerald-600', icon: <CheckCircle2 className="w-5 h-5" /> },
+    { label: 'قيد المراجعة', value: data.mohKpis.underReview, color: 'bg-yellow-500', icon: <Clock className="w-5 h-5" /> },
+    { label: 'متأخر بالوزارة', value: data.mohKpis.overdue, color: 'bg-red-600', icon: <AlertCircle className="w-5 h-5" /> },
   ];
-
-  // Filter dashboard data by active tab (category)
-  const filterByCategory = (items: any[]) => activeTab === 'all' ? items : items.filter((it: any) => it.category === activeTab || it.disciplineCategory === activeTab);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">{t('dashboard.title')}</h2>
-          <p className="text-sm text-slate-500 mt-1">{t('dashboard.subtitle')}</p>
+          <h2 className="text-2xl font-bold text-slate-900">لوحة المعلومات</h2>
+          <p className="text-sm text-slate-500 mt-1">نظرة عامة على حالة كل الالمستندات</p>
         </div>
         <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> {t('common.refresh')}
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> تحديث
         </Button>
-      </div>
-
-      {/* Tabs for main categories */}
-      <div className="flex flex-wrap gap-1.5 border-b border-slate-200 pb-2">
-        <button
-          onClick={() => setActiveTab('all')}
-          className={`px-4 py-2 rounded-t-lg text-sm font-semibold transition-colors ${activeTab === 'all' ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-        >
-          {t('dashboard.tab.all')}
-        </button>
-        {categories.map(cat => (
-          <button
-            key={cat.code}
-            onClick={() => setActiveTab(cat.code)}
-            className={`px-4 py-2 rounded-t-lg text-sm font-semibold transition-colors flex items-center gap-1.5 ${activeTab === cat.code ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
-            <span>{cat.icon}</span>
-            <span>{(lang === 'en' && cat.labelEn) ? cat.labelEn : cat.label}</span>
-          </button>
-        ))}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -824,7 +711,7 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
       {/* Per-Category Cards */}
       <Card className="border-0 shadow-sm">
         <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Folder className="w-5 h-5" /> تفصيل حسب القسم الرئيسي</CardTitle>
-          <CardDescription>توزيع الترانسميتالات على الأقسام الرئيسية (ترانسميتال/MIR/RFI/كتب)</CardDescription></CardHeader>
+          <CardDescription>{t("dashboard.byCategoryDesc")}</CardDescription></CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {(data.perCategory || []).map((cat) => {
@@ -839,10 +726,10 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
                     <span className="text-2xl font-bold text-slate-900">{cat.total}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="text-emerald-700">معتمد: <strong>{cat.approved}</strong></div>
-                    <div className="text-yellow-700">بانتظار: <strong>{cat.pending}</strong></div>
-                    <div className="text-red-700">متأخر: <strong>{cat.overdue}</strong></div>
-                    <div className="text-blue-700">للوزارة: <strong>{cat.mohSent}</strong></div>
+                    <div className="text-emerald-700">{t("dashboard.approved")}: <strong>{cat.approved}</strong></div>
+                    <div className="text-yellow-700">{t("dashboard.pending")}: <strong>{cat.pending}</strong></div>
+                    <div className="text-red-700">{t("dashboard.overdue")}: <strong>{cat.overdue}</strong></div>
+                    <div className="text-blue-700">{t("dashboard.mohSent")}: <strong>{cat.mohSent}</strong></div>
                   </div>
                   <div className="mt-3 flex items-center gap-2">
                     <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
@@ -850,7 +737,7 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
                     </div>
                     <span className="text-xs font-semibold">{pct}%</span>
                   </div>
-                  <div className="mt-2 text-xs text-slate-500">{cat.disciplinesCount} تخصص فرعي · آخر: {cat.lastReference || '—'}</div>
+                  <div className="mt-2 text-xs text-slate-500">{cat.disciplinesCount} {t("dashboard.subDisciplines")} · {t("dashboard.last")}: {cat.lastReference || '—'}</div>
                 </div>
               );
             })}
@@ -859,21 +746,21 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
       </Card>
 
       <Card className="border-0 shadow-sm">
-        <CardHeader><CardTitle className="text-lg">تفصيل حسب التخصص الفرعي</CardTitle>
-          <CardDescription>توزيع الترانسميتالات على التخصصات داخل كل قسم رئيسي</CardDescription></CardHeader>
+        <CardHeader><CardTitle className="text-lg">{t("dashboard.byDisciplineTitle")}</CardTitle>
+          <CardDescription>{t("dashboard.byDisciplineDesc")}</CardDescription></CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader><TableRow>
-              <TableHead className="text-right">{t("dashboard.col.discipline")}</TableHead>
-              <TableHead className="text-right">القسم الرئيسي</TableHead>
-              <TableHead className="text-center">الإجمالي</TableHead>
+              <TableHead className="text-right">التخصص</TableHead>
+              <TableHead className="text-right">{t("dashboard.col.mainCategory")}</TableHead>
+              <TableHead className="text-center">{t("dashboard.col.total")}</TableHead>
               <TableHead className="text-center">معتمد</TableHead>
               <TableHead className="text-center">بانتظار</TableHead>
               <TableHead className="text-center">متأخر</TableHead>
               <TableHead className="text-center">للوزارة</TableHead>
-              <TableHead className="text-center">معتمد وزارة</TableHead>
+              <TableHead className="text-center">{t("dashboard.col.mohApproved")}</TableHead>
               <TableHead className="text-center">% الإنجاز</TableHead>
-              <TableHead className="text-center">آخر مرجع</TableHead>
+              <TableHead className="text-center">{t("dashboard.col.lastRef")}</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {data.perDiscipline.map((d) => {
@@ -912,8 +799,8 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
           <CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
-                <TableHead className="text-right">{t("reports.col.reference")}</TableHead><TableHead className="text-right">{t("dashboard.col.discipline")}</TableHead>
-                <TableHead className="text-right">{t("reports.col.description")}</TableHead><TableHead className="text-center">{t("dashboard.col.status")}</TableHead>
+                <TableHead className="text-right">المرجع</TableHead><TableHead className="text-right">التخصص</TableHead>
+                <TableHead className="text-right">الوصف</TableHead><TableHead className="text-center">الحالة</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {data.consultantOverdueList.map((t) => (
@@ -936,8 +823,8 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
           <CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
-                <TableHead className="text-right">{t("reports.col.reference")}</TableHead><TableHead className="text-right">{t("dashboard.col.discipline")}</TableHead>
-                <TableHead className="text-right">{t("reports.col.description")}</TableHead><TableHead className="text-center">{t("dashboard.col.status")}</TableHead>
+                <TableHead className="text-right">المرجع</TableHead><TableHead className="text-right">التخصص</TableHead>
+                <TableHead className="text-right">الوصف</TableHead><TableHead className="text-center">الحالة</TableHead>
                 <TableHead className="text-center">{t("dashboard.col.action")}</TableHead>
               </TableRow></TableHeader>
               <TableBody>
@@ -962,7 +849,7 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
 }
 
 /* ============ LIST VIEW ============ */
-function ListView({ items, loading, search, onSearch, filterCategory, onFilterCategory, filterDiscipline, onFilterDiscipline, filterStatus, onFilterStatus, filterType, onFilterType, types, disciplines, categories, onOpenDetail, onRefresh, onSendToMoh, onCopy, onDownloadExcel, onRegisterRevision, onRegisterConsultantReply, onRegisterMohReply, onEdit, onDelete, sortBy, sortOrder, onSortByChange, onSortOrderChange }: {
+function ListView({ items, loading, search, onSearch, filterCategory, onFilterCategory, filterDiscipline, onFilterDiscipline, filterStatus, onFilterStatus, filterType, onFilterType, types, disciplines, categories, onOpenDetail, onRefresh, onSendToMoh, onCopy, onDownloadExcel, onRegisterRevision, onRegisterConsultantReply, onRegisterMohReply }: {
   items: Transmittal[]; loading: boolean; search: string; onSearch: (s: string) => void;
   filterCategory: string; onFilterCategory: (s: string) => void;
   filterDiscipline: string; onFilterDiscipline: (s: string) => void;
@@ -975,12 +862,6 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
   onRegisterRevision: (id: string, reference: string, nextRev: number) => void;
   onRegisterConsultantReply: (id: string, reference: string) => void;
   onRegisterMohReply: (id: string, reference: string) => void;
-  onEdit: (t: Transmittal) => void;
-  onDelete: (t: Transmittal) => void;
-  sortBy: 'date' | 'reference' | 'discipline';
-  sortOrder: 'asc' | 'desc';
-  onSortByChange: (s: 'date' | 'reference' | 'discipline') => void;
-  onSortOrderChange: (s: 'asc' | 'desc') => void;
 }) {
   const { t, lang } = useI18n();
   // Filter disciplines based on selected category (cascading)
@@ -988,107 +869,69 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
     ? disciplines.filter(d => (d.categoryCode || d.category || 'TRANSMITTAL') === filterCategory)
     : disciplines;
 
-  // Sort items based on sortBy + sortOrder
-  const sortedItems = [...items].sort((a, b) => {
-    let cmp = 0;
-    if (sortBy === 'date') {
-      const aDate = a.lastSubmitDate ? new Date(a.lastSubmitDate).getTime() : 0;
-      const bDate = b.lastSubmitDate ? new Date(b.lastSubmitDate).getTime() : 0;
-      cmp = aDate - bDate;
-    } else if (sortBy === 'reference') {
-      cmp = a.reference.localeCompare(b.reference);
-    } else if (sortBy === 'discipline') {
-      cmp = a.discipline.localeCompare(b.discipline);
-    }
-    return sortOrder === 'asc' ? cmp : -cmp;
-  });
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div><h2 className="text-2xl font-bold text-slate-900">{t('list.title')}</h2>
-          <p className="text-sm text-slate-500 mt-1">{items.length} {t('list.results')}</p></div>
+        <div><h2 className="text-2xl font-bold text-slate-900">قائمة الالمستندات</h2>
+          <p className="text-sm text-slate-500 mt-1">{items.length} نتيجة</p></div>
         <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> {t('common.refresh')}
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> تحديث
         </Button>
       </div>
 
       <Card className="border-0 shadow-sm"><CardContent className="p-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
-            <Label className="text-xs">{t('common.search')}</Label>
+            <Label className="text-xs">بحث</Label>
             <div className="relative">
               <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input value={search} onChange={(e) => onSearch(e.target.value)} placeholder={t('list.searchPlaceholder')} className="pr-8" />
+              <Input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="ابحث بالمرجع أو الوصف..." className="pr-8" />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{t('list.filterCategory')}</Label>
+            <Label className="text-xs">{t("common.mainCategory")}</Label>
             <Select value={filterCategory} onValueChange={(v) => { onFilterCategory(v); onFilterDiscipline('all'); }}>
-              <SelectTrigger><SelectValue placeholder={t('common.all')} /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t('list.allCategories')}</SelectItem>
-                {categories.map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</SelectItem>)}
+                <SelectItem value="all">كل الأقسام</SelectItem>
+                {categories.map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {c.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{t('list.filterDiscipline')}</Label>
+            <Label className="text-xs">التخصص الفرعي</Label>
             <Select value={filterDiscipline} onValueChange={onFilterDiscipline}>
-              <SelectTrigger><SelectValue placeholder={t('common.all')} /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t('list.allDisciplines')}</SelectItem>
-                {availableDisciplines.map(d => <SelectItem key={d.code} value={d.code}>{(lang === 'en' && d.labelEn) ? d.labelEn : d.label} ({d.code})</SelectItem>)}
+                <SelectItem value="all">كل التخصصات</SelectItem>
+                {availableDisciplines.map(d => <SelectItem key={d.code} value={d.code}>{d.label} ({d.code})</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{t('list.filterType')}</Label>
+            <Label className="text-xs">النوع</Label>
             <Select value={filterType} onValueChange={onFilterType}>
-              <SelectTrigger><SelectValue placeholder={t('common.all')} /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t('list.allTypes')}</SelectItem>
-                {types.map(ty => <SelectItem key={ty} value={ty}>{ty}</SelectItem>)}
+                <SelectItem value="all">كل الأنواع</SelectItem>
+                {types.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{t('list.filterStatus')}</Label>
+            <Label className="text-xs">الحالة</Label>
             <Select value={filterStatus} onValueChange={onFilterStatus}>
-              <SelectTrigger><SelectValue placeholder={t('common.all')} /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t('list.allStatuses')}</SelectItem>
-                <SelectItem value="approved">✅ {t('status.approved')}</SelectItem>
-                <SelectItem value="pending">⏳ {t('status.pending')}</SelectItem>
-                <SelectItem value="overdue">🔴 {t('status.overdue', { days: '' })}</SelectItem>
-                <SelectItem value="resubmit">🔔 {t('status.resubmit')}</SelectItem>
-                <SelectItem value="cancelled">🚫 {t('status.cancelled')}</SelectItem>
-                <SelectItem value="draft">📝 {t('status.draft')}</SelectItem>
+                <SelectItem value="all">كل الحالات</SelectItem>
+                <SelectItem value="approved">✅ معتمد</SelectItem>
+                <SelectItem value="pending">⏳ بانتظار الرد</SelectItem>
+                <SelectItem value="overdue">🔴 متأخر</SelectItem>
+                <SelectItem value="resubmit">🔔 إعادة إرسال</SelectItem>
+                <SelectItem value="cancelled">🚫 ملغى</SelectItem>
+                <SelectItem value="draft">📝 مسودة</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          {/* Sort dropdowns */}
-          <div className="space-y-1.5">
-            <Label className="text-xs">{t('list.sortBy')}</Label>
-            <div className="flex gap-1.5">
-              <Select value={sortBy} onValueChange={(v) => onSortByChange(v as any)}>
-                <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="date">{t('settings.sortDate')}</SelectItem>
-                  <SelectItem value="reference">{t('settings.sortReference')}</SelectItem>
-                  <SelectItem value="discipline">{t('settings.sortDiscipline')}</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onSortOrderChange(sortOrder === 'asc' ? 'desc' : 'asc')}
-                title={sortOrder === 'asc' ? t('settings.sortAsc') : t('settings.sortDesc')}
-                className="px-3"
-              >
-                {sortOrder === 'asc' ? '↑' : '↓'}
-              </Button>
-            </div>
           </div>
         </div>
       </CardContent></Card>
@@ -1098,31 +941,31 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
           <div className="p-4 space-y-2">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
         ) : items.length === 0 ? (
           <div className="text-center py-16 text-slate-500">
-            <FileSpreadsheet className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>{t('list.empty')}</p>
+            <FileSpreadsheet className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>لا توجد نتائج مطابقة</p>
           </div>
         ) : (
           <div className="max-h-[70vh] overflow-y-auto">
             <Table>
               <TableHeader className="sticky top-0 bg-white z-10"><TableRow>
-                <TableHead className="text-right">{t('list.col.reference')}</TableHead>
-                <TableHead className="text-right">{t('list.col.discipline')}</TableHead>
-                <TableHead className="text-right">{t('list.col.type')}</TableHead>
-                <TableHead className="text-right">{t('list.col.description')}</TableHead>
-                <TableHead className="text-center">{t('list.col.revisions')}</TableHead>
-                <TableHead className="text-center">{t('list.col.consultant')}</TableHead>
-                <TableHead className="text-center">{t('list.col.moh')}</TableHead>
-                <TableHead className="text-center">{t('list.col.actions')}</TableHead>
+                <TableHead className="text-right">المرجع</TableHead>
+                <TableHead className="text-right">القسم</TableHead>
+                <TableHead className="text-right">النوع</TableHead>
+                <TableHead className="text-right">الوصف</TableHead>
+                <TableHead className="text-center">المراجعات</TableHead>
+                <TableHead className="text-center">الاستشاري</TableHead>
+                <TableHead className="text-center">الوزارة</TableHead>
+                <TableHead className="text-center">إجراءات</TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {sortedItems.map((item) => (
-                  <TableRow key={item.id} className="cursor-pointer hover:bg-slate-50" onClick={() => onOpenDetail(item.id)}>
-                    <TableCell className="font-mono font-semibold whitespace-nowrap">{item.reference}</TableCell>
-                    <TableCell><Badge variant="secondary" className={getDisciplineColor(item.discipline, disciplines)}>{(lang === 'en' && disciplines.find(d => d.code === item.discipline)?.labelEn) ? disciplines.find(d => d.code === item.discipline)!.labelEn : getDisciplineLabel(item.discipline, disciplines)}</Badge></TableCell>
-                    <TableCell className="text-xs text-slate-600 whitespace-nowrap">{item.type || '—'}</TableCell>
-                    <TableCell className="text-sm text-slate-700 max-w-xs truncate">{(lang === 'en' ? (item.alternativeTitle || item.description) : (item.description || item.alternativeTitle)) || '—'}</TableCell>
-                    <TableCell className="text-center font-semibold">{item.revisionsCount}</TableCell>
-                    <TableCell className="text-center"><Badge variant="outline" className={item.consultantStatus.color}>{item.consultantStatus.emoji}</Badge></TableCell>
-                    <TableCell className="text-center"><Badge variant="outline" className={item.mohStatus.color}>{item.mohStatus.emoji}</Badge></TableCell>
+                {items.map((t) => (
+                  <TableRow key={t.id} className="cursor-pointer hover:bg-slate-50" onClick={() => onOpenDetail(t.id)}>
+                    <TableCell className="font-mono font-semibold whitespace-nowrap">{t.reference}</TableCell>
+                    <TableCell><Badge variant="secondary" className={getDisciplineColor(t.discipline, disciplines)}>{getDisciplineLabel(t.discipline, disciplines)}</Badge></TableCell>
+                    <TableCell className="text-xs text-slate-600 whitespace-nowrap">{t.type || '—'}</TableCell>
+                    <TableCell className="text-sm text-slate-700 max-w-xs truncate">{t.description || '—'}</TableCell>
+                    <TableCell className="text-center font-semibold">{t.revisionsCount}</TableCell>
+                    <TableCell className="text-center"><Badge variant="outline" className={t.consultantStatus.color}>{t.consultantStatus.emoji}</Badge></TableCell>
+                    <TableCell className="text-center"><Badge variant="outline" className={t.mohStatus.color}>{t.mohStatus.emoji}</Badge></TableCell>
                     <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -1131,58 +974,48 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuLabel>{t('common.actions')}</DropdownMenuLabel>
+                          <DropdownMenuLabel>إجراءات</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => onOpenDetail(item.id)}>
-                            <Eye className="w-4 h-4 ml-2" /> {t('list.action.viewDetails')}
+                          <DropdownMenuItem onClick={() => onOpenDetail(t.id)}>
+                            <Eye className="w-4 h-4 ml-2" /> عرض التفاصيل
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => onRegisterRevision(item.id, item.reference, item.revisionsCount)}
-                            disabled={item.computedStatus.status === 'cancelled' || item.revisionsCount === 0 || item.lastReplyDate === null}
+                            onClick={() => onRegisterRevision(t.id, t.reference, t.revisionsCount)}
+                            disabled={t.computedStatus.status === 'cancelled' || t.revisionsCount === 0 || t.lastReplyDate === null}
                           >
-                            <History className="w-4 h-4 ml-2" /> {t('list.action.registerRevision')} (<span dir="ltr">REV.{item.revisionsCount}</span>)
-                            {item.computedStatus.status === 'cancelled' ? <span className="text-[10px] text-slate-400 mr-1">{t('list.disabled.cancelled')}</span> :
-                             (item.revisionsCount === 0 || item.lastReplyDate === null) && <span className="text-[10px] text-slate-400 mr-1">{t('list.disabled.waitingReply')}</span>}
+                            <History className="w-4 h-4 ml-2" /> تسجيل ريفجن (REV.{t.revisionsCount})
+                            {t.computedStatus.status === 'cancelled' ? <span className="text-[10px] text-slate-400 mr-1">(مسحوب)</span> :
+                             (t.revisionsCount === 0 || t.lastReplyDate === null) && <span className="text-[10px] text-slate-400 mr-1">(بانتظار الرد)</span>}
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => onRegisterConsultantReply(item.id, item.reference)}
-                            disabled={item.computedStatus.status === 'cancelled' || item.revisionsCount === 0 || item.lastReplyDate !== null}
+                            onClick={() => onRegisterConsultantReply(t.id, t.reference)}
+                            disabled={t.computedStatus.status === 'cancelled' || t.revisionsCount === 0 || t.lastReplyDate !== null}
                           >
-                            <Building2 className="w-4 h-4 ml-2" /> {t('list.action.registerConsultantReply')}
-                            {item.computedStatus.status === 'cancelled' ? <span className="text-[10px] text-slate-400 mr-1">{t('list.disabled.cancelled')}</span> :
-                             (item.revisionsCount === 0 || item.lastReplyDate !== null) && <span className="text-[10px] text-slate-400 mr-1">{item.revisionsCount === 0 ? t('list.disabled.noRev') : t('list.disabled.replied')}</span>}
+                            <Building2 className="w-4 h-4 ml-2" /> تسجيل رد الاستشاري
+                            {t.computedStatus.status === 'cancelled' ? <span className="text-[10px] text-slate-400 mr-1">(مسحوب)</span> :
+                             (t.revisionsCount === 0 || t.lastReplyDate !== null) && <span className="text-[10px] text-slate-400 mr-1">{t.revisionsCount === 0 ? '(لا ريفجن)' : '(تم الرد)'}</span>}
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => onRegisterMohReply(item.id, item.reference)}
-                            disabled={item.computedStatus.status === 'cancelled' || item.mohStatus.status === 'not_sent'}
+                            onClick={() => onRegisterMohReply(t.id, t.reference)}
+                            disabled={t.computedStatus.status === 'cancelled' || t.mohStatus.status === 'not_sent'}
                           >
-                            <Hospital className="w-4 h-4 ml-2" /> {t('list.action.registerMohReply')}
-                            {item.computedStatus.status === 'cancelled' ? <span className="text-[10px] text-slate-400 mr-1">{t('list.disabled.cancelled')}</span> :
-                             item.mohStatus.status === 'not_sent' && <span className="text-[10px] text-slate-400 mr-1">{t('list.disabled.notSent')}</span>}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => onSendToMoh(item.id, item.reference)}
-                            disabled={item.computedStatus.status === 'cancelled' || item.consultantStatus.status !== 'approved' || (item.mohStatus.status !== 'not_sent' && item.mohStatus.status !== 'reviewed')}
-                          >
-                            <Send className="w-4 h-4 ml-2" /> {t('list.action.sendToMoh')} <span dir="ltr">REV.{item.revisionsCount > 0 ? (item.revisionsCount - 1) : 0}</span>
-                            {item.consultantStatus.status !== 'approved' && <span className="text-[10px] text-slate-400 mr-1">{t('list.disabled.notApproved')}</span>}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onCopy(item.id, item.reference, item.description || '')}>
-                            <Copy className="w-4 h-4 ml-2" /> {t('list.action.copyNew')}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onDownloadExcel(item.reference, item.description || '')}>
-                            <FileDown className="w-4 h-4 ml-2" /> {t('list.action.downloadExcel')}
+                            <Hospital className="w-4 h-4 ml-2" /> تسجيل رد الوزارة
+                            {t.computedStatus.status === 'cancelled' ? <span className="text-[10px] text-slate-400 mr-1">(مسحوب)</span> :
+                             t.mohStatus.status === 'not_sent' && <span className="text-[10px] text-slate-400 mr-1">(لم يُرسل)</span>}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => onEdit(item)}>
-                            <Pencil className="w-4 h-4 ml-2" /> {t('list.action.edit')}
-                          </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => onDelete(item)}
-                            className="text-red-700 focus:text-red-700 focus:bg-red-50"
+                            onClick={() => onSendToMoh(t.id, t.reference)}
+                            disabled={t.computedStatus.status === 'cancelled' || t.consultantStatus.status !== 'approved' || (t.mohStatus.status !== 'not_sent' && t.mohStatus.status !== 'reviewed')}
                           >
-                            <Trash2 className="w-4 h-4 ml-2" /> {t('list.action.delete')}
+                            <Send className="w-4 h-4 ml-2" /> إرسال REV.{t.revisionsCount > 0 ? (t.revisionsCount - 1) : 0} للوزارة
+                            {t.consultantStatus.status !== 'approved' && <span className="text-[10px] text-slate-400 mr-1">(غير معتمد)</span>}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onCopy(t.id, t.reference, t.description || '')}>
+                            <Copy className="w-4 h-4 ml-2" /> نسخ برقم جديد
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onDownloadExcel(t.reference, t.description || '')}>
+                            <FileDown className="w-4 h-4 ml-2" /> تنزيل Excel
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -1199,15 +1032,14 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
 }
 
 /* ============ DETAIL VIEW ============ */
-function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloadExcel, onSendToMoh, onCopy, onOpenDetail, onEdit, onDelete }: {
+function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloadExcel, onSendToMoh, onCopy, onOpenDetail }: {
   detail: TransmittalDetail; loading: boolean; disciplines: Discipline[];
   onBack: () => void; onRefresh: () => void; onDownloadExcel: () => void; onSendToMoh: () => void;
   onCopy: () => void; onOpenDetail: (id: string) => void;
-  onEdit: () => void; onDelete: () => void;
 }) {
+  const { t } = useI18n();
   const [showRevDialog, setShowRevDialog] = useState(false);
   const { toast } = useToast();
-  const { t } = useI18n();
 
   const latestRevNumber = detail.revisions.length > 0 ? detail.revisions[detail.revisions.length - 1].revNumber : 0;
   const [attachments, setAttachments] = useState<any[]>([]);
@@ -1348,24 +1180,18 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft className="w-4 h-4" /> {t('detail.backToList')}</Button>
+        <Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft className="w-4 h-4" /> رجوع للقائمة</Button>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> {t('common.refresh')}
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> تحديث
           </Button>
           <Button variant="outline" size="sm" onClick={onCopy} className="gap-1.5">
-            <Copy className="w-4 h-4" /> {t('detail.copyNew')}
-          </Button>
-          <Button variant="outline" size="sm" onClick={onEdit} className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50">
-            <Pencil className="w-4 h-4" /> تعديل
-          </Button>
-          <Button variant="outline" size="sm" onClick={onDelete} className="gap-1.5 border-red-300 text-red-700 hover:bg-red-50">
-            <Trash2 className="w-4 h-4" /> حذف
+            <Copy className="w-4 h-4" /> نسخ برقم جديد
           </Button>
           <Button variant="outline" size="sm" onClick={onSendToMoh}
             disabled={detail.mohStatus.status !== 'not_sent' && detail.mohStatus.status !== 'reviewed'}
             className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50">
-            <Send className="w-4 h-4" /> إرسال <span dir="ltr">REV.{latestRevNumber}</span> للوزارة
+            <Send className="w-4 h-4" /> إرسال REV.{latestRevNumber} للوزارة
           </Button>
           <Button size="sm" onClick={onDownloadExcel} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
             <Download className="w-4 h-4" /> تنزيل ملف Excel
@@ -1435,8 +1261,8 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
             <Badge variant="outline" className={detail.consultantStatus.color}>{detail.consultantStatus.emoji} {detail.consultantStatus.label}</Badge>
           </div>
           <dl className="space-y-1 text-sm">
-            <div className="flex justify-between"><dt className="text-slate-500">آخر إرسال:</dt><dd>{fmtDate(detail.lastSubmitDate)}</dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">آخر رد:</dt><dd>{fmtDate(detail.lastReplyDate)}</dd></div>
+            <div className="flex justify-between"><dt className="text-slate-500">{t("detail.lastSubmit")}:</dt><dd>{fmtDate(detail.lastSubmitDate)}</dd></div>
+            <div className="flex justify-between"><dt className="text-slate-500">{t("detail.lastReply")}:</dt><dd>{fmtDate(detail.lastReplyDate)}</dd></div>
           </dl>
         </CardContent></Card>
         <Card className="border-0 shadow-sm"><CardContent className="p-4">
@@ -1456,9 +1282,9 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
       <Card className="border-0 shadow-sm">
         <CardHeader className="flex-row items-center justify-between">
           <div><CardTitle className="text-lg flex items-center gap-2"><History className="w-5 h-5" /> سجل المراجعات ({detail.revisions.length})</CardTitle>
-            <CardDescription>سيتم اقتراح <span dir="ltr">REV.{detail.revisions.length}</span> تلقائياً عند الإضافة</CardDescription></div>
+            <CardDescription>سيتم اقتراح REV.{detail.revisions.length} تلقائياً عند الإضافة</CardDescription></div>
           <Button size="sm" onClick={() => setShowRevDialog(true)} className="gap-1.5">
-            <Plus className="w-4 h-4" /> إضافة مراجعة (<span dir="ltr">REV.{detail.revisions.length}</span>)
+            <Plus className="w-4 h-4" /> إضافة مراجعة (REV.{detail.revisions.length})
           </Button>
         </CardHeader>
         <CardContent className="p-0">
@@ -1496,7 +1322,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                   }
                   return (
                     <TableRow key={r.id}>
-                      <TableCell className="text-center font-bold"><span dir="ltr">REV.{r.revNumber}</span></TableCell>
+                      <TableCell className="text-center font-bold">REV.{r.revNumber}</TableCell>
                       <TableCell className="text-center text-sm">{fmtDate(r.submitDate)}</TableCell>
                       <TableCell className="text-center text-sm">{fmtDate(r.replyDate)}</TableCell>
                       <TableCell className={`text-center font-semibold ${actionColor}`}>{actionLabel}</TableCell>
@@ -1523,7 +1349,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
             <CardTitle className="text-lg flex items-center gap-2">
               <FileDown className="w-5 h-5" /> المرفقات والصور ({attachments.length})
             </CardTitle>
-            <CardDescription>ارفع صور (PNG, JPG, GIF, WebP) أو PDF أو Word فقط</CardDescription>
+            <CardDescription>{t("detail.attachmentsHint")}</CardDescription>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -1693,7 +1519,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
             </DialogHeader>
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label className="text-sm font-semibold">{t('reports.filterType')}</Label>
+                <Label className="text-sm font-semibold">النوع</Label>
                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white w-fit">
                   <span className="text-lg">🔗</span>
                   <span className="font-semibold text-sm">رابط خارجي</span>
@@ -1719,7 +1545,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowLinkDialog(false)}>{t('common.cancel')}</Button>
+              <Button variant="outline" onClick={() => setShowLinkDialog(false)}>إلغاء</Button>
               <Button
                 onClick={handleAddLink}
                 disabled={!linkUrl.trim() || !linkName.trim() || uploading}
@@ -1739,13 +1565,18 @@ function AddRevisionDialog({ open, onOpenChange, transmittalId, nextRevNumber, o
   open: boolean; onOpenChange: (v: boolean) => void;
   transmittalId: string; nextRevNumber: number; onSaved: () => void;
 }) {
-  const { t } = useI18n();
   const [submitDate, setSubmitDate] = useState('');
+  const [replyDate, setReplyDate] = useState('');
+  const [action, setAction] = useState('');
+  const [approvalType, setApprovalType] = useState('');
+  const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Auto-set submit date to today when dialog opens
   useEffect(() => {
     if (open) {
       setSubmitDate(new Date().toISOString().slice(0, 10));
+      setReplyDate(''); setAction(''); setApprovalType(''); setNotes('');
     }
   }, [open]);
 
@@ -1757,10 +1588,10 @@ function AddRevisionDialog({ open, onOpenChange, transmittalId, nextRevNumber, o
         body: JSON.stringify({
           revNumber: nextRevNumber,
           submitDate: submitDate || null,
-          replyDate: null,
-          action: null,
-          approvalType: null,
-          notes: null,
+          replyDate: replyDate || null,
+          action: action || null,
+          approvalType: action === 'approved' ? (approvalType || null) : null,
+          notes: notes || null,
         }),
       });
       if (!r.ok) throw new Error('فشل الحفظ');
@@ -1769,28 +1600,68 @@ function AddRevisionDialog({ open, onOpenChange, transmittalId, nextRevNumber, o
     finally { setSaving(false); }
   };
 
+  const handleActionChange = (v: string) => {
+    setAction(v);
+    if (v !== 'approved') setApprovalType('');
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>تقديم مراجعة جديدة - <span dir="ltr">REV.{nextRevNumber}</span></DialogTitle>
-          <DialogDescription>سيتم تسجيل تاريخ التقديم الآن. الرد والإجراء يُسجّلان لاحقاً عند ورود رد الاستشاري.</DialogDescription>
+          <DialogTitle>إضافة مراجعة جديدة - REV.{nextRevNumber}</DialogTitle>
+          <DialogDescription>رقم المراجعة مقترح تلقائياً (آخر رقم + 1). سجّل تاريخ الإرسال والرد والإجراء.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="bg-emerald-50 border border-emerald-200 rounded p-2 text-sm">
-            <strong>رقم المراجعة:</strong> <span dir="ltr">REV.{nextRevNumber}</span> (تلقائي)
+            <strong>رقم المراجعة:</strong> REV.{nextRevNumber} (تلقائي)
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-sm">تاريخ الإرسال</Label>
+              <Input type="date" value={submitDate} onChange={(e) => setSubmitDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">تاريخ الرد</Label>
+              <Input type="date" value={replyDate} onChange={(e) => setReplyDate(e.target.value)} />
+            </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm">تاريخ التقديم *</Label>
-            <Input type="date" value={submitDate} onChange={(e) => setSubmitDate(e.target.value)} />
+            <Label className="text-sm">الإجراء</Label>
+            <Select value={action} onValueChange={handleActionChange}>
+              <SelectTrigger><SelectValue placeholder="اختر الإجراء" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="approved">✅ مقبول</SelectItem>
+                <SelectItem value="rejected">❌ مرفوض</SelectItem>
+                <SelectItem value="withdrawn">🚫 مسحوب</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
-            ℹ️ بعد التقديم، ستظهر الحالة "بانتظار الرد". عند ورود رد الاستشاري، استخدم زر "تسجيل رد الاستشاري" لإدخال الإجراء وتاريخ الرد.
+          {action === 'approved' && (
+            <div className="space-y-1.5 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+              <Label className="text-sm font-semibold text-emerald-800">نوع القبول *</Label>
+              <Select value={approvalType} onValueChange={setApprovalType}>
+                <SelectTrigger className="!w-full !h-auto !min-h-[36px] !whitespace-normal !break-words text-left [&_[data-slot=select-value]]:!line-clamp-none [&_[data-slot=select-value]]:!whitespace-normal [&_[data-slot=select-value]]:!break-words"><SelectValue placeholder="اختر نوع القبول" className="whitespace-normal break-words leading-snug" /></SelectTrigger>
+                <SelectContent>
+                  {APPROVAL_TYPES.map(at => (
+                    <SelectItem key={at.code} value={at.code} className="whitespace-normal break-words leading-snug py-2">
+                      <span className="font-bold">({at.letter})</span> {at.label}
+                      <br />
+                      <span className="text-xs text-slate-500">{at.description}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label className="text-sm">ملاحظات</Label>
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="ملاحظات إضافية..." />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={handleSave} disabled={saving || !submitDate} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'تقديم REV.' + nextRevNumber}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
+          <Button onClick={handleSave} disabled={saving || (action === 'approved' && !approvalType)} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'حفظ REV.' + nextRevNumber}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1863,16 +1734,16 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
   return (
     <div className="max-w-2xl mx-auto space-y-4">
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">إنشاء ترانسميتال جديد</h2>
+        <h2 className="text-2xl font-bold text-slate-900">{t("new.title")}</h2>
         <p className="text-sm text-slate-500 mt-1">
-          سيتم اقتراح المرجع تلقائياً (الرقم التسلسلي الموحد + كود القسم). مثال: {`{CIV-171, EL-172, PL-173, ...}`}
+          {t("new.subtitle", { example: "{CIV-171, EL-172, PL-173, ...}" })}
         </p>
       </div>
 
       <Card className="border-0 shadow-sm"><CardContent className="p-6 space-y-4">
         {/* Step 1: Main Category */}
         <div className="space-y-1.5">
-          <Label>القسم الرئيسي * <span className="text-xs text-slate-500">(ترانسميتال / MIR / RFI / كتب / ...)</span></Label>
+          <Label>{t("new.categoryLabel")} <span className="text-xs text-slate-500">(ترانسميتال / MIR / RFI / كتب / ...)</span></Label>
           <Select value={category} onValueChange={(v) => { setCategory(v); setDiscipline(''); setReference(''); setRefInfo(null); }}>
             <SelectTrigger><SelectValue placeholder="اختر القسم الرئيسي أولاً" /></SelectTrigger>
             <SelectContent>
@@ -1899,7 +1770,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
               )}
             </div>
             <div className="space-y-1.5">
-              <Label>المرجع * {loadingRef && <span className="text-xs text-slate-500">(جاري الحساب...)</span>}</Label>
+              <Label>{t("new.referenceLabel")} {loadingRef && <span className="text-xs text-slate-500">(جاري الحساب...)</span>}</Label>
               <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="سيتم اقتراحه تلقائياً" className="font-mono" />
               {refInfo && (
                 <p className="text-xs text-slate-500">
@@ -1914,7 +1785,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
         {discipline && (
           <>
             <div className="space-y-1.5">
-              <Label>{t('reports.filterType')}</Label>
+              <Label>النوع</Label>
           <Select value={type} onValueChange={setType}>
             <SelectTrigger><SelectValue placeholder="اختر النوع" /></SelectTrigger>
             <SelectContent>
@@ -1932,12 +1803,12 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
         </div>
 
         <div className="space-y-1.5">
-          <Label>{t("common.description")}</Label>
+          <Label>الوصف</Label>
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="مثال: Excavation Plan & Excavation Section" />
         </div>
 
         <div className="space-y-1.5">
-          <Label>تاريخ إرسال <span dir="ltr">REV.0</span></Label>
+          <Label>تاريخ إرسال REV.0</Label>
           <Input type="date" value={submitDate} onChange={(e) => setSubmitDate(e.target.value)} />
         </div>
 
@@ -2010,7 +1881,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
 
       {refInfo && refInfo.recentAllDisciplines.length > 0 && (
         <Card className="bg-blue-50 border-blue-200"><CardContent className="p-4">
-          <p className="text-sm font-semibold text-blue-900 mb-2">آخر 5 مراجع مُنشأة:</p>
+          <p className="text-sm font-semibold text-blue-900 mb-2">{t("new.recentRefs")}</p>
           <div className="flex flex-wrap gap-2">
             {refInfo.recentAllDisciplines.map((r, i) => (
               <Badge key={i} variant="outline" className="font-mono">{r}</Badge>
@@ -2024,6 +1895,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
 
 /* ============ IMPORT VIEW ============ */
 function ImportView({ onDone }: { onDone: () => void }) {
+  const { t } = useI18n();
   const [file, setFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -2046,8 +1918,8 @@ function ImportView({ onDone }: { onDone: () => void }) {
   return (
     <div className="max-w-2xl mx-auto space-y-4">
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">استيراد البيانات من Excel</h2>
-        <p className="text-sm text-slate-500 mt-1">ارفع ملف LOG_Final.xlsm لاستيراد كل الترانسميتالات. سيتم تخطّي الصفوف بدون وصف.</p>
+        <h2 className="text-2xl font-bold text-slate-900">{t("import.title")}</h2>
+        <p className="text-sm text-slate-500 mt-1">{t("import.desc")}</p>
       </div>
 
       <Card className="border-0 shadow-sm"><CardContent className="p-6 space-y-4">
@@ -2233,186 +2105,21 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
     return 'text-slate-700';
   };
 
-  const handlePrint = () => {
-    // Build the full HTML content for printing — EXACT replica of the on-screen table
-    const catLabel = filterCategory !== 'all'
-      ? (categories.find(c => c.code === filterCategory)?.label || filterCategory)
-      : 'جميع الأقسام';
-    const dateStr = dateTo || new Date().toISOString().slice(0, 10);
-
-    // Build table with EXACT same structure as the on-screen table
-    let tableHtml = '<table style="border-collapse:collapse;width:100%;font-size:8px;table-layout:auto;"><thead><tr>';
-    // Reference column
-    tableHtml += '<th style="border:2px solid #cbd5e1;padding:4px;background:#1d4ed8;color:white;min-width:80px;text-align:right;position:sticky;right:0;z-index:2;">' + t("reports.col.reference") + '</th>';
-    // Description column
-    tableHtml += '<th style="border:2px solid #cbd5e1;padding:4px;background:#1d4ed8;color:white;min-width:150px;text-align:right;">' + t("reports.col.description") + '</th>';
-    // REV columns — with sub-headers (تقديم/رد/إجراء)
-    revColumns.forEach((rev, revIdx) => {
-      const borderColor = revIdx === 0 ? '#94a3b8' : '#3b82f6';
-      tableHtml += `<th style="border:2px solid ${borderColor};padding:0;min-width:200px;text-align:center;">`;
-      tableHtml += `<div style="background:#1d4ed8;color:white;padding:4px;font-weight:bold;font-size:10px;">REV.${rev}</div>`;
-      tableHtml += '<div style="display:flex;background:#dbeafe;font-size:7px;">';
-      tableHtml += '<div style="flex:1;padding:2px;border-left:1px solid #93c5fd;">' + t("reports.rev.submit") + '</div>';
-      tableHtml += '<div style="flex:1;padding:2px;border-left:1px solid #93c5fd;">' + t("reports.rev.reply") + '</div>';
-      tableHtml += '<div style="flex:1;padding:2px;">' + t("reports.rev.action") + '</div>';
-      tableHtml += '</div></th>';
-    });
-    // Consultant column
-    tableHtml += '<th style="border:2px solid #10b981;padding:4px;background:#10b981;color:white;min-width:80px;">' + t("reports.col.consultant") + '</th>';
-    // MOH column
-    tableHtml += '<th style="border:2px solid #8b5cf6;padding:4px;background:#8b5cf6;color:white;min-width:80px;">' + t("reports.col.moh") + '</th>';
-    tableHtml += '</tr></thead><tbody>';
-
-    // Data rows
-    items.forEach(item => {
-      tableHtml += '<tr style="page-break-inside:avoid;">';
-      // Reference
-      tableHtml += `<td style="border:1px solid #cbd5e1;padding:3px;font-family:monospace;font-weight:bold;background:white;position:sticky;right:0;z-index:1;">${item.reference || '—'}</td>`;
-      // Description
-      tableHtml += `<td style="border:1px solid #cbd5e1;padding:3px;font-size:7px;max-width:150px;word-wrap:break-word;">${(item as any).alternativeTitle || item.description || '—'}</td>`;
-      // REV cells
-      revColumns.forEach((rev, revIdx) => {
-        const r = item.revisions[rev];
-        const borderColor = revIdx === 0 ? '#94a3b8' : '#3b82f6';
-        if (!r || (!r.submitDate && !r.action)) {
-          tableHtml += `<td style="border:2px solid ${borderColor};padding:0;">`;
-          tableHtml += '<div style="display:flex;min-height:30px;font-size:7px;">';
-          tableHtml += '<div style="flex:1;padding:2px;border-left:1px solid #e2e8f0;text-align:center;color:#cbd5e1;">—</div>';
-          tableHtml += '<div style="flex:1;padding:2px;border-left:1px solid #e2e8f0;text-align:center;color:#cbd5e1;">—</div>';
-          tableHtml += '<div style="flex:1;padding:2px;text-align:center;color:#cbd5e1;">—</div>';
-          tableHtml += '</div></td>';
-        } else {
-          const sDate = r.submitDate ? new Date(r.submitDate).toLocaleDateString('en-GB') : '—';
-          const rDate = r.replyDate ? new Date(r.replyDate).toLocaleDateString('en-GB') : '—';
-          const aLabel = actionLabel(r.action, r.approvalType);
-          // Color based on action
-          let aColor = '#64748b';
-          let aBg = '';
-          if (r.action === 'approved') {
-            if (r.approvalType === 'NOT_APPROVED') { aColor = '#b91c1c'; aBg = 'background:#fef2f2;'; }
-            else if (r.approvalType === 'FOR_INFORMATION' || r.approvalType === 'APPROVED_AS_NOTED_RESUBMIT') { aColor = '#c2410c'; aBg = 'background:#fff7ed;'; }
-            else { aColor = '#047857'; aBg = 'background:#ecfdf5;'; }
-          } else if (r.action === 'rejected') { aColor = '#b91c1c'; aBg = 'background:#fef2f2;'; }
-          else if (r.action === 'withdrawn') { aColor = '#374151'; aBg = 'background:#f3f4f6;'; }
-          else if (r.action === 'pending') { aColor = '#a16207'; aBg = 'background:#fefce8;'; }
-
-          // Days open color
-          let daysColor = '#64748b';
-          if (r.daysOpen !== null) {
-            if (r.daysOpen > 30) daysColor = '#b91c1c';
-            else if (r.daysOpen > 14) daysColor = '#a16207';
-            else daysColor = '#047857';
-          }
-
-          tableHtml += `<td style="border:2px solid ${borderColor};padding:0;">`;
-          tableHtml += '<div style="display:flex;min-height:30px;font-size:7px;">';
-          // Submit date + days
-          tableHtml += '<div style="flex:1;padding:2px;border-left:1px solid #e2e8f0;text-align:center;">';
-          if (r.submitDate) {
-            tableHtml += `<div style="font-weight:500;color:#334155;">${sDate}</div>`;
-            if (r.daysOpen !== null) {
-              tableHtml += `<div style="font-size:6px;font-weight:bold;color:${daysColor};">${r.daysOpen}ي</div>`;
-            }
-          } else {
-            tableHtml += '<span style="color:#cbd5e1;">—</span>';
-          }
-          tableHtml += '</div>';
-          // Reply date
-          tableHtml += '<div style="flex:1;padding:2px;border-left:1px solid #e2e8f0;text-align:center;">';
-          tableHtml += r.replyDate ? `<div style="font-weight:500;color:#334155;">${rDate}</div>` : '<span style="color:#cbd5e1;">—</span>';
-          tableHtml += '</div>';
-          // Action
-          tableHtml += `<div style="flex:1;padding:2px;text-align:center;font-weight:bold;${aBg}color:${aColor};">${aLabel}</div>`;
-          tableHtml += '</div></td>';
-        }
-      });
-      // Consultant
-      const ce = item.consultantStatus === 'Approved' ? '✅' : item.consultantStatus === 'Overdue' ? '🔴' : item.consultantStatus === 'Under Review' ? '⏳' : item.consultantStatus === 'Cancelled' ? '🚫' : '—';
-      tableHtml += `<td style="border:2px solid #10b981;padding:3px;text-align:center;background:#ecfdf5;">${ce}</td>`;
-      // MOH
-      let me = '—';
-      if (item.mohStatus === 'Approved') me = '✅';
-      else if (item.mohStatus === 'Under Review') me = '⏳';
-      else if (item.mohStatus === 'Overdue') me = '🔴';
-      else if (item.mohStatus === 'Rejected') me = '❌';
-      let mohExtra = '';
-      if (item.mohSubmitDate) {
-        mohExtra = `<div style="font-size:6px;color:#64748b;margin-top:2px;">${new Date(item.mohSubmitDate).toLocaleDateString('en-GB')}</div>`;
-      }
-      tableHtml += `<td style="border:2px solid #8b5cf6;padding:3px;text-align:center;background:#f5f3ff;">${me}${mohExtra}</td>`;
-      tableHtml += '</tr>';
-    });
-    tableHtml += '</tbody></table>';
-
-    const fullHtml = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>تقرير ${catLabel}</title>
-    <style>
-      @page { size: A3 landscape; margin: 0.5cm; }
-      body { font-family: Tahoma, Arial, sans-serif; margin: 0; padding: 10px; direction: rtl; }
-      .header { text-align: center; border: 2px solid #0f172a; padding: 10px; margin-bottom: 10px; background: #f8fafc; }
-      .header h1 { font-size: 16px; margin: 0; color: #0f172a; }
-      .header p { font-size: 11px; margin: 4px 0 0; color: #475569; }
-      table { width: 100%; border-collapse: collapse; table-layout: auto; }
-      thead { display: table-header-group; }
-      tr { page-break-inside: avoid; }
-      .legend { margin-top: 10px; font-size: 8px; color: #475569; }
-      .legend span { margin-left: 10px; }
-    </style>
-    </head><body>
-    <div class="header">
-      <h1>${t("reports.title")} - ${catLabel}</h1>
-      <p>${t("reports.printUntil")}: ${dateStr} · ${items.length} ترانسميتال · ${revColumns.length} مراجعة (<span dir="ltr">REV.0 - REV.${maxRevNumber}</span>)</p>
-    </div>
-    ${tableHtml}
-    <div class="legend">
-      <strong>دليل الألوان:</strong>
-      <span style="background:#ecfdf5;padding:1px 4px;border:1px solid #10b981;">A: APPROVED</span>
-      <span style="background:#ecfdf5;padding:1px 4px;border:1px solid #10b981;">B: APPROVED AS NOTED</span>
-      <span style="background:#fff7ed;padding:1px 4px;border:1px solid #c2410c;">C: APPROVED AS NOTED & RESUBMIT</span>
-      <span style="background:#fef2f2;padding:1px 4px;border:1px solid #b91c1c;">D: NOT APPROVED</span>
-      <span style="background:#fff7ed;padding:1px 4px;border:1px solid #c2410c;">E: FOR INFORMATION</span>
-      <span style="background:#fef2f2;padding:1px 4px;border:1px solid #b91c1c;">❌ مرفوض</span>
-      <span style="background:#f3f4f6;padding:1px 4px;border:1px solid #374151;">🚫 مسحوب</span>
-      <span style="color:#64748b;">· Xي = عدد الأيام من التقديم حتى الرد</span>
-    </div>
-    </body></html>`;
-
-    // If running in Electron, use IPC for native printing (avoids pop-up blocker)
-    if (typeof window !== 'undefined' && (window as any).electronAPI?.printContent) {
-      (window as any).electronAPI.printContent(fullHtml).then(() => {
-        toast({ title: 'تم الطباعة' });
-      }).catch(() => {
-        toast({ title: 'خطأ', description: 'فشل الطباعة', variant: 'destructive' });
-      });
-      return;
-    }
-
-    // Browser fallback: use window.open
-    const printWin = window.open('', '_blank', 'width=1400,height=900');
-    if (!printWin) {
-      toast({ title: 'Error', description: 'Please allow pop-ups', variant: 'destructive' });
-      return;
-    }
-    printWin.document.write(fullHtml);
-    printWin.document.close();
-    printWin.focus();
-    setTimeout(() => { printWin.print(); }, 500);
-  };
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">{t('reports.title')}</h2>
+          <h2 className="text-2xl font-bold text-slate-900">تقارير الجدول الزمني</h2>
           <p className="text-sm text-slate-500 mt-1">
-            {items.length} ترانسميتال · {revColumns.length} مراجعة (<span dir="ltr">REV.0 - REV.{maxRevNumber}</span>)
+            {items.length} ترانسميتال · {revColumns.length} مراجعة (REV.0 - REV.{maxRevNumber}) · كل ريفجن في جدول منفصل بفواصل رأسية
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={fetchReport} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> {t('common.refresh')}
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> تحديث
           </Button>
-          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5">
-            <Printer className="w-4 h-4" /> طباعة كاملة
+          <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-1.5">
+            <Printer className="w-4 h-4" /> طباعة
           </Button>
           <Button size="sm" onClick={handleExportExcel} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
             <FileDown className="w-4 h-4" /> تنزيل Excel
@@ -2424,48 +2131,48 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
       <Card className="border-0 shadow-sm"><CardContent className="p-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
-            <Label className="text-xs">{t('common.search')}</Label>
+            <Label className="text-xs">بحث</Label>
             <div className="relative">
               <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('reports.searchPlaceholder')} className="pr-8" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="مرجع أو وصف..." className="pr-8" />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{t('reports.filterCategory')}</Label>
+            <Label className="text-xs">{t("common.mainCategory")}</Label>
             <Select value={filterCategory} onValueChange={(v) => { setFilterCategory(v); setFilterDiscipline('all'); }}>
               <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t('common.all')}</SelectItem>
+                <SelectItem value="all">الكل</SelectItem>
                 {categories.map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {c.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{t('reports.filterDiscipline')}</Label>
+            <Label className="text-xs">التخصص</Label>
             <Select value={filterDiscipline} onValueChange={setFilterDiscipline}>
               <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t('common.all')}</SelectItem>
+                <SelectItem value="all">الكل</SelectItem>
                 {availableDisciplines.map(d => <SelectItem key={d.code} value={d.code}>{d.label} ({d.code})</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{t('reports.filterType')}</Label>
+            <Label className="text-xs">النوع</Label>
             <Select value={filterType} onValueChange={setFilterType}>
               <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t('common.all')}</SelectItem>
+                <SelectItem value="all">الكل</SelectItem>
                 {types.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{t('reports.dateFrom')}</Label>
+            <Label className="text-xs">من تاريخ</Label>
             <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{t('reports.dateTo')}</Label>
+            <Label className="text-xs">إلى تاريخ</Label>
             <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
           </div>
         </div>
@@ -2482,31 +2189,31 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
           ) : items.length === 0 ? (
             <div className="text-center py-16 text-slate-500">
               <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p>{t('reports.empty')}</p>
+              <p>لا توجد بيانات مطابقة للفلاتر</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table className="border-collapse">
                 <TableHeader className="sticky top-0 bg-white z-10">
                   <TableRow>
-                    <TableHead className="text-right sticky right-0 bg-white z-20 min-w-[120px] border-l-2 border-slate-300">{t("reports.col.reference")}</TableHead>
-                    <TableHead className="text-right min-w-[180px] border-l-2 border-slate-300">{t("reports.col.description")}</TableHead>
+                    <TableHead className="text-right sticky right-0 bg-white z-20 min-w-[120px] border-l-2 border-slate-300">المرجع</TableHead>
+                    <TableHead className="text-right min-w-[180px] border-l-2 border-slate-300">الوصف</TableHead>
                     {revColumns.map((rev, revIdx) => (
                       <TableHead
                         key={rev}
                         className={`text-center min-w-[260px] p-0 border-l-4 ${revIdx === 0 ? 'border-l-2 border-slate-400' : 'border-l-4 border-blue-500'}`}
                       >
                         {/* REV group header — colored band on top */}
-                        <div className="bg-blue-700 text-white py-1.5 px-2 font-bold text-sm"><span dir="ltr">REV.{rev}</span></div>
+                        <div className="bg-blue-700 text-white py-1.5 px-2 font-bold text-sm">REV.{rev}</div>
                         <div className="flex text-xs font-normal mt-0 bg-blue-50">
-                          <div className="flex-1 py-1 border-l border-blue-200">{t("reports.rev.submit")}</div>
-                          <div className="flex-1 py-1 border-l border-blue-200">{t("reports.rev.reply")}</div>
-                          <div className="flex-1 py-1 border-l border-blue-200">{t("reports.rev.action")}</div>
+                          <div className="flex-1 py-1 border-l border-blue-200">تقديم</div>
+                          <div className="flex-1 py-1 border-l border-blue-200">رد</div>
+                          <div className="flex-1 py-1 border-l border-blue-200">إجراء</div>
                         </div>
                       </TableHead>
                     ))}
-                    <TableHead className="text-center min-w-[100px] border-l-4 border-emerald-500 bg-emerald-50">{t("reports.col.consultant")}</TableHead>
-                    <TableHead className="text-center min-w-[100px] border-l-2 border-purple-500 bg-purple-50">{t("reports.col.moh")}</TableHead>
+                    <TableHead className="text-center min-w-[100px] border-l-4 border-emerald-500 bg-emerald-50">الاستشاري</TableHead>
+                    <TableHead className="text-center min-w-[100px] border-l-2 border-purple-500 bg-purple-50">الوزارة</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2619,7 +2326,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
 function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines, onRefreshCategories, onRefreshDocTypes }: {
   disciplines: Discipline[];
   categories: Category[];
-  docTypes: DocType[];
+  docTypes: { id: string; code: string; label: string; transmittalsCount?: number }[];
   onRefreshDisciplines: () => void;
   onRefreshCategories: () => void;
   onRefreshDocTypes: () => void;
@@ -2628,78 +2335,46 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
   const [showAdd, setShowAdd] = useState(false);
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [showAddDocType, setShowAddDocType] = useState(false);
-  const [showWipeData, setShowWipeData] = useState(false);
   const [newDocTypeCode, setNewDocTypeCode] = useState('');
   const [newDocTypeLabel, setNewDocTypeLabel] = useState('');
-  const [newDocTypeLabelEn, setNewDocTypeLabelEn] = useState('');
-  const [newDocTypeCategory, setNewDocTypeCategory] = useState('');
   const [editing, setEditing] = useState<Discipline | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [editingDocType, setEditingDocType] = useState<DocType | null>(null);
-  const [storagePath, setStoragePath] = useState('');
   const { toast } = useToast();
 
+  // Always fetch fresh data when SettingsView mounts
   useEffect(() => {
     onRefreshDisciplines();
     onRefreshCategories();
-    // Check localStorage first for custom save path
-    const savedPath = typeof window !== 'undefined' ? localStorage.getItem('customStoragePath') : null;
-    if (savedPath) {
-      setStoragePath(savedPath);
-    } else {
-      // Fetch default storage path
-      fetch('/api/config/storage-path').then(r => r.json()).then(d => setStoragePath(d.path || 'storage/uploads/')).catch(() => setStoragePath('storage/uploads/'));
-    }
   }, []);
 
-  const handleChooseSavePath = async () => {
-    // If in Electron, use native dialog
-    if (typeof window !== 'undefined' && (window as any).electronAPI?.chooseSavePath) {
-      const chosenPath = await (window as any).electronAPI.chooseSavePath();
-      if (chosenPath) {
-        localStorage.setItem('customStoragePath', chosenPath);
-        setStoragePath(chosenPath);
-        toast({ title: 'تم حفظ المسار', description: chosenPath });
-      }
-    } else {
-      // Browser fallback: manual input
-      const inputPath = prompt('أدخل مسار حفظ الملفات (مثال: C:\\Users\\Dell\\Documents\\SiteFiles):', storagePath);
-      if (inputPath) {
-        localStorage.setItem('customStoragePath', inputPath);
-        setStoragePath(inputPath);
-        toast({ title: 'تم حفظ المسار', description: inputPath });
-      }
-    }
-  };
-
   const handleDelete = async (code: string) => {
-    if (!confirm(lang === 'ar' ? `هل أنت متأكد من حذف التخصص ${code}؟` : `Delete discipline ${code}?`)) return;
+    if (!confirm(`هل أنت متأكد من حذف القسم ${code}؟`)) return;
     try {
       const r = await fetch(`/api/disciplines/${code}`, { method: 'DELETE' });
-      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'Failed'); }
-      toast({ title: lang === 'ar' ? 'تم حذف التخصص' : 'Deleted', description: code });
+      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الحذف'); }
+      toast({ title: 'تم حذف القسم', description: code });
       onRefreshDisciplines();
-    } catch (e: any) { toast({ title: t('common.error'), description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
   };
 
   const handleDeleteCategory = async (code: string) => {
-    if (!confirm(lang === 'ar' ? `هل أنت متأكد من حذف القسم الرئيسي ${code}؟` : `Delete category ${code}?`)) return;
+    if (!confirm(`هل أنت متأكد من حذف القسم الرئيسي ${code}؟`)) return;
     try {
       const r = await fetch(`/api/categories/${code}`, { method: 'DELETE' });
-      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'Failed'); }
-      toast({ title: lang === 'ar' ? 'تم حذف القسم الرئيسي' : 'Deleted', description: code });
+      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الحذف'); }
+      toast({ title: 'تم حذف القسم الرئيسي', description: code });
       onRefreshCategories();
-    } catch (e: any) { toast({ title: t('common.error'), description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
   };
 
   const handleDeleteDocType = async (id: string, code: string) => {
-    if (!confirm(lang === 'ar' ? `هل أنت متأكد من حذف النوع ${code}؟` : `Delete type ${code}?`)) return;
+    if (!confirm(`هل أنت متأكد من حذف النوع ${code}؟`)) return;
     try {
       const r = await fetch(`/api/doc-types/${id}`, { method: 'DELETE' });
-      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || 'Failed'); }
-      toast({ title: lang === 'ar' ? 'تم حذف النوع' : 'Deleted', description: code });
+      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || 'فشل الحذف'); }
+      toast({ title: 'تم حذف النوع', description: code });
       onRefreshDocTypes();
-    } catch (e: any) { toast({ title: t('common.error'), description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
   };
 
   const handleAddDocType = async () => {
@@ -2707,83 +2382,51 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
     try {
       const r = await fetch('/api/doc-types', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: newDocTypeCode.toUpperCase().trim(),
-          label: newDocTypeLabel.trim(),
-          labelEn: newDocTypeLabelEn.trim() || undefined,
-          categoryCode: newDocTypeCategory || undefined,
-        }),
+        body: JSON.stringify({ code: newDocTypeCode.toUpperCase().trim(), label: newDocTypeLabel.trim() }),
       });
-      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || 'Failed'); }
-      toast({ title: lang === 'ar' ? 'تم إضافة النوع' : 'Added', description: newDocTypeCode.toUpperCase() });
+      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || 'فشل الحفظ'); }
+      toast({ title: 'تم إضافة النوع', description: newDocTypeCode.toUpperCase() });
       setShowAddDocType(false);
-      setNewDocTypeCode(''); setNewDocTypeLabel(''); setNewDocTypeLabelEn(''); setNewDocTypeCategory('');
+      setNewDocTypeCode(''); setNewDocTypeLabel('');
       onRefreshDocTypes();
-    } catch (e: any) { toast({ title: t('common.error'), description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
   };
-
-  const colorOptions = [
-    { value: 'bg-gray-100 text-gray-700', label: t('color.gray') },
-    { value: 'bg-amber-100 text-amber-700', label: t('color.amber') },
-    { value: 'bg-purple-100 text-purple-700', label: t('color.purple') },
-    { value: 'bg-cyan-100 text-cyan-700', label: t('color.cyan') },
-    { value: 'bg-rose-100 text-rose-700', label: t('color.rose') },
-    { value: 'bg-red-100 text-red-700', label: t('color.red') },
-    { value: 'bg-emerald-100 text-emerald-700', label: t('color.emerald') },
-    { value: 'bg-blue-100 text-blue-700', label: t('color.blue') },
-    { value: 'bg-indigo-100 text-indigo-700', label: t('color.indigo') },
-    { value: 'bg-orange-100 text-orange-700', label: t('color.orange') },
-  ];
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">{t('settings.title')}</h2>
-          <p className="text-sm text-slate-500 mt-1">{t('settings.subtitle')}</p>
+          <h2 className="text-2xl font-bold text-slate-900">إعدادات الأقسام</h2>
+          <p className="text-sm text-slate-500 mt-1">الأقسام الرئيسية والتخصصات الفرعية تحتها</p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2">
           <Button onClick={() => setShowAddCategory(true)} variant="outline" className="gap-1.5">
-            <FolderPlus className="w-4 h-4" /> {t('settings.addCategory')}
+            <FolderPlus className="w-4 h-4" /> إضافة قسم رئيسي
           </Button>
           <Button onClick={() => setShowAdd(true)} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
-            <Plus className="w-4 h-4" /> {t('settings.addDiscipline')}
+            <Plus className="w-4 h-4" /> إضافة تخصص
           </Button>
         </div>
       </div>
-
-      {/* Storage Path Card */}
-      <Card className="border-blue-200 bg-blue-50/30">
-        <CardHeader><CardTitle className="text-base flex items-center gap-2">
-          <Folder className="w-5 h-5 text-blue-700" /> {t('settings.storagePath')}
-        </CardTitle></CardHeader>
-        <CardContent>
-          <p className="text-sm text-slate-600 mb-2">{t('settings.storagePathHint')}</p>
-          <code className="block bg-white border border-slate-200 rounded p-2 text-xs font-mono text-slate-800 break-all mb-3">{storagePath}</code>
-          <Button onClick={handleChooseSavePath} variant="outline" size="sm" className="gap-1.5">
-            <Folder className="w-4 h-4" /> {lang === 'ar' ? 'اختيار مسار الحفظ' : 'Choose Save Path'}
-          </Button>
-        </CardContent>
-      </Card>
 
       {/* Categories Management Section */}
       <Card className="border-0 shadow-sm">
         <CardHeader className="border-b bg-slate-50">
           <CardTitle className="text-base flex items-center gap-2">
-            <Folder className="w-5 h-5" /> {t('settings.categories')} ({categories.length})
+            <Folder className="w-5 h-5" /> الأقسام الرئيسية ({categories.length})
           </CardTitle>
-          <CardDescription>{lang === 'ar' ? 'الأقسام الرئيسية القابلة للإضافة' : 'Addable main categories'}</CardDescription>
+          <CardDescription>الأقسام الرئيسية القابلة للإضافة (ترانسميتال، MIR، RFI، كتب، وأي قسم آخر)</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader><TableRow>
-              <TableHead className="text-right">{lang === 'ar' ? 'الأيقونة' : 'Icon'}</TableHead>
-              <TableHead className="text-right">{t('common.code')}</TableHead>
-              <TableHead className="text-right">{lang === 'ar' ? 'الاسم (عربي)' : 'Label (AR)'}</TableHead>
-              <TableHead className="text-right">{lang === 'ar' ? 'الاسم (EN)' : 'Label (EN)'}</TableHead>
-              <TableHead className="text-center">{lang === 'ar' ? 'تخصصات' : 'Disciplines'}</TableHead>
-              <TableHead className="text-center">{lang === 'ar' ? 'ترانسميتالات' : 'Transmittals'}</TableHead>
-              <TableHead className="text-center">{t('common.actions')}</TableHead>
+              <TableHead className="text-right">الأيقونة</TableHead>
+              <TableHead className="text-right">الكود</TableHead>
+              <TableHead className="text-right">الاسم</TableHead>
+              <TableHead className="text-center">عدد التخصصات</TableHead>
+              <TableHead className="text-center">عدد الالمستندات</TableHead>
+              <TableHead className="text-center">اللون</TableHead>
+              <TableHead className="text-center">إجراءات</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {categories.map((c) => (
@@ -2791,9 +2434,9 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
                   <TableCell className="text-2xl">{c.icon}</TableCell>
                   <TableCell className="font-mono font-bold">{c.code}</TableCell>
                   <TableCell>{c.label}</TableCell>
-                  <TableCell className="text-slate-600">{c.labelEn || '—'}</TableCell>
                   <TableCell className="text-center font-semibold">{c.disciplinesCount || 0}</TableCell>
                   <TableCell className="text-center font-semibold">{c.transmittalsCount || 0}</TableCell>
+                  <TableCell className="text-center"><div className={`inline-block px-2 py-1 rounded text-xs ${c.color}`}>عينة</div></TableCell>
                   <TableCell className="text-center">
                     <div className="flex justify-center gap-1">
                       <Button size="sm" variant="ghost" onClick={() => setEditingCategory(c)}><Pencil className="w-4 h-4" /></Button>
@@ -2812,43 +2455,35 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
         <CardHeader className="border-b bg-slate-50 flex-row items-center justify-between">
           <div>
             <CardTitle className="text-base flex items-center gap-2">
-              <FileText className="w-5 h-5" /> {t('settings.docTypes', { count: docTypes.length }).replace('{count}', String(docTypes.length))}
+              <FileText className="w-5 h-5" /> أنواع المستندات ({docTypes.length})
             </CardTitle>
-            <CardDescription>{t('settings.docTypesHint')}</CardDescription>
+            <CardDescription>الأنواع المستخدمة في تصنيف الالمستندات (Shop Drawings, Sample, ...)</CardDescription>
           </div>
           <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowAddDocType(true)}>
-            <Plus className="w-4 h-4" /> {t('settings.addDocType')}
+            <Plus className="w-4 h-4" /> إضافة نوع
           </Button>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader><TableRow>
-              <TableHead className="text-right">{t('common.code')}</TableHead>
-              <TableHead className="text-right">{lang === 'ar' ? 'الاسم (عربي)' : 'Label (AR)'}</TableHead>
-              <TableHead className="text-right">{lang === 'ar' ? 'الاسم (EN)' : 'Label (EN)'}</TableHead>
-              <TableHead className="text-right">{t('common.category')}</TableHead>
-              <TableHead className="text-center">{lang === 'ar' ? 'ترانسميتالات' : 'Transmittals'}</TableHead>
-              <TableHead className="text-center">{t('common.actions')}</TableHead>
+              <TableHead className="text-right">الكود</TableHead>
+              <TableHead className="text-right">الاسم</TableHead>
+              <TableHead className="text-center">عدد الالمستندات</TableHead>
+              <TableHead className="text-center">إجراءات</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {docTypes.map((dt) => {
-                const cat = categories.find(c => c.code === (dt as any).categoryCode);
-                return (
-                  <TableRow key={dt.id}>
-                    <TableCell className="font-mono font-bold">{dt.code}</TableCell>
-                    <TableCell>{dt.label}</TableCell>
-                    <TableCell className="text-slate-600">{(dt as any).labelEn || '—'}</TableCell>
-                    <TableCell>{cat ? `${cat.icon} ${(lang === 'en' && cat.labelEn) ? cat.labelEn : cat.label}` : '—'}</TableCell>
-                    <TableCell className="text-center font-semibold">{dt.transmittalsCount || 0}</TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex justify-center gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => setEditingDocType(dt)}><Pencil className="w-4 h-4" /></Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleDeleteDocType(dt.id, dt.code)}><Trash2 className="w-4 h-4 text-red-600" /></Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {docTypes.map((t) => (
+                <TableRow key={t.id}>
+                  <TableCell className="font-mono font-bold">{t.code}</TableCell>
+                  <TableCell>{t.label}</TableCell>
+                  <TableCell className="text-center font-semibold">{t.transmittalsCount || 0}</TableCell>
+                  <TableCell className="text-center">
+                    <div className="flex justify-center gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => handleDeleteDocType(t.id, t.code)}><Trash2 className="w-4 h-4 text-red-600" /></Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </CardContent>
@@ -2859,50 +2494,30 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
         <Dialog open={true} onOpenChange={(v) => !v && setShowAddDocType(false)}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{t('dialog.addDocType.title')}</DialogTitle>
-              <DialogDescription>{t('dialog.addDocType.desc')}</DialogDescription>
+              <DialogTitle>إضافة نوع مستند جديد</DialogTitle>
+              <DialogDescription>أضف نوعاً جديداً لتصنيف الالمستندات</DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label className="text-sm">{t('common.code')} *</Label>
-                <Input value={newDocTypeCode} onChange={(e) => setNewDocTypeCode(e.target.value.toUpperCase())} placeholder="MD" className="font-mono" maxLength={30} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-sm">{lang === 'ar' ? 'الاسم (عربي) *' : 'Label (AR) *'}</Label>
-                  <Input value={newDocTypeLabel} onChange={(e) => setNewDocTypeLabel(e.target.value)} placeholder={lang === 'ar' ? 'طريقة تنفيذ' : 'Method Statement'} autoFocus />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-sm">{t('common.labelEn')}</Label>
-                  <Input value={newDocTypeLabelEn} onChange={(e) => setNewDocTypeLabelEn(e.target.value)} placeholder="Method Statement" dir="ltr" />
-                </div>
+                <Label className="text-sm">الكود *</Label>
+                <Input value={newDocTypeCode} onChange={(e) => setNewDocTypeCode(e.target.value.toUpperCase())} placeholder="مثال: MD" className="font-mono" maxLength={30} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm">{t('common.category')}</Label>
-                <Select value={newDocTypeCategory} onValueChange={setNewDocTypeCategory}>
-                  <SelectTrigger><SelectValue placeholder={lang === 'ar' ? 'اختر القسم' : 'Select category'} /></SelectTrigger>
-                  <SelectContent>
-                    {categories.map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label className="text-sm">الاسم *</Label>
+                <Input value={newDocTypeLabel} onChange={(e) => setNewDocTypeLabel(e.target.value)} placeholder="مثال: Method Statement" autoFocus />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowAddDocType(false)}>{t('common.cancel')}</Button>
-              <Button onClick={handleAddDocType} disabled={!newDocTypeCode || !newDocTypeLabel} className="bg-emerald-700 hover:bg-emerald-800">{t('common.save')}</Button>
+              <Button variant="outline" onClick={() => setShowAddDocType(false)}>إلغاء</Button>
+              <Button onClick={handleAddDocType} disabled={!newDocTypeCode || !newDocTypeLabel} className="bg-emerald-700 hover:bg-emerald-800">حفظ</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
 
-      {/* Edit DocType Dialog */}
-      {editingDocType && (
-        <EditDocTypeDialog docType={editingDocType} categories={categories} onOpenChange={(v) => !v && setEditingDocType(null)} onSaved={() => { setEditingDocType(null); onRefreshDocTypes(); }} />
-      )}
+      <h3 className="text-lg font-semibold text-slate-700 pt-2">التخصصات الفرعية حسب القسم الرئيسي</h3>
 
-      {/* Disciplines grouped by category */}
-      <h3 className="text-lg font-semibold text-slate-700 pt-2">{t('settings.disciplines')}</h3>
-
+      {/* Render disciplines grouped by category */}
       {categories.map((cat) => {
         const catDisciplines = disciplines.filter(d => (d.categoryCode || d.category || 'TRANSMITTAL') === cat.code);
         if (catDisciplines.length === 0) return null;
@@ -2911,42 +2526,36 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
             <CardHeader className="border-b bg-slate-50">
               <CardTitle className="text-base flex items-center gap-2">
                 <span className="text-xl">{cat.icon}</span>
-                <Badge className={`${cat.color} border-0`}>{(lang === 'en' && cat.labelEn) ? cat.labelEn : cat.label}</Badge>
-                <span className="text-xs text-slate-500">({catDisciplines.length} {lang === 'ar' ? 'تخصص' : 'disciplines'})</span>
+                <Badge className={`${cat.color} border-0`}>{cat.label}</Badge>
+                <span className="text-xs text-slate-500">({catDisciplines.length} تخصص)</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead className="text-right">{t('common.code')}</TableHead>
-                  <TableHead className="text-right">{lang === 'ar' ? 'الاسم (عربي)' : 'Label (AR)'}</TableHead>
-                  <TableHead className="text-right">{lang === 'ar' ? 'الاسم (EN)' : 'Label (EN)'}</TableHead>
-                  <TableHead className="text-right">{lang === 'ar' ? 'أقسام إضافية' : 'Extra Categories'}</TableHead>
-                  <TableHead className="text-right">{lang === 'ar' ? 'البادئة' : 'Prefix'}</TableHead>
-                  <TableHead className="text-center">{lang === 'ar' ? 'ترانسميتالات' : 'Transmittals'}</TableHead>
-                  <TableHead className="text-center">{t('common.actions')}</TableHead>
+                  <TableHead className="text-right">الكود</TableHead>
+                  <TableHead className="text-right">الاسم</TableHead>
+                  <TableHead className="text-right">البادئة</TableHead>
+                  <TableHead className="text-center">اللون</TableHead>
+                  <TableHead className="text-center">عدد الالمستندات</TableHead>
+                  <TableHead className="text-center">إجراءات</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {catDisciplines.map((d) => {
-                    const extraCats = (d.allCategories || []).filter((c: string) => c !== cat.code);
-                    const extraCatLabels = extraCats.map((c: string) => categories.find(cat => cat.code === c)?.label || c).join('، ');
-                    return (
-                      <TableRow key={d.code}>
-                        <TableCell className="font-mono font-bold">{d.code}</TableCell>
-                        <TableCell>{d.label}</TableCell>
-                        <TableCell className="text-slate-600">{d.labelEn || '—'}</TableCell>
-                        <TableCell className="text-xs text-slate-600">{extraCats.length > 0 ? extraCatLabels : '—'}</TableCell>
-                        <TableCell className="font-mono text-sm">{d.prefix}</TableCell>
-                        <TableCell className="text-center font-semibold">{d.transmittalsCount || 0}</TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex justify-center gap-1">
-                            <Button size="sm" variant="ghost" onClick={() => setEditing(d)}><Pencil className="w-4 h-4" /></Button>
-                            <Button size="sm" variant="ghost" onClick={() => handleDelete(d.code)}><Trash2 className="w-4 h-4 text-red-600" /></Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  {catDisciplines.map((d) => (
+                    <TableRow key={d.code}>
+                      <TableCell className="font-mono font-bold">{d.code}</TableCell>
+                      <TableCell>{d.label}</TableCell>
+                      <TableCell className="font-mono text-sm">{d.prefix}</TableCell>
+                      <TableCell className="text-center"><div className={`inline-block px-2 py-1 rounded text-xs ${d.color}`}>عينة</div></TableCell>
+                      <TableCell className="text-center font-semibold">{d.transmittalsCount || 0}</TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex justify-center gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => setEditing(d)}><Pencil className="w-4 h-4" /></Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleDelete(d.code)}><Trash2 className="w-4 h-4 text-red-600" /></Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </CardContent>
@@ -2960,33 +2569,26 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
         if (emptyCats.length === 0) return null;
         return (
           <Card className="bg-slate-50 border-slate-200"><CardContent className="p-4">
-            <p className="text-sm text-slate-700 mb-2"><strong>{t('settings.emptyCategories')}</strong></p>
+            <p className="text-sm text-slate-700 mb-2"><strong>أقسام رئيسية بدون تخصصات بعد:</strong></p>
             <div className="flex flex-wrap gap-2">
               {emptyCats.map(c => (
-                <Badge key={c.code} variant="outline" className="text-sm">{c.icon} {(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</Badge>
+                <Badge key={c.code} variant="outline" className="text-sm">{c.icon} {c.label}</Badge>
               ))}
             </div>
+            <p className="text-xs text-slate-500 mt-2">أضف تخصصاً جديداً واختر القسم المناسب له.</p>
           </CardContent></Card>
         );
       })()}
 
-      {/* Wipe Data Section */}
-      <Card className="border-red-200 bg-red-50/30">
-        <CardHeader><CardTitle className="text-base flex items-center gap-2 text-red-800">
-          <AlertCircle className="w-5 h-5" /> {t('settings.wipeData')}
-        </CardTitle></CardHeader>
-        <CardContent>
-          <p className="text-sm text-slate-600 mb-3">{t('settings.wipeDataDesc')}</p>
-          <Button variant="destructive" onClick={() => setShowWipeData(true)} className="gap-1.5">
-            <Trash2 className="w-4 h-4" /> {t('settings.wipeDataBtn')}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Wipe Data Dialog */}
-      {showWipeData && (
-        <WipeDataDialog onClose={() => setShowWipeData(false)} onSuccess={() => { setShowWipeData(false); onRefreshDisciplines(); onRefreshCategories(); onRefreshDocTypes(); }} />
-      )}
+      <Card className="bg-blue-50 border-blue-200"><CardContent className="p-4">
+        <p className="text-sm text-blue-900">
+          <strong>💡 ملاحظات:</strong><br />
+          • الأقسام الرئيسية: ترانسميتال، MIR، RFI، كتب — قابلة للإضافة والحذف<br />
+          • كل قسم رئيسي له تسلسل ترقيم مستقل خاص به<br />
+          • البادئة تُستخدم في تكوين رقم المرجع (مثال: <code className="bg-white px-1 rounded">CIV-</code> + <code className="bg-white px-1 rounded">171</code> = <code className="bg-white px-1 rounded">CIV-171</code>)<br />
+          • لا يمكن حذف قسم مرتبط بالمستندات (احذف الالمستندات أولاً)
+        </p>
+      </CardContent></Card>
 
       <AddDisciplineDialog open={showAdd} onOpenChange={setShowAdd} onSaved={() => { setShowAdd(false); onRefreshDisciplines(); }} categories={categories} />
       <AddCategoryDialog open={showAddCategory} onOpenChange={setShowAddCategory} onSaved={() => { setShowAddCategory(false); onRefreshCategories(); }} />
@@ -2996,295 +2598,101 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
   );
 }
 
-/* ============ WIPE DATA DIALOG ============ */
-function WipeDataDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const { t } = useI18n();
-  const [password, setPassword] = useState('');
-  const [saving, setSaving] = useState(false);
-  const { toast } = useToast();
-
-  const handleConfirm = async () => {
-    setSaving(true);
-    try {
-      const r = await fetch('/api/wipe-data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      });
-      if (!r.ok) {
-        const err = await r.json();
-        throw new Error(err.error || t('settings.wipeDataWrongPassword'));
-      }
-      const data = await r.json();
-      toast({ title: t('dialog.wipeData.success'), description: `${data.wiped.transmittals} transmittals, ${data.wiped.revisions} revisions` });
-      onSuccess();
-    } catch (e: any) {
-      toast({ title: t('common.error'), description: e.message, variant: 'destructive' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open={true} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-red-700">
-            <AlertCircle className="w-5 h-5" />
-            {t('dialog.wipeData.title')}
-          </DialogTitle>
-          <DialogDescription>{t('dialog.wipeData.desc')}</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-            <p className="text-sm text-red-900">{t('dialog.wipeData.confirm')}</p>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-sm">{t('settings.wipeDataPassword')}</Label>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="0160"
-              autoFocus
-              className="font-mono"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button
-            onClick={handleConfirm}
-            disabled={saving || !password}
-            variant="destructive"
-            className="gap-1.5"
-          >
-            <Trash2 className="w-4 h-4" />
-            {saving ? t('common.saving') : t('dialog.wipeData.btn')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/* ============ EDIT DOC TYPE DIALOG ============ */
-function EditDocTypeDialog({ docType, categories, onOpenChange, onSaved }: {
-  docType: DocType;
-  categories: Category[];
-  onOpenChange: (v: boolean) => void;
-  onSaved: () => void;
-}) {
-  const { t, lang } = useI18n();
-  const [code, setCode] = useState(docType.code);
-  const [label, setLabel] = useState(docType.label);
-  const [labelEn, setLabelEn] = useState((docType as any).labelEn || '');
-  const [categoryCode, setCategoryCode] = useState((docType as any).categoryCode || '');
-  const [saving, setSaving] = useState(false);
-  const { toast } = useToast();
-
-  const handleSave = async () => {
-    if (!code.trim() || !label.trim()) return;
-    setSaving(true);
-    try {
-      const r = await fetch(`/api/doc-types/${docType.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: code.toUpperCase().trim(),
-          label: label.trim(),
-          labelEn: labelEn.trim() || null,
-          categoryCode: categoryCode || null,
-        }),
-      });
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed');
-      }
-      toast({ title: lang === 'ar' ? 'تم تحديث النوع' : 'Updated', description: code.toUpperCase() });
-      onSaved();
-    } catch (e: any) {
-      toast({ title: t('common.error'), description: e.message, variant: 'destructive' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open={true} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t('dialog.editDocType.title')}: {docType.code}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label className="text-sm">{t('common.code')} *</Label>
-            <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} className="font-mono" maxLength={30} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-sm">{lang === 'ar' ? 'الاسم (عربي) *' : 'Label (AR) *'}</Label>
-              <Input value={label} onChange={(e) => setLabel(e.target.value)} autoFocus />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm">{t('common.labelEn')}</Label>
-              <Input value={labelEn} onChange={(e) => setLabelEn(e.target.value)} dir="ltr" />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-sm">{t('common.category')}</Label>
-            <Select value={categoryCode} onValueChange={setCategoryCode}>
-              <SelectTrigger><SelectValue placeholder={lang === 'ar' ? 'بدون قسم' : 'No category'} /></SelectTrigger>
-              <SelectContent>
-                {categories.map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={handleSave} disabled={saving || !code.trim() || !label.trim()} className="bg-emerald-700 hover:bg-emerald-800">
-            {saving ? t('common.saving') : t('common.save')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function AddDisciplineDialog({ open, onOpenChange, onSaved, categories }: { open: boolean; onOpenChange: (v: boolean) => void; onSaved: () => void; categories?: Category[] }) {
   const { t, lang } = useI18n();
   const [code, setCode] = useState('');
   const [label, setLabel] = useState('');
-  const [labelEn, setLabelEn] = useState('');
   const [prefix, setPrefix] = useState('');
   const [color, setColor] = useState('bg-gray-100 text-gray-700');
   const [category, setCategory] = useState('TRANSMITTAL');
-  const [extraCategories, setExtraCategories] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    if (open) {
-      setCode(''); setLabel(''); setLabelEn(''); setPrefix(''); setColor('bg-gray-100 text-gray-700');
-      setCategory('TRANSMITTAL'); setExtraCategories([]);
-    }
+    if (open) { setCode(''); setLabel(''); setPrefix(''); setColor('bg-gray-100 text-gray-700'); setCategory('TRANSMITTAL'); }
   }, [open]);
 
   const colorOptions = [
-    { value: 'bg-gray-100 text-gray-700', label: t('color.gray') },
-    { value: 'bg-amber-100 text-amber-700', label: t('color.amber') },
-    { value: 'bg-purple-100 text-purple-700', label: t('color.purple') },
-    { value: 'bg-cyan-100 text-cyan-700', label: t('color.cyan') },
-    { value: 'bg-rose-100 text-rose-700', label: t('color.rose') },
-    { value: 'bg-red-100 text-red-700', label: t('color.red') },
-    { value: 'bg-emerald-100 text-emerald-700', label: t('color.emerald') },
-    { value: 'bg-blue-100 text-blue-700', label: t('color.blue') },
-    { value: 'bg-indigo-100 text-indigo-700', label: t('color.indigo') },
-    { value: 'bg-orange-100 text-orange-700', label: t('color.orange') },
+    { value: 'bg-gray-100 text-gray-700', label: 'رمادي' },
+    { value: 'bg-amber-100 text-amber-700', label: 'كهرماني' },
+    { value: 'bg-purple-100 text-purple-700', label: 'بنفسجي' },
+    { value: 'bg-cyan-100 text-cyan-700', label: 'سماوي' },
+    { value: 'bg-rose-100 text-rose-700', label: 'وردي' },
+    { value: 'bg-red-100 text-red-700', label: 'أحمر' },
+    { value: 'bg-emerald-100 text-emerald-700', label: 'أخضر' },
+    { value: 'bg-blue-100 text-blue-700', label: 'أزرق' },
+    { value: 'bg-indigo-100 text-indigo-700', label: 'نيلي' },
+    { value: 'bg-orange-100 text-orange-700', label: 'برتقالي' },
   ];
 
   const handleSave = async () => {
     if (!code || !label || !prefix) {
-      toast({ title: t('common.error'), description: lang === 'ar' ? 'كل الحقول مطلوبة' : 'All fields required', variant: 'destructive' });
-      return;
+      toast({ title: 'خطأ', description: 'كل الحقول مطلوبة', variant: 'destructive' }); return;
     }
     setSaving(true);
     try {
-      const allCategories = [category, ...extraCategories.filter(c => c !== category)];
       const r = await fetch('/api/disciplines', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: code.toUpperCase(),
-          label,
-          labelEn: labelEn || undefined,
-          prefix,
-          color,
-          category,
-          categories: allCategories,
-        }),
+        body: JSON.stringify({ code: code.toUpperCase(), label, prefix, color, category }),
       });
-      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'Failed'); }
-      toast({ title: lang === 'ar' ? 'تم إضافة التخصص' : 'Added', description: `${code.toUpperCase()} - ${label}` });
+      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الحفظ'); }
+      toast({ title: 'تم إضافة القسم', description: `${code.toUpperCase()} - ${label} (${getCategoryLabel(category)})` });
       onSaved();
-    } catch (e: any) { toast({ title: t('common.error'), description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
     finally { setSaving(false); }
   };
 
+  // Auto-suggest prefix based on code
   useEffect(() => {
-    if (code && !prefix) setPrefix(`${code.toUpperCase()}-`);
+    if (code && !prefix) {
+      setPrefix(`${code.toUpperCase()}-`);
+    }
   }, [code, prefix]);
-
-  const toggleExtraCategory = (catCode: string) => {
-    if (catCode === category) return;
-    setExtraCategories(prev => prev.includes(catCode) ? prev.filter(c => c !== catCode) : [...prev, catCode]);
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t('dialog.addDiscipline.title')}</DialogTitle>
-          <DialogDescription>{t('dialog.addDiscipline.desc')}</DialogDescription>
-        </DialogHeader>
+        <DialogHeader><DialogTitle>إضافة قسم جديد</DialogTitle>
+          <DialogDescription>أضف تخصصاً جديداً تحت أحد الأقسام الرئيسية</DialogDescription></DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label className="text-sm">{t('dialog.addDiscipline.mainCategory')}</Label>
-            <Select value={category} onValueChange={(v) => {
-              setCategory(v);
-              setExtraCategories(prev => prev.filter(c => c !== v));
-            }}>
+            <Label className="text-sm">{t("common.mainCategory")} *</Label>
+            <Select value={category} onValueChange={setCategory}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {(categories || (CATEGORIES as readonly Category[])).map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</SelectItem>)}
+                {(categories || CATEGORIES).map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {c.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-sm">{t('dialog.addDiscipline.extraCategories')}</Label>
-            <p className="text-xs text-slate-500">{t('dialog.addDiscipline.extraCategoriesHint')}</p>
-            <div className="flex flex-wrap gap-1.5 p-2 border border-slate-200 rounded-lg max-h-32 overflow-y-auto">
-              {(categories || (CATEGORIES as readonly Category[])).filter(c => c.code !== category).map(c => (
-                <label key={c.code} className="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 cursor-pointer text-xs">
-                  <input type="checkbox" checked={extraCategories.includes(c.code)} onChange={() => toggleExtraCategory(c.code)} className="w-3 h-3" />
-                  <span>{c.icon}</span>
-                  <span>{(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-sm">{t('common.code')} *</Label>
-              <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="ELV" className="font-mono" maxLength={10} />
+              <Label className="text-sm">الكود *</Label>
+              <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="مثال: ELV" className="font-mono" maxLength={10} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm">{lang === 'ar' ? 'الاسم (عربي) *' : 'Label (AR) *'}</Label>
-              <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={lang === 'ar' ? 'المصاعد' : 'Elevators'} />
+              <Label className="text-sm">الاسم (عربي) *</Label>
+              <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="مثال: المصاعد" />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm">{t('common.labelEn')}</Label>
-            <Input value={labelEn} onChange={(e) => setLabelEn(e.target.value)} placeholder="Elevators" dir="ltr" />
+            <Label className="text-sm">البادئة * (تُستخدم في رقم المرجع)</Label>
+            <Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="مثال: ELV-" className="font-mono" />
+            <p className="text-xs text-slate-500">مثال: <code className="bg-slate-100 px-1 rounded">{prefix || 'CIV-'}171</code></p>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm">{lang === 'ar' ? 'البادئة *' : 'Prefix *'}</Label>
-            <Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="ELV-" className="font-mono" />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-sm">{t('color.blue' ) && lang === 'ar' ? 'اللون' : 'Color'}</Label>
+            <Label className="text-sm">اللون</Label>
             <Select value={color} onValueChange={setColor}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {colorOptions.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
               </SelectContent>
             </Select>
-            <div className={`inline-block px-3 py-1.5 rounded text-sm mt-1 ${color}`}>{lang === 'ar' ? 'معاينة' : 'Preview'}</div>
+            <div className={`inline-block px-3 py-1.5 rounded text-sm mt-1 ${color}`}>معاينة اللون</div>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? t('common.saving') : t('common.save')}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'حفظ'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -3294,96 +2702,63 @@ function AddDisciplineDialog({ open, onOpenChange, onSaved, categories }: { open
 function EditDisciplineDialog({ discipline, onOpenChange, onSaved, categories }: { discipline: Discipline; onOpenChange: (v: boolean) => void; onSaved: () => void; categories?: Category[] }) {
   const { t, lang } = useI18n();
   const [label, setLabel] = useState(discipline.label);
-  const [labelEn, setLabelEn] = useState(discipline.labelEn || '');
   const [prefix, setPrefix] = useState(discipline.prefix);
   const [color, setColor] = useState(discipline.color);
   const [category, setCategory] = useState(discipline.category || 'TRANSMITTAL');
-  const [extraCategories, setExtraCategories] = useState<string[]>(
-    (discipline.allCategories || []).filter(c => c !== (discipline.category || 'TRANSMITTAL'))
-  );
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
   const colorOptions = [
-    { value: 'bg-gray-100 text-gray-700', label: t('color.gray') },
-    { value: 'bg-amber-100 text-amber-700', label: t('color.amber') },
-    { value: 'bg-purple-100 text-purple-700', label: t('color.purple') },
-    { value: 'bg-cyan-100 text-cyan-700', label: t('color.cyan') },
-    { value: 'bg-rose-100 text-rose-700', label: t('color.rose') },
-    { value: 'bg-red-100 text-red-700', label: t('color.red') },
-    { value: 'bg-emerald-100 text-emerald-700', label: t('color.emerald') },
-    { value: 'bg-blue-100 text-blue-700', label: t('color.blue') },
-    { value: 'bg-indigo-100 text-indigo-700', label: t('color.indigo') },
-    { value: 'bg-orange-100 text-orange-700', label: t('color.orange') },
+    { value: 'bg-gray-100 text-gray-700', label: 'رمادي' },
+    { value: 'bg-amber-100 text-amber-700', label: 'كهرماني' },
+    { value: 'bg-purple-100 text-purple-700', label: 'بنفسجي' },
+    { value: 'bg-cyan-100 text-cyan-700', label: 'سماوي' },
+    { value: 'bg-rose-100 text-rose-700', label: 'وردي' },
+    { value: 'bg-red-100 text-red-700', label: 'أحمر' },
+    { value: 'bg-emerald-100 text-emerald-700', label: 'أخضر' },
+    { value: 'bg-blue-100 text-blue-700', label: 'أزرق' },
+    { value: 'bg-indigo-100 text-indigo-700', label: 'نيلي' },
+    { value: 'bg-orange-100 text-orange-700', label: 'برتقالي' },
   ];
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const allCategories = [category, ...extraCategories.filter(c => c !== category)];
       const r = await fetch(`/api/disciplines/${discipline.code}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          label, labelEn: labelEn || null, prefix, color, category, categories: allCategories,
-        }),
+        body: JSON.stringify({ label, prefix, color, category }),
       });
-      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || 'Failed'); }
-      toast({ title: lang === 'ar' ? 'تم تحديث التخصص' : 'Updated', description: discipline.code });
+      if (!r.ok) throw new Error('فشل الحفظ');
+      toast({ title: 'تم تحديث القسم', description: `${discipline.code} (${getCategoryLabel(category)})` });
       onSaved();
-    } catch (e: any) { toast({ title: t('common.error'), description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
     finally { setSaving(false); }
-  };
-
-  const toggleExtraCategory = (catCode: string) => {
-    if (catCode === category) return;
-    setExtraCategories(prev => prev.includes(catCode) ? prev.filter(c => c !== catCode) : [...prev, catCode]);
   };
 
   return (
     <Dialog open={true} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader><DialogTitle>{t('dialog.editDiscipline.title')}: {discipline.code}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>تعديل القسم: {discipline.code}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label className="text-sm">{t('dialog.addDiscipline.mainCategory')}</Label>
-            <Select value={category} onValueChange={(v) => {
-              setCategory(v);
-              setExtraCategories(prev => prev.filter(c => c !== v));
-            }}>
+            <Label className="text-sm">{t("common.mainCategory")}</Label>
+            <Select value={category} onValueChange={setCategory}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {(categories || (CATEGORIES as readonly Category[])).map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</SelectItem>)}
+                {(categories || CATEGORIES).map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {c.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm">{t('dialog.addDiscipline.extraCategories')}</Label>
-            <div className="flex flex-wrap gap-1.5 p-2 border border-slate-200 rounded-lg max-h-32 overflow-y-auto">
-              {(categories || (CATEGORIES as readonly Category[])).filter(c => c.code !== category).map(c => (
-                <label key={c.code} className="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 cursor-pointer text-xs">
-                  <input type="checkbox" checked={extraCategories.includes(c.code)} onChange={() => toggleExtraCategory(c.code)} className="w-3 h-3" />
-                  <span>{c.icon}</span>
-                  <span>{(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-sm">{lang === 'ar' ? 'الاسم (عربي)' : 'Label (AR)'}</Label>
-              <Input value={label} onChange={(e) => setLabel(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm">{t('common.labelEn')}</Label>
-              <Input value={labelEn} onChange={(e) => setLabelEn(e.target.value)} dir="ltr" />
-            </div>
+            <Label className="text-sm">الاسم (عربي)</Label>
+            <Input value={label} onChange={(e) => setLabel(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm">{lang === 'ar' ? 'البادئة' : 'Prefix'}</Label>
+            <Label className="text-sm">البادئة</Label>
             <Input value={prefix} onChange={(e) => setPrefix(e.target.value)} className="font-mono" />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm">{lang === 'ar' ? 'اللون' : 'Color'}</Label>
+            <Label className="text-sm">اللون</Label>
             <Select value={color} onValueChange={setColor}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -3393,13 +2768,14 @@ function EditDisciplineDialog({ discipline, onOpenChange, onSaved, categories }:
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? t('common.saving') : t('common.save')}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'حفظ'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+
 
 /* ============ SEND TO MOH DIALOG ============ */
 function SendToMohDialog({ target, onClose, onConfirm }: {
@@ -3407,7 +2783,6 @@ function SendToMohDialog({ target, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (submitDate: string, submitRev: number, notes: string) => void;
 }) {
-  const { t } = useI18n();
   const [submitDate, setSubmitDate] = useState(new Date().toISOString().slice(0, 10));
   const [submitRev, setSubmitRev] = useState<number>(target.latestRev);
   const [notes, setNotes] = useState('');
@@ -3429,7 +2804,7 @@ function SendToMohDialog({ target, onClose, onConfirm }: {
             إرسال للوزارة - {target.reference}
           </DialogTitle>
           <DialogDescription>
-            أدخل تاريخ الإرسال لوزارة الصحة. سيتم إرسال آخر مراجعة (<span dir="ltr">REV.{target.latestRev}</span>) تلقائياً.
+            أدخل تاريخ الإرسال لوزارة الصحة. سيتم إرسال آخر مراجعة (REV.{target.latestRev}) تلقائياً.
           </DialogDescription>
         </DialogHeader>
 
@@ -3439,7 +2814,7 @@ function SendToMohDialog({ target, onClose, onConfirm }: {
               <strong>المرجع:</strong> <span className="font-mono">{target.reference}</span>
             </p>
             <p className="text-sm text-blue-900">
-              <strong>المراجعة المُرسلة (تلقائي - آخر ريفجن):</strong> <span dir="ltr">REV.{target.latestRev}</span>
+              <strong>المراجعة المُرسلة (تلقائي - آخر ريفجن):</strong> REV.{target.latestRev}
             </p>
           </div>
 
@@ -3465,7 +2840,7 @@ function SendToMohDialog({ target, onClose, onConfirm }: {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button variant="outline" onClick={onClose}>إلغاء</Button>
           <Button
             onClick={handleConfirm}
             disabled={saving || !submitDate}
@@ -3599,12 +2974,12 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
                 ✓ {template.name} ({(template.size / 1024).toFixed(1)} KB)
               </p>
             )}
-            <p className="text-xs text-slate-500">ارفع قالب مخصص لهذا القسم (Excel، Word، PDF، أو نص). سيُستخدم عند توليد الملفات لهذا القسم.</p>
+            <p className="text-xs text-slate-500">{t("settings.templateHint")}</p>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? t('common.saving') : t('common.save')}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'حفظ'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -3707,7 +3082,7 @@ function EditCategoryDialog({ category, onOpenChange, onSaved }: { category: Cat
                 </Button>
               </div>
             ) : removeTemplate ? (
-              <p className="text-sm text-amber-700">سيتم حذف القالب عند الحفظ</p>
+              <p className="text-sm text-amber-700">{t("settings.removeTemplateHint")}</p>
             ) : (
               <input
                 type="file"
@@ -3728,8 +3103,8 @@ function EditCategoryDialog({ category, onOpenChange, onSaved }: { category: Cat
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? t('common.saving') : t('common.save')}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'حفظ'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -3742,7 +3117,6 @@ function RegisterRevisionDialog({ target, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (submitDate: string, replyDate: string, action: string, approvalType: string, notes: string) => void;
 }) {
-  const { t } = useI18n();
   const [submitDate, setSubmitDate] = useState(new Date().toISOString().slice(0, 10));
   const [replyDate, setReplyDate] = useState('');
   const [action, setAction] = useState('');
@@ -3771,7 +3145,7 @@ function RegisterRevisionDialog({ target, onClose, onConfirm }: {
             تسجيل ريفجن جديد - {target.reference}
           </DialogTitle>
           <DialogDescription>
-            سيتم إنشاء مراجعة جديدة <span dir="ltr">REV.{target.nextRev}</span> (آخر رقم + 1). أدخل تاريخ الإرسال والرد والإجراء.
+            سيتم إنشاء مراجعة جديدة REV.{target.nextRev} (آخر رقم + 1). أدخل تاريخ الإرسال والرد والإجراء.
           </DialogDescription>
         </DialogHeader>
 
@@ -3779,7 +3153,7 @@ function RegisterRevisionDialog({ target, onClose, onConfirm }: {
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-sm text-blue-900">
               <strong>المرجع:</strong> <span className="font-mono">{target.reference}</span> ·
-              <strong> المراجعة الجديدة:</strong> <span dir="ltr">REV.{target.nextRev}</span>
+              <strong> المراجعة الجديدة:</strong> REV.{target.nextRev}
             </p>
           </div>
 
@@ -3832,7 +3206,7 @@ function RegisterRevisionDialog({ target, onClose, onConfirm }: {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button variant="outline" onClick={onClose}>إلغاء</Button>
           <Button onClick={handleConfirm} disabled={saving || !submitDate || (action === 'approved' && !approvalType)} className="bg-blue-700 hover:bg-blue-800 gap-1.5">
             <History className="w-4 h-4" />
             {saving ? 'جاري التسجيل...' : `تسجيل REV.${target.nextRev}`}
@@ -3849,7 +3223,6 @@ function ConsultantReplyDialog({ target, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (replyDate: string, action: string, approvalType: string, notes: string) => void;
 }) {
-  const { t } = useI18n();
   const [replyDate, setReplyDate] = useState(new Date().toISOString().slice(0, 10));
   const [action, setAction] = useState('');
   const [approvalType, setApprovalType] = useState('');
@@ -3934,7 +3307,7 @@ function ConsultantReplyDialog({ target, onClose, onConfirm }: {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button variant="outline" onClick={onClose}>إلغاء</Button>
           <Button onClick={handleConfirm} disabled={saving || !replyDate || !action || (action === 'approved' && !approvalType)} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
             <Building2 className="w-4 h-4" />
             {saving ? 'جاري التسجيل...' : 'تسجيل الرد'}
@@ -3951,7 +3324,6 @@ function MohReplyDialog({ target, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (reviewDate: string, status: string, notes: string) => void;
 }) {
-  const { t } = useI18n();
   const [reviewDate, setReviewDate] = useState(new Date().toISOString().slice(0, 10));
   const [status, setStatus] = useState('');
   const [notes, setNotes] = useState('');
@@ -4010,7 +3382,7 @@ function MohReplyDialog({ target, onClose, onConfirm }: {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button variant="outline" onClick={onClose}>إلغاء</Button>
           <Button onClick={handleConfirm} disabled={saving || !reviewDate || !status} className="bg-purple-700 hover:bg-purple-800 gap-1.5">
             <Hospital className="w-4 h-4" />
             {saving ? 'جاري التسجيل...' : 'تسجيل رد الوزارة'}
@@ -4027,7 +3399,6 @@ function CopyTransmittalDialog({ target, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (editedDescription: string) => void;
 }) {
-  const { t } = useI18n();
   const [description, setDescription] = useState(target.description);
   const [saving, setSaving] = useState(false);
 
@@ -4072,183 +3443,10 @@ function CopyTransmittalDialog({ target, onClose, onConfirm }: {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button variant="outline" onClick={onClose}>إلغاء</Button>
           <Button onClick={handleConfirm} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
             <Copy className="w-4 h-4" />
             {saving ? 'جاري النسخ...' : 'نسخ برقم جديد'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/* ============ EDIT TRANSMITTAL DIALOG ============ */
-function EditTransmittalDialog({ target, disciplines, onClose, onConfirm }: {
-  target: Transmittal;
-  disciplines: Discipline[];
-  onClose: () => void;
-  onConfirm: (data: { reference: string; discipline: string; type: string; description: string; alternativeTitle: string }) => void;
-}) {
-  const { t, lang } = useI18n();
-  const [reference, setReference] = useState(target.reference);
-  const [discipline, setDiscipline] = useState(target.discipline);
-  const [type, setType] = useState(target.type || '');
-  const [description, setDescription] = useState(target.description || '');
-  const [alternativeTitle, setAlternativeTitle] = useState((target as any).alternativeTitle || '');
-  const [saving, setSaving] = useState(false);
-
-  const handleConfirm = async () => {
-    if (!reference.trim() || !discipline) return;
-    setSaving(true);
-    await onConfirm({ reference, discipline, type, description, alternativeTitle });
-    setSaving(false);
-  };
-
-  return (
-    <Dialog open={true} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Pencil className="w-5 h-5 text-blue-700" />
-            {t('dialog.editTransmittal.title')}
-          </DialogTitle>
-          <DialogDescription>
-            {lang === 'ar' ? 'يمكنك تعديل المرجع، التخصص، النوع، العنوان المختصر، والوصف. ستظل المراجعات والردود محفوظة.' : 'You can edit reference, discipline, type, short title, and description. Revisions and replies will remain saved.'}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-sm text-blue-900">
-              <strong>{t('common.reference')}:</strong> <span className="font-mono">{target.reference}</span> ·
-              <strong className="mr-2">{t('common.discipline')}:</strong> {target.discipline}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-sm">{t('common.reference')} *</Label>
-              <Input value={reference} onChange={(e) => setReference(e.target.value)} className="font-mono" placeholder="CIV-001" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm">{t('common.discipline')} *</Label>
-              <Select value={discipline} onValueChange={setDiscipline}>
-                <SelectTrigger><SelectValue placeholder={t('new.disciplinePlaceholder')} /></SelectTrigger>
-                <SelectContent>
-                  {disciplines.map(d => (
-                    <SelectItem key={d.code} value={d.code}>
-                      {(lang === 'en' && d.labelEn) ? d.labelEn : d.label} · {d.code}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-sm">{t('common.type')} ({t('common.optional')})</Label>
-            <Input value={type} onChange={(e) => setType(e.target.value)} placeholder="SHOP DRAWINGS" />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-sm">{t('new.altTitleLabel')}</Label>
-            <Input value={alternativeTitle} onChange={(e) => setAlternativeTitle(e.target.value)} placeholder={t('new.altTitlePlaceholder')} />
-            <p className="text-xs text-slate-500">{t('new.altTitleHint')}</p>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-sm">{t('new.descriptionLabel')} ({t('common.optional')})</Label>
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder={t('new.descriptionPlaceholder')} />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button
-            onClick={handleConfirm}
-            disabled={saving || !reference.trim() || !discipline}
-            className="bg-blue-700 hover:bg-blue-800 gap-1.5"
-          >
-            <Pencil className="w-4 h-4" />
-            {saving ? t('common.saving') : (lang === 'ar' ? 'حفظ التعديلات' : 'Save Changes')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/* ============ DELETE TRANSMITTAL DIALOG ============ */
-function DeleteTransmittalDialog({ target, onClose, onConfirm }: {
-  target: Transmittal;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  const { t } = useI18n();
-  const [saving, setSaving] = useState(false);
-  const [confirmText, setConfirmText] = useState('');
-
-  const handleConfirm = async () => {
-    if (confirmText !== target.reference) return;
-    setSaving(true);
-    await onConfirm();
-    setSaving(false);
-  };
-
-  return (
-    <Dialog open={true} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-red-700">
-            <Trash2 className="w-5 h-5" />
-            {t('dialog.deleteTransmittal.title')}
-          </DialogTitle>
-          <DialogDescription>
-            {t('dialog.deleteTransmittal.desc') || (t('dialog.deleteTransmittal.title'))}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-            <p className="text-sm text-red-900">
-              <strong>{t('common.reference')}:</strong> <span className="font-mono">{target.reference}</span>
-            </p>
-            <p className="text-sm text-red-900 mt-1">
-              <strong>{t('common.discipline')}:</strong> {target.discipline} ·
-              <strong className="mr-2">{t('list.col.revisions')}:</strong> {target.revisionsCount}
-            </p>
-            {target.description && (
-              <p className="text-sm text-red-900 mt-1">
-                <strong>{t('common.description')}:</strong> {target.description.slice(0, 80)}{target.description.length > 80 ? '...' : ''}
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-sm">
-              {t('dialog.deleteTransmittal.confirm', { ref: target.reference })}
-            </Label>
-            <Input
-              value={confirmText}
-              onChange={(e) => setConfirmText(e.target.value)}
-              className="font-mono"
-              placeholder={target.reference}
-              autoFocus
-            />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button
-            onClick={handleConfirm}
-            disabled={saving || confirmText !== target.reference}
-            variant="destructive"
-            className="gap-1.5"
-          >
-            <Trash2 className="w-4 h-4" />
-            {saving ? t('common.saving') : t('dialog.deleteTransmittal.deleteBtn')}
           </Button>
         </DialogFooter>
       </DialogContent>
