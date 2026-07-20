@@ -22,6 +22,7 @@ export async function GET() {
       id: c.id,
       code: c.code,
       label: c.label,
+      labelEn: c.labelEn,
       icon: c.icon,
       color: c.color,
       templatePath: c.templatePath,
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest) {
     const form = await req.formData();
     const code = String(form.get('code') || '').toUpperCase().trim();
     const label = String(form.get('label') || '').trim();
+    const labelEn = String(form.get('labelEn') || '').trim();
     const icon = String(form.get('icon') || '📄');
     const color = String(form.get('color') || 'bg-blue-100 text-blue-700');
     const file = form.get('template') as File | null;
@@ -77,7 +79,7 @@ export async function POST(req: NextRequest) {
 
     try {
       const c = await db.category.create({
-        data: { code, label, icon, color, templatePath, templateType },
+        data: { code, label, labelEn: labelEn || null, icon, color, templatePath, templateType },
       });
       return NextResponse.json(c, { status: 201 });
     } catch (e: any) {
@@ -90,7 +92,7 @@ export async function POST(req: NextRequest) {
 
   // JSON body (no file)
   const body = await req.json();
-  const { code, label, icon, color } = body;
+  const { code, label, labelEn, icon, color } = body;
   if (!code || !label) {
     return NextResponse.json({ error: 'الكود والاسم مطلوبان' }, { status: 400 });
   }
@@ -100,6 +102,7 @@ export async function POST(req: NextRequest) {
       data: {
         code: codeUpper,
         label: String(label).trim(),
+        labelEn: labelEn ? String(labelEn).trim() : null,
         icon: icon || '📄',
         color: color || 'bg-blue-100 text-blue-700',
       },

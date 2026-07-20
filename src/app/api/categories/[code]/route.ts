@@ -21,6 +21,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
   if (contentType.includes('multipart/form-data')) {
     const form = await req.formData();
     const label = form.get('label') as string | null;
+    const labelEn = form.get('labelEn') as string | null;
     const icon = form.get('icon') as string | null;
     const color = form.get('color') as string | null;
     const file = form.get('template') as File | null;
@@ -84,6 +85,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
       where: { code },
       data: {
         ...(label !== null && label !== undefined && { label: String(label).trim() }),
+        ...(labelEn !== null && labelEn !== undefined && { labelEn: labelEn ? String(labelEn).trim() : null }),
         ...(icon !== null && icon !== undefined && { icon }),
         ...(color !== null && color !== undefined && { color }),
         templatePath,
@@ -95,12 +97,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
 
   // JSON body (no file)
   const body = await req.json();
-  const { label, icon, color } = body;
+  const { label, labelEn, icon, color } = body;
 
   const c = await db.category.update({
     where: { code },
     data: {
       ...(label !== undefined && { label: String(label).trim() }),
+      ...(labelEn !== undefined && { labelEn: labelEn ? String(labelEn).trim() : null }),
       ...(icon !== undefined && { icon }),
       ...(color !== undefined && { color }),
     },

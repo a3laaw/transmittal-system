@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
-  const { code, label } = body;
+  const { code, label, labelEn } = body;
 
   const existing = await db.docType.findUnique({ where: { id } });
   if (!existing) {
@@ -28,6 +28,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     data: {
       ...(code !== undefined && { code: newCode }),
       ...(label !== undefined && { label: String(label).trim() }),
+      ...(labelEn !== undefined && { labelEn: labelEn ? String(labelEn).trim() : null }),
     },
   });
   return NextResponse.json(t);

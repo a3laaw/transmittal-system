@@ -1,4 +1,4 @@
-var { app, BrowserWindow, shell, dialog } = require('electron');
+var { app, BrowserWindow, shell, dialog, ipcMain } = require('electron');
 var { spawn } = require('child_process');
 var path = require('path');
 var fs = require('fs');
@@ -67,7 +67,33 @@ function createWindow() {
   mainWindow.on('closed', function() { mainWindow = null; });
 }
 
-app.whenReady().then(function() { startServer().then(function() { createWindow(); }).catch(function(err) { dialog.showErrorBox('Error', 'Failed:\n' + err.message); app.quit(); }); });
+app.whenReady().then(function() {
+  // IPC: print content in a hidden window
+  ipcMain.handle('print-content', async function(event, html) {
+    try {
+      var printWin = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: false, contextIsolation: true } });
+      printWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+      await new Promise(function(r) { printWin.webContents.once('did-finish-load', r); });
+      await printWin.webContents.print({ printBackground: true });
+      printWin.close();
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e.message }; }
+  });
+
+  // IPC: choose save path
+  ipcMain.handle('choose-save-path', async function() {
+    try {
+      var result = await dialog.showOpenDialog(mainWindow || new BrowserWindow({ show: false }), {
+        title: 'اختر مجلد الحفظ',
+        properties: ['openDirectory', 'createDirectory'],
+      });
+      if (result.canceled || !result.filePaths || result.filePaths.length === 0) return null;
+      return result.filePaths[0];
+    } catch (e) { return null; }
+  });
+
+  startServer().then(function() { createWindow(); }).catch(function(err) { dialog.showErrorBox('Error', 'Failed:\n' + err.message); app.quit(); });
+});
 app.on('window-all-closed', function() { if (serverProcess) { serverProcess.kill(); serverProcess = null; } app.quit(); });
 app.on('before-quit', function() { if (serverProcess) { serverProcess.kill(); serverProcess = null; } });
 var lock = app.requestSingleInstanceLock();

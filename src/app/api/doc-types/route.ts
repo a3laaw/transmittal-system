@@ -26,14 +26,18 @@ export async function GET() {
 // POST /api/doc-types — create new type
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { code, label } = body;
+  const { code, label, labelEn } = body;
   if (!code || !label) {
     return NextResponse.json({ error: 'الكود والاسم مطلوبان' }, { status: 400 });
   }
   const codeUpper = String(code).toUpperCase().trim();
   try {
     const t = await db.docType.create({
-      data: { code: codeUpper, label: String(label).trim() },
+      data: {
+        code: codeUpper,
+        label: String(label).trim(),
+        labelEn: labelEn ? String(labelEn).trim() : null,
+      },
     });
     return NextResponse.json(t, { status: 201 });
   } catch (e: any) {

@@ -30,7 +30,7 @@ import {
   CheckCircle2, Clock, XCircle, Bell, LayoutDashboard, FileSpreadsheet,
   ArrowLeft, RefreshCw, FilePlus, History, Send, Settings, Building2,
   Trash2, Pencil, Hospital, Building, Copy, MoreVertical, Eye, FileDown,
-  FolderPlus, Folder, BarChart3, Calendar, Printer, Link,
+  FolderPlus, Folder, FolderOpen, BarChart3, Calendar, Printer, Link,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -2324,8 +2324,14 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
   const [showAddDocType, setShowAddDocType] = useState(false);
   const [newDocTypeCode, setNewDocTypeCode] = useState('');
   const [newDocTypeLabel, setNewDocTypeLabel] = useState('');
+  const [newDocTypeLabelEn, setNewDocTypeLabelEn] = useState('');
   const [editing, setEditing] = useState<Discipline | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editingDocType, setEditingDocType] = useState<any | null>(null);
+  const [showWipeData, setShowWipeData] = useState(false);
+  const [wipePassword, setWipePassword] = useState('');
+  const [wipeLoading, setWipeLoading] = useState(false);
+  const [savePath, setSavePath] = useState<string>('');
   const { toast } = useToast();
 
   // Always fetch fresh data when SettingsView mounts
@@ -2369,15 +2375,75 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
     try {
       const r = await fetch('/api/doc-types', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: newDocTypeCode.toUpperCase().trim(), label: newDocTypeLabel.trim() }),
+        body: JSON.stringify({ code: newDocTypeCode.toUpperCase().trim(), label: newDocTypeLabel.trim(), labelEn: newDocTypeLabelEn.trim() || undefined }),
       });
-      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || 'فشل الحفظ'); }
-      toast({ title: 'تم إضافة النوع', description: newDocTypeCode.toUpperCase() });
+      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || t('msg.saveFailed')); }
+      toast({ title: t('msg.saved'), description: newDocTypeCode.toUpperCase() });
       setShowAddDocType(false);
-      setNewDocTypeCode(''); setNewDocTypeLabel('');
+      setNewDocTypeCode(''); setNewDocTypeLabel(''); setNewDocTypeLabelEn('');
       onRefreshDocTypes();
-    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: t('msg.error'), description: e.message, variant: 'destructive' }); }
   };
+
+  const handleSaveDocType = async (updated: { id: string; code: string; label: string; labelEn?: string | null }) => {
+    try {
+      const r = await fetch(`/api/doc-types/${updated.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: updated.label, labelEn: updated.labelEn || null }),
+      });
+      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || t('msg.saveFailed')); }
+      toast({ title: t('msg.saved'), description: updated.code });
+      setEditingDocType(null);
+      onRefreshDocTypes();
+    } catch (e: any) { toast({ title: t('msg.error'), description: e.message, variant: 'destructive' }); }
+  };
+
+  const handleWipeData = async () => {
+    if (wipePassword !== '0160') {
+      toast({ title: t('msg.error'), description: t('msg.wrongPassword'), variant: 'destructive' });
+      return;
+    }
+    setWipeLoading(true);
+    try {
+      const r = await fetch('/api/wipe-data', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: wipePassword }),
+      });
+      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || t('msg.wipeFailed')); }
+      const data = await r.json();
+      toast({ title: t('msg.wipeSuccess'), description: t('msg.wipeResult', {count: data.wiped?.transmittals || 0}) });
+      setShowWipeData(false); setWipePassword('');
+      onRefreshDisciplines(); onRefreshCategories(); onRefreshDocTypes();
+    } catch (e: any) { toast({ title: t('msg.error'), description: e.message, variant: 'destructive' }); }
+    finally { setWipeLoading(false); }
+  };
+
+  const handleChooseSavePath = async () => {
+    try {
+      const electronAPI = (window as any).electronAPI;
+      if (!electronAPI || !electronAPI.chooseSavePath) {
+        toast({ title: t('msg.error'), description: t('msg.savePathElectronOnly'), variant: 'destructive' });
+        return;
+      }
+      const chosen = await electronAPI.chooseSavePath();
+      if (chosen) {
+        localStorage.setItem('nova-save-path', chosen);
+        setSavePath(chosen);
+        toast({ title: t('msg.savePathUpdated'), description: chosen });
+      }
+    } catch (e: any) { toast({ title: t('msg.error'), description: e.message, variant: 'destructive' }); }
+  };
+
+  const handleFetchSavePath = async () => {
+    try {
+      const saved = localStorage.getItem('nova-save-path');
+      if (saved) { setSavePath(saved); return; }
+      const r = await fetch('/api/config/storage-path');
+      if (r.ok) { const d = await r.json(); setSavePath(d.path || ''); }
+    } catch {}
+  };
+
+  useEffect(() => { handleFetchSavePath(); }, []);
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
@@ -2463,6 +2529,7 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
                   <TableCell className="text-center font-semibold">{item.transmittalsCount || 0}</TableCell>
                   <TableCell className="text-center">
                     <div className="flex justify-center gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => setEditingDocType(item)}><Pencil className="w-4 h-4" /></Button>
                       <Button size="sm" variant="ghost" onClick={() => handleDeleteDocType(item.id, item.code)}><Trash2 className="w-4 h-4 text-red-600" /></Button>
                     </div>
                   </TableCell>
@@ -2489,6 +2556,10 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
               <div className="space-y-1.5">
                 <Label className="text-sm">{t('field.nameReq')}</Label>
                 <Input value={newDocTypeLabel} onChange={(e) => setNewDocTypeLabel(e.target.value)} placeholder={t('new.typeExample1')} autoFocus />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">{t('field.nameEn')}</Label>
+                <Input value={newDocTypeLabelEn} onChange={(e) => setNewDocTypeLabelEn(e.target.value)} placeholder="Method Statement" dir="ltr" />
               </div>
             </div>
             <DialogFooter>
@@ -2578,7 +2649,116 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
       <AddCategoryDialog open={showAddCategory} onOpenChange={setShowAddCategory} onSaved={() => { setShowAddCategory(false); onRefreshCategories(); }} />
       {editingCategory && <EditCategoryDialog category={editingCategory} onOpenChange={(v) => !v && setEditingCategory(null)} onSaved={() => { setEditingCategory(null); onRefreshCategories(); }} />}
       {editing && <EditDisciplineDialog discipline={editing} onOpenChange={(v) => !v && setEditing(null)} onSaved={() => { setEditing(null); onRefreshDisciplines(); }} categories={categories} />}
+      {editingDocType && <EditDocTypeDialog docType={editingDocType} onOpenChange={(v) => !v && setEditingDocType(null)} onSaved={handleSaveDocType} />}
+
+      {/* Advanced Tools Section */}
+      <Card className="border-amber-200 bg-amber-50/30 mt-6">
+        <CardHeader className="border-b bg-amber-100/40">
+          <CardTitle className="text-base flex items-center gap-2 text-amber-900">
+            <AlertCircle className="w-5 h-5" /> {t('settings.advancedTools')}
+          </CardTitle>
+          <CardDescription>{t('settings.advancedToolsDesc')}</CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 space-y-4">
+          {/* Save Path */}
+          <div className="bg-white border border-slate-200 rounded-lg p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slate-800 mb-1">{t('settings.savePathTitle')}</p>
+                <p className="text-xs text-slate-500 mb-1">{t('settings.savePathDesc')}</p>
+                <p className="text-xs font-mono text-slate-700 truncate" dir="ltr">{savePath || t('settings.savePathDefault')}</p>
+              </div>
+              <Button size="sm" variant="outline" className="gap-1.5 shrink-0" onClick={handleChooseSavePath}>
+                <FolderOpen className="w-4 h-4" /> {t('settings.changeSavePath')}
+              </Button>
+            </div>
+          </div>
+
+          {/* Wipe Data */}
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-red-900 mb-1">{t('settings.wipeDataTitle')}</p>
+                <p className="text-xs text-red-700">{t('settings.wipeDataDesc')}</p>
+              </div>
+              <Button size="sm" variant="destructive" className="gap-1.5 shrink-0" onClick={() => setShowWipeData(true)}>
+                <Trash2 className="w-4 h-4" /> {t('settings.wipeDataButton')}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Wipe Data Confirmation Dialog */}
+      {showWipeData && (
+        <Dialog open={true} onOpenChange={(v) => !v && setShowWipeData(false)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-red-800 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5" /> {t('settings.wipeDataDialogTitle')}
+              </DialogTitle>
+              <DialogDescription>{t('settings.wipeDataDialogDesc')}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="bg-red-50 border border-red-200 rounded p-3 text-xs text-red-800">
+                {t('confirm.wipeData')}
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-semibold">{t('settings.wipePassword')}</Label>
+                <Input type="password" value={wipePassword} onChange={(e) => setWipePassword(e.target.value)} placeholder={t('settings.wipePasswordHint')} className="font-mono" autoFocus />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowWipeData(false)}>{t('common.cancel')}</Button>
+              <Button variant="destructive" onClick={handleWipeData} disabled={wipeLoading || !wipePassword} className="gap-1.5">
+                {wipeLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {t('settings.wipeDataConfirm')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
+  );
+}
+
+/* ============ EDIT DOC TYPE DIALOG ============ */
+function EditDocTypeDialog({ docType, onOpenChange, onSaved }: {
+  docType: { id: string; code: string; label: string; labelEn?: string | null };
+  onOpenChange: (v: boolean) => void;
+  onSaved: (updated: { id: string; code: string; label: string; labelEn?: string | null }) => void;
+}) {
+  const { t } = useI18n();
+  const [label, setLabel] = useState(docType.label);
+  const [labelEn, setLabelEn] = useState(docType.labelEn || '');
+
+  return (
+    <Dialog open={true} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('settings.editDocType')} — {docType.code}</DialogTitle>
+          <DialogDescription>{t('settings.editDocTypeDesc')}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('field.codeReq')}</Label>
+            <Input value={docType.code} disabled className="font-mono bg-slate-50" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('field.nameReq')}</Label>
+            <Input value={label} onChange={(e) => setLabel(e.target.value)} autoFocus />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('field.nameEn')}</Label>
+            <Input value={labelEn} onChange={(e) => setLabelEn(e.target.value)} placeholder="Method Statement" dir="ltr" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button onClick={() => onSaved({ id: docType.id, code: docType.code, label, labelEn })} disabled={!label} className="bg-emerald-700 hover:bg-emerald-800">{t('common.save')}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -2708,9 +2888,15 @@ function AddDisciplineDialog({ open, onOpenChange, onSaved, categories }: { open
 function EditDisciplineDialog({ discipline, onOpenChange, onSaved, categories }: { discipline: Discipline; onOpenChange: (v: boolean) => void; onSaved: () => void; categories?: Category[] }) {
   const { t, lang } = useI18n();
   const [label, setLabel] = useState(discipline.label);
+  const [labelEn, setLabelEn] = useState((discipline as any).labelEn || '');
   const [prefix, setPrefix] = useState(discipline.prefix);
   const [color, setColor] = useState(discipline.color);
   const [category, setCategory] = useState(discipline.category || 'TRANSMITTAL');
+  const [extraCategories, setExtraCategories] = useState<string[]>(
+    Array.isArray((discipline as any).allCategories)
+      ? (discipline as any).allCategories.filter((c: string) => c !== (discipline.category || 'TRANSMITTAL'))
+      : []
+  );
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
@@ -2727,17 +2913,23 @@ function EditDisciplineDialog({ discipline, onOpenChange, onSaved, categories }:
     { value: 'bg-orange-100 text-orange-700', label: 'برتقالي' },
   ];
 
+  const toggleExtraCategory = (catCode: string) => {
+    if (catCode === category) return;
+    setExtraCategories(prev => prev.includes(catCode) ? prev.filter(c => c !== catCode) : [...prev, catCode]);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
+      const allCategories = [category, ...extraCategories.filter(c => c !== category)];
       const r = await fetch(`/api/disciplines/${discipline.code}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label, prefix, color, category }),
+        body: JSON.stringify({ label, labelEn: labelEn || null, prefix, color, category, categories: allCategories }),
       });
-      if (!r.ok) throw new Error('فشل الحفظ');
-      toast({ title: 'تم تحديث القسم', description: `${discipline.code} (${getCategoryLabel(category)})` });
+      if (!r.ok) throw new Error(t('msg.saveFailed'));
+      toast({ title: t('msg.updated'), description: `${discipline.code}` });
       onSaved();
-    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: t('msg.error'), description: e.message, variant: 'destructive' }); }
     finally { setSaving(false); }
   };
 
@@ -2748,16 +2940,32 @@ function EditDisciplineDialog({ discipline, onOpenChange, onSaved, categories }:
         <div className="space-y-3">
           <div className="space-y-1.5">
             <Label className="text-sm">{t('field.mainCategory')}</Label>
-            <Select value={category} onValueChange={setCategory}>
+            <Select value={category} onValueChange={(v) => { setCategory(v); setExtraCategories(prev => prev.filter(c => c !== v)); }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {(categories || CATEGORIES).map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {c.label}</SelectItem>)}
+                {(categories || CATEGORIES).map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {(lang === 'en' && (c as any).labelEn) ? (c as any).labelEn : c.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
+            <Label className="text-sm">{t('field.extraCategories')}</Label>
+            <div className="flex flex-wrap gap-1.5 p-2 border border-slate-200 rounded-lg max-h-32 overflow-y-auto">
+              {(categories || CATEGORIES).filter((c: any) => c.code !== category).map((c: any) => (
+                <label key={c.code} className="flex items-center gap-1.5 px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 cursor-pointer text-xs">
+                  <input type="checkbox" checked={extraCategories.includes(c.code)} onChange={() => toggleExtraCategory(c.code)} className="w-3 h-3" />
+                  <span>{c.icon}</span>
+                  <span>{(lang === 'en' && c.labelEn) ? c.labelEn : c.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
             <Label className="text-sm">{t('field.nameAr')}</Label>
             <Input value={label} onChange={(e) => setLabel(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('field.nameEn')}</Label>
+            <Input value={labelEn} onChange={(e) => setLabelEn(e.target.value)} placeholder="Elevators" dir="ltr" />
           </div>
           <div className="space-y-1.5">
             <Label className="text-sm">{t('field.prefix')}</Label>
@@ -2775,7 +2983,7 @@ function EditDisciplineDialog({ discipline, onOpenChange, onSaved, categories }:
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'حفظ'}</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? t('msg.saving') : t('common.save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -2867,6 +3075,7 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
   const { t, lang } = useI18n();
   const [code, setCode] = useState('');
   const [label, setLabel] = useState('');
+  const [labelEn, setLabelEn] = useState('');
   const [icon, setIcon] = useState('📄');
   const [color, setColor] = useState('bg-blue-100 text-blue-700');
   const [template, setTemplate] = useState<File | null>(null);
@@ -2874,7 +3083,7 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
   const { toast } = useToast();
 
   useEffect(() => {
-    if (open) { setCode(''); setLabel(''); setIcon('📄'); setColor('bg-blue-100 text-blue-700'); setTemplate(null); }
+    if (open) { setCode(''); setLabel(''); setLabelEn(''); setIcon('📄'); setColor('bg-blue-100 text-blue-700'); setTemplate(null); }
   }, [open]);
 
   const iconOptions = ['📄', '🔍', '❓', '📚', '📋', '📝', '🏗️', '⚡', '🔥', '💧', '❄️', '📡', '🚪', '🛡️', '🔧', '📦'];
@@ -2893,7 +3102,7 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
 
   const handleSave = async () => {
     if (!code || !label) {
-      toast({ title: 'خطأ', description: 'الكود والاسم مطلوبان', variant: 'destructive' }); return;
+      toast({ title: t('msg.error'), description: t('msg.codeLabelRequired'), variant: 'destructive' }); return;
     }
     setSaving(true);
     try {
@@ -2902,21 +3111,22 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
         const fd = new FormData();
         fd.append('code', code.toUpperCase());
         fd.append('label', label);
+        fd.append('labelEn', labelEn);
         fd.append('icon', icon);
         fd.append('color', color);
         fd.append('template', template);
         const r = await fetch('/api/categories', { method: 'POST', body: fd });
-        if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الحفظ'); }
+        if (!r.ok) { const err = await r.json(); throw new Error(err.error || t('msg.saveFailed')); }
       } else {
         const r = await fetch('/api/categories', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: code.toUpperCase(), label, icon, color }),
+          body: JSON.stringify({ code: code.toUpperCase(), label, labelEn: labelEn || undefined, icon, color }),
         });
-        if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'فشل الحفظ'); }
+        if (!r.ok) { const err = await r.json(); throw new Error(err.error || t('msg.saveFailed')); }
       }
-      toast({ title: 'تم إضافة القسم الرئيسي', description: `${code.toUpperCase()} - ${label}` });
+      toast({ title: t('msg.saved'), description: `${code.toUpperCase()} - ${label}` });
       onSaved();
-    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: t('msg.error'), description: e.message, variant: 'destructive' }); }
     finally { setSaving(false); }
   };
 
@@ -2935,6 +3145,10 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
               <Label className="text-sm">{t('field.nameReq')}</Label>
               <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t('new.typeExample2')} />
             </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('field.nameEn')}</Label>
+            <Input value={labelEn} onChange={(e) => setLabelEn(e.target.value)} placeholder="Method Statements" dir="ltr" />
           </div>
           <div className="space-y-1.5">
             <Label className="text-sm">{t('common.icon')}</Label>
@@ -2986,7 +3200,7 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'حفظ'}</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? t('msg.saving') : t('common.save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -2997,6 +3211,7 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
 function EditCategoryDialog({ category, onOpenChange, onSaved }: { category: Category; onOpenChange: (v: boolean) => void; onSaved: () => void }) {
   const { t, lang } = useI18n();
   const [label, setLabel] = useState(category.label);
+  const [labelEn, setLabelEn] = useState((category as any).labelEn || '');
   const [icon, setIcon] = useState(category.icon);
   const [color, setColor] = useState(category.color);
   const [template, setTemplate] = useState<File | null>(null);
@@ -3025,22 +3240,23 @@ function EditCategoryDialog({ category, onOpenChange, onSaved }: { category: Cat
       if (template || removeTemplate) {
         const fd = new FormData();
         fd.append('label', label);
+        fd.append('labelEn', labelEn);
         fd.append('icon', icon);
         fd.append('color', color);
         if (template) fd.append('template', template);
         if (removeTemplate) fd.append('removeTemplate', 'true');
         const r = await fetch(`/api/categories/${category.code}`, { method: 'PATCH', body: fd });
-        if (!r.ok) throw new Error('فشل الحفظ');
+        if (!r.ok) throw new Error(t('msg.saveFailed'));
       } else {
         const r = await fetch(`/api/categories/${category.code}`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ label, icon, color }),
+          body: JSON.stringify({ label, labelEn, icon, color }),
         });
-        if (!r.ok) throw new Error('فشل الحفظ');
+        if (!r.ok) throw new Error(t('msg.saveFailed'));
       }
-      toast({ title: 'تم تحديث القسم الرئيسي', description: category.code });
+      toast({ title: t('msg.updated'), description: category.code });
       onSaved();
-    } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }); }
+    } catch (e: any) { toast({ title: t('msg.error'), description: e.message, variant: 'destructive' }); }
     finally { setSaving(false); }
   };
 
@@ -3052,6 +3268,10 @@ function EditCategoryDialog({ category, onOpenChange, onSaved }: { category: Cat
           <div className="space-y-1.5">
             <Label className="text-sm">{t('common.name')}</Label>
             <Input value={label} onChange={(e) => setLabel(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('field.nameEn')}</Label>
+            <Input value={labelEn} onChange={(e) => setLabelEn(e.target.value)} placeholder="Method Statements" dir="ltr" />
           </div>
           <div className="space-y-1.5">
             <Label className="text-sm">{t('common.icon')}</Label>
@@ -3110,7 +3330,7 @@ function EditCategoryDialog({ category, onOpenChange, onSaved }: { category: Cat
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? 'جاري الحفظ...' : 'حفظ'}</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-emerald-700 hover:bg-emerald-800">{saving ? t('msg.saving') : t('common.save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
