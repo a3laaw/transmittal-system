@@ -755,13 +755,13 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
         <CardContent className="p-0">
           <Table>
             <TableHeader><TableRow>
-              <TableHead className="text-right">التخصص</TableHead>
+              <TableHead className="text-right">{t("dashboard.col.discipline")}</TableHead>
               <TableHead className="text-right">{t("dashboard.col.mainCategory")}</TableHead>
               <TableHead className="text-center">{t("dashboard.col.total")}</TableHead>
-              <TableHead className="text-center">معتمد</TableHead>
-              <TableHead className="text-center">بانتظار</TableHead>
-              <TableHead className="text-center">متأخر</TableHead>
-              <TableHead className="text-center">للوزارة</TableHead>
+              <TableHead className="text-center">{t("dashboard.col.approved")}</TableHead>
+              <TableHead className="text-center">{t("dashboard.col.pending")}</TableHead>
+              <TableHead className="text-center">{t("dashboard.col.overdue")}</TableHead>
+              <TableHead className="text-center">{t("dashboard.col.mohSent")}</TableHead>
               <TableHead className="text-center">{t("dashboard.col.mohApproved")}</TableHead>
               <TableHead className="text-center">% الإنجاز</TableHead>
               <TableHead className="text-center">{t("dashboard.col.lastRef")}</TableHead>
@@ -803,8 +803,8 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
           <CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
-                <TableHead className="text-right">المرجع</TableHead><TableHead className="text-right">التخصص</TableHead>
-                <TableHead className="text-right">الوصف</TableHead><TableHead className="text-center">الحالة</TableHead>
+                <TableHead className="text-right">{t("reports.col.reference")}</TableHead><TableHead className="text-right">{t("dashboard.col.discipline")}</TableHead>
+                <TableHead className="text-right">{t("reports.col.description")}</TableHead><TableHead className="text-center">{t("dashboard.col.status")}</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {data.consultantOverdueList.map((t) => (
@@ -827,8 +827,8 @@ function DashboardView({ data, loading, disciplines, categories, onOpenDetail, o
           <CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
-                <TableHead className="text-right">المرجع</TableHead><TableHead className="text-right">التخصص</TableHead>
-                <TableHead className="text-right">الوصف</TableHead><TableHead className="text-center">الحالة</TableHead>
+                <TableHead className="text-right">{t("reports.col.reference")}</TableHead><TableHead className="text-right">{t("dashboard.col.discipline")}</TableHead>
+                <TableHead className="text-right">{t("reports.col.description")}</TableHead><TableHead className="text-center">{t("dashboard.col.status")}</TableHead>
                 <TableHead className="text-center">{t("dashboard.col.action")}</TableHead>
               </TableRow></TableHeader>
               <TableBody>
@@ -886,7 +886,7 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
       <Card className="border-0 shadow-sm"><CardContent className="p-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
-            <Label className="text-xs">بحث</Label>
+            <Label className="text-xs">{t("common.search")}</Label>
             <div className="relative">
               <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <Input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="ابحث بالمرجع أو الوصف..." className="pr-8" />
@@ -913,7 +913,7 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">النوع</Label>
+            <Label className="text-xs">{t("reports.filterType")}</Label>
             <Select value={filterType} onValueChange={onFilterType}>
               <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
               <SelectContent>
@@ -951,13 +951,13 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
           <div className="max-h-[70vh] overflow-y-auto">
             <Table>
               <TableHeader className="sticky top-0 bg-white z-10"><TableRow>
-                <TableHead className="text-right">المرجع</TableHead>
-                <TableHead className="text-right">القسم</TableHead>
+                <TableHead className="text-right">{t("reports.col.reference")}</TableHead>
+                <TableHead className="text-right">{t("dashboard.col.mainCategory")}</TableHead>
                 <TableHead className="text-right">النوع</TableHead>
-                <TableHead className="text-right">الوصف</TableHead>
+                <TableHead className="text-right">{t("reports.col.description")}</TableHead>
                 <TableHead className="text-center">المراجعات</TableHead>
-                <TableHead className="text-center">الاستشاري</TableHead>
-                <TableHead className="text-center">الوزارة</TableHead>
+                <TableHead className="text-center">{t("reports.col.consultant")}</TableHead>
+                <TableHead className="text-center">{t("reports.col.moh")}</TableHead>
                 <TableHead className="text-center">إجراءات</TableHead>
               </TableRow></TableHeader>
               <TableBody>
@@ -1195,7 +1195,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
           <Button variant="outline" size="sm" onClick={onSendToMoh}
             disabled={detail.mohStatus.status !== 'not_sent' && detail.mohStatus.status !== 'reviewed'}
             className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50">
-            <Send className="w-4 h-4" /> إرسال REV.{latestRevNumber} للوزارة
+            <Send className="w-4 h-4" /> إرسال <span dir="ltr">REV.{latestRevNumber}</span> للوزارة
           </Button>
           <Button size="sm" onClick={onDownloadExcel} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
             <Download className="w-4 h-4" /> تنزيل ملف Excel
@@ -1286,9 +1286,9 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
       <Card className="border-0 shadow-sm">
         <CardHeader className="flex-row items-center justify-between">
           <div><CardTitle className="text-lg flex items-center gap-2"><History className="w-5 h-5" /> سجل المراجعات ({detail.revisions.length})</CardTitle>
-            <CardDescription>سيتم اقتراح REV.{detail.revisions.length} تلقائياً عند الإضافة</CardDescription></div>
+            <CardDescription>سيتم اقتراح <span dir="ltr">REV.{detail.revisions.length}</span> تلقائياً عند الإضافة</CardDescription></div>
           <Button size="sm" onClick={() => setShowRevDialog(true)} className="gap-1.5">
-            <Plus className="w-4 h-4" /> إضافة مراجعة (REV.{detail.revisions.length})
+            <Plus className="w-4 h-4" /> إضافة مراجعة ((<span dir="ltr">REV.{detail.revisions.length}</span>)
           </Button>
         </CardHeader>
         <CardContent className="p-0">
@@ -1326,7 +1326,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                   }
                   return (
                     <TableRow key={r.id}>
-                      <TableCell className="text-center font-bold">REV.{r.revNumber}</TableCell>
+                      <TableCell className="text-center font-bold"><span dir="ltr">REV.{r.revNumber}</span></TableCell>
                       <TableCell className="text-center text-sm">{fmtDate(r.submitDate)}</TableCell>
                       <TableCell className="text-center text-sm">{fmtDate(r.replyDate)}</TableCell>
                       <TableCell className={`text-center font-semibold ${actionColor}`}>{actionLabel}</TableCell>
@@ -1523,7 +1523,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
             </DialogHeader>
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label className="text-sm font-semibold">النوع</Label>
+                <Label className="text-sm font-semibold">{t("reports.filterType")}</Label>
                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white w-fit">
                   <span className="text-lg">🔗</span>
                   <span className="font-semibold text-sm">رابط خارجي</span>
@@ -1613,12 +1613,12 @@ function AddRevisionDialog({ open, onOpenChange, transmittalId, nextRevNumber, o
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>إضافة مراجعة جديدة - REV.{nextRevNumber}</DialogTitle>
+          <DialogTitle>إضافة مراجعة جديدة - <span dir="ltr">REV.{nextRevNumber}</span></DialogTitle>
           <DialogDescription>رقم المراجعة مقترح تلقائياً (آخر رقم + 1). سجّل تاريخ الإرسال والرد والإجراء.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="bg-emerald-50 border border-emerald-200 rounded p-2 text-sm">
-            <strong>رقم المراجعة:</strong> REV.{nextRevNumber} (تلقائي)
+            <strong>رقم المراجعة:</strong> <span dir="ltr">REV.{nextRevNumber}</span> (تلقائي)
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -1789,7 +1789,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
         {discipline && (
           <>
             <div className="space-y-1.5">
-              <Label>النوع</Label>
+              <Label>{t("reports.filterType")}</Label>
           <Select value={type} onValueChange={setType}>
             <SelectTrigger><SelectValue placeholder="اختر النوع" /></SelectTrigger>
             <SelectContent>
@@ -1807,7 +1807,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
         </div>
 
         <div className="space-y-1.5">
-          <Label>الوصف</Label>
+          <Label>{t("common.description")}</Label>
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="مثال: Excavation Plan & Excavation Section" />
         </div>
 
@@ -2113,7 +2113,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">تقارير الجدول الزمني</h2>
+          <h2 className="text-2xl font-bold text-slate-900">{t("reports.title")}</h2>
           <p className="text-sm text-slate-500 mt-1">
             {items.length} ترانسميتال · {revColumns.length} مراجعة (REV.0 - REV.{maxRevNumber}) · كل ريفجن في جدول منفصل بفواصل رأسية
           </p>
@@ -2135,7 +2135,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
       <Card className="border-0 shadow-sm"><CardContent className="p-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
-            <Label className="text-xs">بحث</Label>
+            <Label className="text-xs">{t("common.search")}</Label>
             <div className="relative">
               <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="مرجع أو وصف..." className="pr-8" />
@@ -2146,37 +2146,37 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
             <Select value={filterCategory} onValueChange={(v) => { setFilterCategory(v); setFilterDiscipline('all'); }}>
               <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">الكل</SelectItem>
+                <SelectItem value="all">{t("common.all")}</SelectItem>
                 {categories.map(c => <SelectItem key={c.code} value={c.code}>{c.icon} {c.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">التخصص</Label>
+            <Label className="text-xs">{t("reports.filterDiscipline")}</Label>
             <Select value={filterDiscipline} onValueChange={setFilterDiscipline}>
               <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">الكل</SelectItem>
+                <SelectItem value="all">{t("common.all")}</SelectItem>
                 {availableDisciplines.map(d => <SelectItem key={d.code} value={d.code}>{d.label} ({d.code})</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">النوع</Label>
+            <Label className="text-xs">{t("reports.filterType")}</Label>
             <Select value={filterType} onValueChange={setFilterType}>
               <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">الكل</SelectItem>
+                <SelectItem value="all">{t("common.all")}</SelectItem>
                 {types.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">من تاريخ</Label>
+            <Label className="text-xs">{t("reports.dateFrom")}</Label>
             <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">إلى تاريخ</Label>
+            <Label className="text-xs">{t("reports.dateTo")}</Label>
             <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
           </div>
         </div>
@@ -2193,31 +2193,31 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
           ) : items.length === 0 ? (
             <div className="text-center py-16 text-slate-500">
               <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p>لا توجد بيانات مطابقة للفلاتر</p>
+              <p>{t("reports.empty")}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table className="border-collapse">
                 <TableHeader className="sticky top-0 bg-white z-10">
                   <TableRow>
-                    <TableHead className="text-right sticky right-0 bg-white z-20 min-w-[120px] border-l-2 border-slate-300">المرجع</TableHead>
-                    <TableHead className="text-right min-w-[180px] border-l-2 border-slate-300">الوصف</TableHead>
+                    <TableHead className="text-right sticky right-0 bg-white z-20 min-w-[120px] border-l-2 border-slate-300">{t("reports.col.reference")}</TableHead>
+                    <TableHead className="text-right min-w-[180px] border-l-2 border-slate-300">{t("reports.col.description")}</TableHead>
                     {revColumns.map((rev, revIdx) => (
                       <TableHead
                         key={rev}
                         className={`text-center min-w-[260px] p-0 border-l-4 ${revIdx === 0 ? 'border-l-2 border-slate-400' : 'border-l-4 border-blue-500'}`}
                       >
                         {/* REV group header — colored band on top */}
-                        <div className="bg-blue-700 text-white py-1.5 px-2 font-bold text-sm">REV.{rev}</div>
+                        <div className="bg-blue-700 text-white py-1.5 px-2 font-bold text-sm"><span dir="ltr">REV.{rev}</span></div>
                         <div className="flex text-xs font-normal mt-0 bg-blue-50">
-                          <div className="flex-1 py-1 border-l border-blue-200">تقديم</div>
-                          <div className="flex-1 py-1 border-l border-blue-200">رد</div>
-                          <div className="flex-1 py-1 border-l border-blue-200">إجراء</div>
+                          <div className="flex-1 py-1 border-l border-blue-200">{t("reports.rev.submit")}</div>
+                          <div className="flex-1 py-1 border-l border-blue-200">{t("reports.rev.reply")}</div>
+                          <div className="flex-1 py-1 border-l border-blue-200">{t("reports.rev.action")}</div>
                         </div>
                       </TableHead>
                     ))}
-                    <TableHead className="text-center min-w-[100px] border-l-4 border-emerald-500 bg-emerald-50">الاستشاري</TableHead>
-                    <TableHead className="text-center min-w-[100px] border-l-2 border-purple-500 bg-purple-50">الوزارة</TableHead>
+                    <TableHead className="text-center min-w-[100px] border-l-4 border-emerald-500 bg-emerald-50">{t("reports.col.consultant")}</TableHead>
+                    <TableHead className="text-center min-w-[100px] border-l-2 border-purple-500 bg-purple-50">{t("reports.col.moh")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2419,7 +2419,7 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
           <CardTitle className="text-base flex items-center gap-2">
             <Folder className="w-5 h-5" /> الأقسام الرئيسية ({categories.length})
           </CardTitle>
-          <CardDescription>الأقسام الرئيسية القابلة للإضافة (ترانسميتال، MIR، RFI، كتب، وأي قسم آخر)</CardDescription>
+          <CardDescription>{t("dashboard.byCategoryDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -2461,7 +2461,7 @@ function SettingsView({ disciplines, categories, docTypes, onRefreshDisciplines,
             <CardTitle className="text-base flex items-center gap-2">
               <FileText className="w-5 h-5" /> أنواع المستندات ({docTypes.length})
             </CardTitle>
-            <CardDescription>الأنواع المستخدمة في تصنيف الالمستندات (Shop Drawings, Sample, ...)</CardDescription>
+            <CardDescription>{t("settings.docTypesHint")}</CardDescription>
           </div>
           <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowAddDocType(true)}>
             <Plus className="w-4 h-4" /> إضافة نوع
@@ -2809,6 +2809,7 @@ function SendToMohDialog({ target, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (submitDate: string, submitRev: number, notes: string) => void;
 }) {
+  const { t } = useI18n();
   const [submitDate, setSubmitDate] = useState(new Date().toISOString().slice(0, 10));
   const [submitRev, setSubmitRev] = useState<number>(target.latestRev);
   const [notes, setNotes] = useState('');
@@ -2830,14 +2831,14 @@ function SendToMohDialog({ target, onClose, onConfirm }: {
             إرسال للوزارة - {target.reference}
           </DialogTitle>
           <DialogDescription>
-            أدخل تاريخ الإرسال لوزارة الصحة. سيتم إرسال آخر مراجعة (REV.{target.latestRev}) تلقائياً.
+            أدخل تاريخ الإرسال لوزارة الصحة. سيتم إرسال آخر مراجعة (<span dir="ltr">REV.{target.latestRev}</span>) تلقائياً.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
             <p className="text-sm text-blue-900">
-              <strong>المرجع:</strong> <span className="font-mono">{target.reference}</span>
+              <strong>{t("common.reference")}:</strong> <span className="font-mono">{target.reference}</span>
             </p>
             <p className="text-sm text-blue-900">
               <strong>المراجعة المُرسلة (تلقائي - آخر ريفجن):</strong> REV.{target.latestRev}
@@ -3143,6 +3144,7 @@ function RegisterRevisionDialog({ target, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (submitDate: string, replyDate: string, action: string, approvalType: string, notes: string) => void;
 }) {
+  const { t } = useI18n();
   const [submitDate, setSubmitDate] = useState(new Date().toISOString().slice(0, 10));
   const [replyDate, setReplyDate] = useState('');
   const [action, setAction] = useState('');
@@ -3171,14 +3173,14 @@ function RegisterRevisionDialog({ target, onClose, onConfirm }: {
             تسجيل ريفجن جديد - {target.reference}
           </DialogTitle>
           <DialogDescription>
-            سيتم إنشاء مراجعة جديدة REV.{target.nextRev} (آخر رقم + 1). أدخل تاريخ الإرسال والرد والإجراء.
+            سيتم إنشاء مراجعة جديدة <span dir="ltr">REV.{target.nextRev}</span> (آخر رقم + 1). أدخل تاريخ الإرسال والرد والإجراء.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-sm text-blue-900">
-              <strong>المرجع:</strong> <span className="font-mono">{target.reference}</span> ·
+              <strong>{t("common.reference")}:</strong> <span className="font-mono">{target.reference}</span> ·
               <strong> المراجعة الجديدة:</strong> REV.{target.nextRev}
             </p>
           </div>
@@ -3249,6 +3251,7 @@ function ConsultantReplyDialog({ target, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (replyDate: string, action: string, approvalType: string, notes: string) => void;
 }) {
+  const { t } = useI18n();
   const [replyDate, setReplyDate] = useState(new Date().toISOString().slice(0, 10));
   const [action, setAction] = useState('');
   const [approvalType, setApprovalType] = useState('');
@@ -3284,7 +3287,7 @@ function ConsultantReplyDialog({ target, onClose, onConfirm }: {
         <div className="space-y-4">
           <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
             <p className="text-sm text-emerald-900">
-              <strong>المرجع:</strong> <span className="font-mono">{target.reference}</span> ·
+              <strong>{t("common.reference")}:</strong> <span className="font-mono">{target.reference}</span> ·
               سيتم تحديث آخر ريفجن تلقائياً
             </p>
           </div>
@@ -3350,6 +3353,7 @@ function MohReplyDialog({ target, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (reviewDate: string, status: string, notes: string) => void;
 }) {
+  const { t } = useI18n();
   const [reviewDate, setReviewDate] = useState(new Date().toISOString().slice(0, 10));
   const [status, setStatus] = useState('');
   const [notes, setNotes] = useState('');
@@ -3378,7 +3382,7 @@ function MohReplyDialog({ target, onClose, onConfirm }: {
         <div className="space-y-4">
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
             <p className="text-sm text-purple-900">
-              <strong>المرجع:</strong> <span className="font-mono">{target.reference}</span>
+              <strong>{t("common.reference")}:</strong> <span className="font-mono">{target.reference}</span>
             </p>
           </div>
 
@@ -3388,7 +3392,7 @@ function MohReplyDialog({ target, onClose, onConfirm }: {
               <Input type="date" value={reviewDate} onChange={(e) => setReviewDate(e.target.value)} required />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm">حالة الرد *</Label>
+              <Label className="text-sm">{t("dialog.mohReply.status")} *</Label>
               <Select value={status} onValueChange={setStatus}>
                 <SelectTrigger><SelectValue placeholder="اختر الحالة" /></SelectTrigger>
                 <SelectContent>
@@ -3443,7 +3447,7 @@ function CopyTransmittalDialog({ target, onClose, onConfirm }: {
             نسخ الترانسميتال - {target.reference}
           </DialogTitle>
           <DialogDescription>
-            سيتم إنشاء ترانسميتال جديد بنفس البيانات (التخصص، النوع) ورقم تسلسلي جديد تلقائي. يمكنك تعديل الوصف قبل النسخ.
+            سيتم إنشاء مستند جديد بنفس البيانات (التخصص، النوع) ورقم تسلسلي جديد تلقائي. يمكنك تعديل الوصف قبل النسخ.
           </DialogDescription>
         </DialogHeader>
 
