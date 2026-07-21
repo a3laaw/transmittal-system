@@ -462,5 +462,7 @@
   "dialog.editActionHint": "اتركه فارغاً لو لسه ما فيش رد من الاستشاري",
   "dialog.editMohReview": "تعديل رد الوزارة",
   "dialog.editMohReviewDesc": "تعديل بيانات رد الوزارة (تاريخ الإرسال، تاريخ الرد، الحالة، الملاحظات)",
-  "field.statusReq": "الحالة *"
+  "field.statusReq": "الحالة *",
+  "dialog.addMohReview": "إضافة رد الوزارة",
+  "common.add": "إضافة"
 }

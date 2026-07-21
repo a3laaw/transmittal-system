@@ -229,7 +229,19 @@ export default function Home() {
         consultant,
       );
       const mohStatus = computeMohStatus(moh);
-      setDetail({ ...d, computedStatus: overall, consultantStatus, mohStatus } as TransmittalDetail);
+      // Add MOH review fields as top-level for easy access in UI (matching list API shape)
+      const enrichedDetail = {
+        ...d,
+        computedStatus: overall,
+        consultantStatus,
+        mohStatus,
+        mohSubmitDate: moh?.submitDate ?? null,
+        mohSubmitRev: moh?.submitRev ?? null,
+        mohReviewDate: moh?.reviewDate ?? null,
+        mohStatusRaw: moh,            // full MOH review object (for EditMohReviewDialog)
+        mohNotes: moh?.notes ?? '',   // MOH notes (for EditMohReviewDialog)
+      };
+      setDetail(enrichedDetail as TransmittalDetail);
     } catch (e: any) {
       toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
     } finally {
@@ -1309,24 +1321,25 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
             <h3 className="font-semibold text-slate-800 flex items-center gap-2"><Hospital className="w-5 h-5 text-blue-700" /> {t('detail.mohFull')}</h3>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className={detail.mohStatus.color}>{detail.mohStatus.emoji} {t(detail.mohStatus.statusKey || 'status.' + detail.mohStatus.status, detail.mohStatus.daysOpen !== undefined ? {days: detail.mohStatus.daysOpen} : {})}</Badge>
-              {detail.mohSubmitDate && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7"
-                  onClick={() => setEditingMohReview({
-                    party: 'MOH',
-                    submitDate: detail.mohSubmitDate,
-                    submitRev: detail.mohSubmitRev,
-                    reviewDate: detail.mohReviewDate,
-                    status: (detail as any).mohStatusRaw?.status || null,
-                    notes: (detail as any).mohNotes || '',
-                  })}
-                  title={t('dialog.editMohReview')}
-                >
-                  <Pencil className="w-3 h-3 text-amber-700" />
-                </Button>
-              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 gap-1 text-xs"
+                onClick={() => setEditingMohReview({
+                  party: 'MOH',
+                  submitDate: (detail as any).mohSubmitDate || null,
+                  submitRev: (detail as any).mohSubmitRev ?? null,
+                  reviewDate: (detail as any).mohReviewDate || null,
+                  status: (detail as any).mohStatusRaw?.status || null,
+                  notes: (detail as any).mohNotes || '',
+                })}
+                title={detail.mohStatus.status === 'not_sent' ? t('dialog.addMohReview') : t('dialog.editMohReview')}
+              >
+                <Pencil className="w-3 h-3 text-amber-700" />
+                <span className="text-amber-700">
+                  {detail.mohStatus.status === 'not_sent' ? t('common.add') : t('common.edit')}
+                </span>
+              </Button>
             </div>
           </div>
           <dl className="space-y-1 text-sm">
