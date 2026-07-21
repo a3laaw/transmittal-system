@@ -456,7 +456,12 @@ export default function Home() {
   const handleDownloadExcel = async (reference: string, description: string, category?: string, revNumber?: number) => {
     const today = new Date().toISOString().slice(0, 10);
     const revLabel = revNumber !== undefined ? `Rev.${String(revNumber).padStart(2, '0')}` : '';
-    toast({ title: t('msg.generatingExcel'), description: t('msg.willDownload', {ref: revLabel ? `${reference}-${revLabel}` : reference}) });
+    // Build filename based on category label (not "Transmittal-")
+    const catLabel = category
+      ? (categories.find(c => c.code === category)?.label || t('app.docUnit'))
+      : t('app.docUnit');
+    const fileBase = revLabel ? `${catLabel}-${reference}-${revLabel}` : `${catLabel}-${reference}`;
+    toast({ title: t('msg.generatingExcel'), description: t('msg.willDownload', {ref: fileBase}) });
     const catParam = category ? `&category=${encodeURIComponent(category)}` : '';
     const revParam = revNumber !== undefined ? `&rev=${revNumber}` : '';
     const url = `/api/excel-template?reference=${encodeURIComponent(reference)}&description=${encodeURIComponent(description)}&date=${today}${catParam}${revParam}&_=${Date.now()}`;
@@ -470,13 +475,14 @@ export default function Home() {
       const objUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = objUrl;
-      a.download = revLabel ? `${reference}-${revLabel}.xlsx` : `Transmittal-${reference}.xlsx`;
+      a.download = `${fileBase}.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
     } catch (e: any) {
-      toast({ title: t('msg.downloadError'), description: e.message, variant: 'destructive' });
+      const errMsg = (e && typeof e === 'object' && typeof e.message === 'string') ? e.message : String(e);
+      toast({ title: t('msg.downloadError'), description: errMsg, variant: 'destructive' });
     }
   };
 
@@ -552,8 +558,11 @@ export default function Home() {
               const ref = detail.reference;
               const desc = detail.description || '';
               const today = new Date().toISOString().slice(0, 10);
-              toast({ title: t('msg.generatingFile'), description: `Transmittal ${ref}` });
-              const url = `/api/excel-template?reference=${encodeURIComponent(ref)}&description=${encodeURIComponent(desc)}&date=${today}&_=${Date.now()}`;
+              // Use category name in filename and toast
+              const catCode = detail.category || 'TRANSMITTAL';
+              const catLabel = categories.find(c => c.code === catCode)?.label || t('app.docUnit');
+              toast({ title: t('msg.generatingFile'), description: `${catLabel} ${ref}` });
+              const url = `/api/excel-template?reference=${encodeURIComponent(ref)}&description=${encodeURIComponent(desc)}&category=${encodeURIComponent(catCode)}&date=${today}&_=${Date.now()}`;
               try {
                 const res = await fetch(url, { cache: 'no-store' });
                 if (!res.ok) {
@@ -564,13 +573,14 @@ export default function Home() {
                 const objUrl = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = objUrl;
-                a.download = `Transmittal-${ref}.xlsx`;
+                a.download = `${catLabel}-${ref}.xlsx`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
               } catch (e: any) {
-                toast({ title: t('msg.downloadError'), description: e.message, variant: 'destructive' });
+                const errMsg = (e && typeof e === 'object' && typeof e.message === 'string') ? e.message : String(e);
+                toast({ title: t('msg.downloadError'), description: errMsg, variant: 'destructive' });
               }
             }}
             onSendToMoh={() => handleSendToMoh(detail.id, detail.reference, detail.revisions.length > 0 ? detail.revisions[detail.revisions.length - 1].revNumber : 0)}
@@ -582,11 +592,12 @@ export default function Home() {
           <NewTransmittalView
             disciplines={disciplines}
             categories={categories}
-            onCreated={(t) => { toast({ title: t('msg.transmittalCreated'), description: t.reference }); setSelectedId(t.id); setView('detail'); }}
-            onDownloadTemplate={async (ref, discipline, desc) => {
+            onCreated={(created) => { toast({ title: t('msg.transmittalCreated'), description: created.reference }); setSelectedId(created.id); setView('detail'); }}
+            onDownloadTemplate={async (ref, discipline, desc, category) => {
               const today = new Date().toISOString().slice(0, 10);
               toast({ title: t('msg.generatingExcel'), description: t('msg.willDownload', {ref: ref}) });
-              const url = `/api/excel-template?reference=${encodeURIComponent(ref)}&discipline=${encodeURIComponent(discipline)}&description=${encodeURIComponent(desc)}&date=${today}&_=${Date.now()}`;
+              const catParam = category ? `&category=${encodeURIComponent(category)}` : '';
+              const url = `/api/excel-template?reference=${encodeURIComponent(ref)}&discipline=${encodeURIComponent(discipline)}&description=${encodeURIComponent(desc)}&date=${today}${catParam}&_=${Date.now()}`;
               try {
                 const res = await fetch(url, { cache: 'no-store' });
                 if (!res.ok) {
@@ -597,13 +608,18 @@ export default function Home() {
                 const objUrl = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = objUrl;
-                a.download = `Transmittal-${ref}.xlsx`;
+                // Use category name (or fallback to "Document") instead of "Transmittal"
+                const catLabel = category
+                  ? (categories.find(c => c.code === category)?.label || category)
+                  : t('app.docUnit');
+                a.download = `${catLabel}-${ref}.xlsx`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
               } catch (e: any) {
-                toast({ title: t('msg.downloadError'), description: e.message, variant: 'destructive' });
+                const errMsg = (e && typeof e === 'object' && typeof e.message === 'string') ? e.message : String(e);
+                toast({ title: t('msg.downloadError'), description: errMsg, variant: 'destructive' });
               }
             }}
           />
@@ -2096,7 +2112,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
   disciplines: Discipline[];
   categories: Category[];
   onCreated: (t: any) => void;
-  onDownloadTemplate: (ref: string, discipline: string, desc: string) => void;
+  onDownloadTemplate: (ref: string, discipline: string, desc: string, category?: string) => void;
 }) {
   const { t, lang } = useI18n();
   const [reference, setReference] = useState('');
@@ -2321,7 +2337,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
       </CardContent></Card>
 
       <div className="flex flex-wrap gap-2 justify-end">
-        <Button variant="outline" onClick={() => onDownloadTemplate(reference, discipline, description)} disabled={!reference}>
+        <Button variant="outline" onClick={() => onDownloadTemplate(reference, discipline, description, category)} disabled={!reference}>
           <Download className="w-4 h-4" /> {t('new.downloadTemplate')}</Button>
         <Button onClick={handleCreate} disabled={saving || !reference || !discipline} className="bg-emerald-700 hover:bg-emerald-800 gap-1.5">
           <Plus className="w-4 h-4" /> {saving ? t('msg.creating') : t('button.createTransmittal')}

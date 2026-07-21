@@ -433,12 +433,12 @@
   "common.link": "رابط",
   "common.image": "صورة",
   "common.unknown": "غير معروف",
-  "button.createTransmittal": "إنشاء الترانسميتال",
+  "button.createTransmittal": "إنشاء المستند",
   "button.registerReply": "تسجيل الرد",
   "button.registerMohReply": "تسجيل رد الوزارة",
   "msg.linkAdded": "تم إضافة الرابط",
   "msg.disciplineAdded": "تم إضافة القسم",
-  "msg.transmittalCreated": "تم إنشاء الترانسميتال",
+  "msg.transmittalCreated": "تم إنشاء المستند",
   "msg.downloaded": "تم التنزيل",
   "msg.disciplineDeleted": "تم حذف القسم",
   "msg.categoryDeleted": "تم حذف القسم الرئيسي",
@@ -471,5 +471,6 @@
   "msg.popupsBlocked": "النوافذ المنبثقة محظوبة — فعّلها للطباعة",
   "field.shortCode": "الكود المختصر",
   "field.shortCodeHint": "كود داخلي للتمييز بين الأقسام (مثل: TR, MR, RF, LT) — لا يُكتب في ملف Excel",
-  "common.optional": "اختياري"
+  "common.optional": "اختياري",
+  "app.docUnit": "مستند"
 }
