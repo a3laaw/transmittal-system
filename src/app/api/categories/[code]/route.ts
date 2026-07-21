@@ -22,6 +22,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
     const form = await req.formData();
     const label = form.get('label') as string | null;
     const labelEn = form.get('labelEn') as string | null;
+    const shortCode = form.get('shortCode') as string | null;
     const icon = form.get('icon') as string | null;
     const color = form.get('color') as string | null;
     const file = form.get('template') as File | null;
@@ -86,6 +87,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
       data: {
         ...(label !== null && label !== undefined && { label: String(label).trim() }),
         ...(labelEn !== null && labelEn !== undefined && { labelEn: labelEn ? String(labelEn).trim() : null }),
+        ...(shortCode !== null && shortCode !== undefined && { shortCode: shortCode ? String(shortCode).toUpperCase().trim() : null }),
         ...(icon !== null && icon !== undefined && { icon }),
         ...(color !== null && color !== undefined && { color }),
         templatePath,
@@ -97,13 +99,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
 
   // JSON body (no file)
   const body = await req.json();
-  const { label, labelEn, icon, color } = body;
+  const { label, labelEn, shortCode, icon, color } = body;
 
   const c = await db.category.update({
     where: { code },
     data: {
       ...(label !== undefined && { label: String(label).trim() }),
       ...(labelEn !== undefined && { labelEn: labelEn ? String(labelEn).trim() : null }),
+      ...(shortCode !== undefined && { shortCode: shortCode ? String(shortCode).toUpperCase().trim() : null }),
       ...(icon !== undefined && { icon }),
       ...(color !== undefined && { color }),
     },

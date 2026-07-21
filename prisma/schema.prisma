@@ -12,6 +12,9 @@ datasource db {
 model Category {
   id            String   @id @default(cuid())
   code          String   @unique
+  // Short code used for internal reference sequencing (TR for TRANSMITTAL, MR for MIR, etc.)
+  // NOT written in the Excel template — used only for backend uniqueness grouping
+  shortCode     String?
   label         String
   labelEn       String?
   icon          String   @default("📄")
@@ -71,7 +74,7 @@ model DisciplineCategory {
 
 model Transmittal {
   id          String   @id @default(cuid())
-  reference   String   @unique
+  reference   String
   discipline  String
   disciplineCode String?
   category    String   @default("TRANSMITTAL")
@@ -94,6 +97,9 @@ model Transmittal {
   @@index([category])
   @@index([reference])
   @@index([parentTransmittalId])
+  // Reference is unique PER CATEGORY, not globally.
+  // This allows CIV-001 in TRANSMITTAL and CIV-001 in MIR to coexist.
+  @@unique([category, reference])
 }
 
 model Revision {

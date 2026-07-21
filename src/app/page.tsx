@@ -2147,7 +2147,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
     try {
       const r = await fetch('/api/transmittals', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reference, discipline, type: type || undefined, description: description || undefined, parentTransmittalId: parentTransmittalId || undefined }),
+        body: JSON.stringify({ reference, discipline, category, type: type || undefined, description: description || undefined, parentTransmittalId: parentTransmittalId || undefined }),
       });
       if (!r.ok) { const err = await r.json(); throw new Error(err.error || t('msg.createFailed')); }
       const created = await r.json();
@@ -2563,21 +2563,32 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
     const electronAPI = (window as any).electronAPI;
     if (electronAPI && electronAPI.printContent) {
       try {
-        await electronAPI.printContent(printHtml);
-        return;
-      } catch (e) {
-        console.warn('Electron print failed, falling back to window.print()', e);
+        const result = await electronAPI.printContent(printHtml);
+        if (result && result.ok) {
+          toast({ title: t('msg.printed'), description: t('reports.title') });
+          return;
+        } else if (result && result.error) {
+          console.warn('Electron print failed:', result.error);
+          toast({ title: t('msg.printFailed'), description: result.error, variant: 'destructive' });
+        }
+      } catch (e: any) {
+        console.warn('Electron print IPC threw:', e);
+        toast({ title: t('msg.printFailed'), description: e.message, variant: 'destructive' });
       }
     }
-    // Fallback: open new window and print
+    // Fallback: open new window and print (browser mode)
     const printWin = window.open('', '_blank', 'width=1024,height=768');
     if (printWin) {
       printWin.document.write(printHtml);
       printWin.document.close();
       printWin.focus();
-      setTimeout(() => printWin.print(), 500);
+      setTimeout(() => {
+        try { printWin.print(); } catch (e) { console.error('Print failed:', e); }
+      }, 500);
+      toast({ title: t('msg.printOpened') });
     } else {
       // Last resort — print current page
+      toast({ title: t('msg.popupsBlocked'), variant: 'destructive' });
       window.print();
     }
   };
@@ -3637,6 +3648,7 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
   const [code, setCode] = useState('');
   const [label, setLabel] = useState('');
   const [labelEn, setLabelEn] = useState('');
+  const [shortCode, setShortCode] = useState('');
   const [icon, setIcon] = useState('📄');
   const [color, setColor] = useState('bg-blue-100 text-blue-700');
   const [template, setTemplate] = useState<File | null>(null);
@@ -3644,7 +3656,7 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
   const { toast } = useToast();
 
   useEffect(() => {
-    if (open) { setCode(''); setLabel(''); setLabelEn(''); setIcon('📄'); setColor('bg-blue-100 text-blue-700'); setTemplate(null); }
+    if (open) { setCode(''); setLabel(''); setLabelEn(''); setShortCode(''); setIcon('📄'); setColor('bg-blue-100 text-blue-700'); setTemplate(null); }
   }, [open]);
 
   const iconOptions = ['📄', '🔍', '❓', '📚', '📋', '📝', '🏗️', '⚡', '🔥', '💧', '❄️', '📡', '🚪', '🛡️', '🔧', '📦'];
@@ -3673,6 +3685,7 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
         fd.append('code', code.toUpperCase());
         fd.append('label', label);
         fd.append('labelEn', labelEn);
+        fd.append('shortCode', shortCode.toUpperCase());
         fd.append('icon', icon);
         fd.append('color', color);
         fd.append('template', template);
@@ -3681,7 +3694,7 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
       } else {
         const r = await fetch('/api/categories', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: code.toUpperCase(), label, labelEn: labelEn || undefined, icon, color }),
+          body: JSON.stringify({ code: code.toUpperCase(), label, labelEn: labelEn || undefined, shortCode: shortCode.toUpperCase() || undefined, icon, color }),
         });
         if (!r.ok) { const err = await r.json(); throw new Error(err.error || t('msg.saveFailed')); }
       }
@@ -3710,6 +3723,11 @@ function AddCategoryDialog({ open, onOpenChange, onSaved }: { open: boolean; onO
           <div className="space-y-1.5">
             <Label className="text-sm">{t('field.nameEn')}</Label>
             <Input value={labelEn} onChange={(e) => setLabelEn(e.target.value)} placeholder="Method Statements" dir="ltr" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('field.shortCode')} <span className="text-xs text-slate-400">({t('common.optional')})</span></Label>
+            <Input value={shortCode} onChange={(e) => setShortCode(e.target.value.toUpperCase())} placeholder="TR / MR / RF / LT" className="font-mono" maxLength={5} dir="ltr" />
+            <p className="text-xs text-slate-500">{t('field.shortCodeHint')}</p>
           </div>
           <div className="space-y-1.5">
             <Label className="text-sm">{t('common.icon')}</Label>
@@ -3773,6 +3791,7 @@ function EditCategoryDialog({ category, onOpenChange, onSaved }: { category: Cat
   const { t, lang } = useI18n();
   const [label, setLabel] = useState(category.label);
   const [labelEn, setLabelEn] = useState((category as any).labelEn || '');
+  const [shortCode, setShortCode] = useState((category as any).shortCode || '');
   const [icon, setIcon] = useState(category.icon);
   const [color, setColor] = useState(category.color);
   const [template, setTemplate] = useState<File | null>(null);
@@ -3802,6 +3821,7 @@ function EditCategoryDialog({ category, onOpenChange, onSaved }: { category: Cat
         const fd = new FormData();
         fd.append('label', label);
         fd.append('labelEn', labelEn);
+        fd.append('shortCode', shortCode.toUpperCase());
         fd.append('icon', icon);
         fd.append('color', color);
         if (template) fd.append('template', template);
@@ -3811,7 +3831,7 @@ function EditCategoryDialog({ category, onOpenChange, onSaved }: { category: Cat
       } else {
         const r = await fetch(`/api/categories/${category.code}`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ label, labelEn, icon, color }),
+          body: JSON.stringify({ label, labelEn, shortCode: shortCode.toUpperCase() || null, icon, color }),
         });
         if (!r.ok) throw new Error(t('msg.saveFailed'));
       }
@@ -3833,6 +3853,11 @@ function EditCategoryDialog({ category, onOpenChange, onSaved }: { category: Cat
           <div className="space-y-1.5">
             <Label className="text-sm">{t('field.nameEn')}</Label>
             <Input value={labelEn} onChange={(e) => setLabelEn(e.target.value)} placeholder="Method Statements" dir="ltr" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('field.shortCode')} <span className="text-xs text-slate-400">({t('common.optional')})</span></Label>
+            <Input value={shortCode} onChange={(e) => setShortCode(e.target.value.toUpperCase())} placeholder="TR / MR / RF / LT" className="font-mono" maxLength={5} dir="ltr" />
+            <p className="text-xs text-slate-500">{t('field.shortCodeHint')}</p>
           </div>
           <div className="space-y-1.5">
             <Label className="text-sm">{t('common.icon')}</Label>

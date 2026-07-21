@@ -117,20 +117,38 @@ export async function GET(req: NextRequest) {
 // POST /api/transmittals — create new
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { reference, discipline, type, description, parentTransmittalId } = body;
+  const { reference, discipline, type, description, parentTransmittalId, category: categoryOverride } = body;
 
   if (!reference || !discipline) {
     return NextResponse.json({ error: 'المرجع والتخصص مطلوبان' }, { status: 400 });
   }
 
-  const existing = await db.transmittal.findUnique({ where: { reference } });
-  if (existing) {
-    return NextResponse.json({ error: `المرجع ${reference} موجود مسبقاً` }, { status: 409 });
+  // Look up the discipline's category (default + multi-link)
+  const disc = await db.discipline.findUnique({
+    where: { code: discipline },
+    include: { categories: { select: { categoryCode: true } } },
+  });
+  const defaultCategory = disc?.categoryCode || 'TRANSMITTAL';
+  // Use override if discipline is linked to it; otherwise use default
+  let category = defaultCategory;
+  if (categoryOverride) {
+    const allCats = [defaultCategory, ...(disc?.categories?.map(c => c.categoryCode) || [])];
+    if (allCats.includes(categoryOverride)) {
+      category = categoryOverride;
+    }
   }
 
-  // Look up the discipline's category
-  const disc = await db.discipline.findUnique({ where: { code: discipline } });
-  const category = disc?.categoryCode || 'TRANSMITTAL';
+  // Reference uniqueness is now PER CATEGORY (not global)
+  // This allows CIV-001 in TRANSMITTAL and CIV-001 in MIR to coexist
+  const existing = await db.transmittal.findFirst({
+    where: { reference, category },
+  });
+  if (existing) {
+    return NextResponse.json(
+      { error: `المرجع ${reference} موجود مسبقاً في القسم ${category}` },
+      { status: 409 }
+    );
+  }
 
   const t = await db.transmittal.create({
     data: {

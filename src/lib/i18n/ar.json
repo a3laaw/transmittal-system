@@ -464,5 +464,12 @@
   "dialog.editMohReviewDesc": "تعديل بيانات رد الوزارة (تاريخ الإرسال، تاريخ الرد، الحالة، الملاحظات)",
   "field.statusReq": "الحالة *",
   "dialog.addMohReview": "إضافة رد الوزارة",
-  "common.add": "إضافة"
+  "common.add": "إضافة",
+  "msg.printed": "تمت الطباعة",
+  "msg.printFailed": "فشل في الطباعة",
+  "msg.printOpened": "تم فتح نافذة الطباعة",
+  "msg.popupsBlocked": "النوافذ المنبثقة محظوبة — فعّلها للطباعة",
+  "field.shortCode": "الكود المختصر",
+  "field.shortCodeHint": "كود داخلي للتمييز بين الأقسام (مثل: TR, MR, RF, LT) — لا يُكتب في ملف Excel",
+  "common.optional": "اختياري"
 }

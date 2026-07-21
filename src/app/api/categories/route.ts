@@ -21,6 +21,7 @@ export async function GET() {
     items: items.map(c => ({
       id: c.id,
       code: c.code,
+      shortCode: c.shortCode,
       label: c.label,
       labelEn: c.labelEn,
       icon: c.icon,
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
     const code = String(form.get('code') || '').toUpperCase().trim();
     const label = String(form.get('label') || '').trim();
     const labelEn = String(form.get('labelEn') || '').trim();
+    const shortCode = String(form.get('shortCode') || '').toUpperCase().trim();
     const icon = String(form.get('icon') || '📄');
     const color = String(form.get('color') || 'bg-blue-100 text-blue-700');
     const file = form.get('template') as File | null;
@@ -79,7 +81,7 @@ export async function POST(req: NextRequest) {
 
     try {
       const c = await db.category.create({
-        data: { code, label, labelEn: labelEn || null, icon, color, templatePath, templateType },
+        data: { code, label, labelEn: labelEn || null, shortCode: shortCode || null, icon, color, templatePath, templateType },
       });
       return NextResponse.json(c, { status: 201 });
     } catch (e: any) {
@@ -92,7 +94,7 @@ export async function POST(req: NextRequest) {
 
   // JSON body (no file)
   const body = await req.json();
-  const { code, label, labelEn, icon, color } = body;
+  const { code, label, labelEn, shortCode, icon, color } = body;
   if (!code || !label) {
     return NextResponse.json({ error: 'الكود والاسم مطلوبان' }, { status: 400 });
   }
@@ -103,6 +105,7 @@ export async function POST(req: NextRequest) {
         code: codeUpper,
         label: String(label).trim(),
         labelEn: labelEn ? String(labelEn).trim() : null,
+        shortCode: shortCode ? String(shortCode).toUpperCase().trim() : null,
         icon: icon || '📄',
         color: color || 'bg-blue-100 text-blue-700',
       },

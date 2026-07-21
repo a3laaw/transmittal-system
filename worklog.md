@@ -251,3 +251,47 @@
 - ✅ 438 t() calls (was 0)
 - ✅ 376 translation keys (was 286)
 - ✅ All 17 view/dialog functions have useI18n()
+
+---
+
+## v8.9 — تسلسل مستقل + زر الطباعة (Phase 5)
+
+### المشاكل المبلّغة:
+1. ❌ زر الطباعة لا يعمل
+2. ❌ الرقم التسلسلي لازم يكون مستقل لكل قسم رئيسي (TRANSMITTAL, MIR, RFI, LETTERS)
+3. ❌ لما تختار قسم رئيسي معين وتخصص مربوط بيه، النظام بيقول "الرقم موجود فعلاً"
+
+### الفحص والإصلاح:
+
+**1. زر الطباعة** — `loadURL('data:text/html;...')` في Electron مش مستقر
+- **الإصلاح**: 
+  - اكتب HTML في temp file ثم `loadFile(tmpFile)`
+  - اظهر النافذة (`show: true`) للـ preview
+  - `silent: false` لفتح native print dialog
+  - toast feedback للنجاح/الفشل
+  - تنظيف الـ temp file بعد الانتهاء
+
+**2. الرقم التسلسلي مستقل لكل قسم** — كان `reference String @unique` (global)
+- **المشكلة**: لو في `CIV-001` في TRANSMITTAL، مينفعش تعمل `CIV-001` في MIR!
+- **الإصلاح**:
+  - schema.prisma: شيلت `@unique` من reference
+  - أضفت `@@unique([category, reference])` — reference فريد داخل القسم فقط
+  - API POST /api/transmittals: تحقق PER CATEGORY
+  - Migration في `ensureMigrations()`:
+    - DROP old global unique index `Transmittal_reference_key`
+    - CREATE composite unique index `Transmittal_category_reference_key`
+
+**3. كود لكل قسم رئيسي (TR, MR, RF, LT)** — بدون كتابته في Excel
+- **الإصلاح**:
+  - schema.prisma: أضفت `shortCode String?` field لـ Category
+  - default seed: TRANSMITTAL=TR, MIR=MR, RFI=RF, BOOKS=LT
+  - migration: assign shortCodes للأقسام الموجودة
+  - UI: input field في Add/Edit Category Dialog (اختياري)
+  - API: POST/PATCH /api/categories بيقبل shortCode
+  - **ملف Excel ما بيتكتبش فيه الكود**
+
+### ملاحظات تقنية:
+- 473 مفتاح ترجمة (كانت 466)
+- 0 أخطاء TypeScript
+- Build نجح
+- المحافظة على كل التقدم السابق

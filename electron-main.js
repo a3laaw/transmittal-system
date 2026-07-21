@@ -69,16 +69,46 @@ function createWindow() {
 }
 
 app.whenReady().then(function() {
-  // IPC: print content in a hidden window
+  // IPC: print content — write HTML to a temp file then load it (more reliable than data: URL)
   ipcMain.handle('print-content', async function(event, html) {
+    var os = require('os');
+    var printWin = null;
+    var tmpFile = null;
     try {
-      var printWin = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: false, contextIsolation: true } });
-      printWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
-      await new Promise(function(r) { printWin.webContents.once('did-finish-load', r); });
-      await printWin.webContents.print({ printBackground: true });
-      printWin.close();
+      // Write HTML to a temp file (avoids data: URL issues with large content)
+      var tmpDir = os.tmpdir();
+      tmpFile = path.join(tmpDir, 'nova-print-' + Date.now() + '.html');
+      fs.writeFileSync(tmpFile, html, 'utf-8');
+
+      // Show the window so user can see preview + the print dialog appears
+      printWin = new BrowserWindow({
+        show: true,
+        width: 1024,
+        height: 768,
+        title: 'Print Preview',
+        webPreferences: { nodeIntegration: false, contextIsolation: true }
+      });
+
+      await printWin.loadFile(tmpFile);
+
+      // Give the page a moment to render, then trigger print
+      await new Promise(function(r) { setTimeout(r, 400); });
+
+      // Open native print dialog
+      await printWin.webContents.print({
+        printBackground: true,
+        silent: false,  // show print dialog so user can pick printer
+      });
+
       return { ok: true };
-    } catch (e) { return { ok: false, error: e.message }; }
+    } catch (e) {
+      console.error('[print-content] Error:', e.message);
+      return { ok: false, error: e.message };
+    } finally {
+      // Clean up
+      try { if (printWin) printWin.close(); } catch (_) {}
+      try { if (tmpFile) fs.unlinkSync(tmpFile); } catch (_) {}
+    }
   });
 
   // IPC: choose save path

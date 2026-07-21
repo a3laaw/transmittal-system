@@ -464,5 +464,12 @@
   "dialog.editMohReviewDesc": "Edit MOH review data (submit date, review date, status, notes)",
   "field.statusReq": "Status *",
   "dialog.addMohReview": "Add MOH Review",
-  "common.add": "Add"
+  "common.add": "Add",
+  "msg.printed": "Printed",
+  "msg.printFailed": "Print failed",
+  "msg.printOpened": "Print window opened",
+  "msg.popupsBlocked": "Pop-ups blocked — enable them to print",
+  "field.shortCode": "Short Code",
+  "field.shortCodeHint": "Internal code to distinguish categories (e.g., TR, MR, RF, LT) — not written to Excel",
+  "common.optional": "optional"
 }
