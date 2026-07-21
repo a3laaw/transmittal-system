@@ -2510,94 +2510,229 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
   };
 
   const handlePrintReport = async () => {
-    // Build a clean printable HTML with the report table
-    const printHtml = `
-<!DOCTYPE html>
-<html lang="${lang}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}">
+    // Build a professional printable HTML that matches the on-screen Reports view:
+    // - Color-coded REV columns (REV.0 blue, REV.1 green, REV.2 amber, ...)
+    // - Each REV column shows: submit date, reply date, action
+    // - Status indicators with colors
+    // - Header with project info + filters summary
+    // - Footer with print date
+
+    // Static color palette matching ReportsView (Tailwind JIT requires literal classes)
+    const revColors = [
+      { header: '#1d4ed8', light: '#eff6ff', border: '#bfdbfe' }, // blue
+      { header: '#047857', light: '#ecfdf5', border: '#a7f3d0' }, // emerald
+      { header: '#b45309', light: '#fffbeb', border: '#fde68a' }, // amber
+      { header: '#6b21a8', light: '#faf5ff', border: '#e9d5ff' }, // purple
+      { header: '#be123c', light: '#fff1f2', border: '#fecdd3' }, // rose
+      { header: '#0e7490', light: '#ecfeff', border: '#a5f3fc' }, // cyan
+      { header: '#3730a3', light: '#eef2ff', border: '#c7d2fe' }, // indigo
+      { header: '#c2410c', light: '#fff7ed', border: '#fed7aa' }, // orange
+    ];
+
+    const fmtDateShort = (d: string | null | undefined) => {
+      if (!d) return '—';
+      try {
+        const date = new Date(d);
+        if (isNaN(date.getTime())) return '—';
+        const dd = String(date.getDate()).padStart(2, '0');
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const yyyy = date.getFullYear();
+        return `${dd}/${mm}/${yyyy}`;
+      } catch { return '—'; }
+    };
+
+    const getActionCell = (r: any) => {
+      if (!r || (!r.submitDate && !r.action)) {
+        return '<span style="color:#cbd5e1;">—</span>';
+      }
+      const act = (r.action || '').toLowerCase().trim();
+      let letter = '—';
+      let bg = '';
+      let color = '#64748b';
+      if (act === 'approved') {
+        const at = r.approvalType;
+        if (at === 'APPROVED') { letter = 'A'; bg = '#dcfce7'; color = '#047857'; }
+        else if (at === 'APPROVED_AS_NOTED') { letter = 'B'; bg = '#dcfce7'; color = '#047857'; }
+        else if (at === 'APPROVED_AS_NOTED_RESUBMIT') { letter = 'C'; bg = '#fed7aa'; color = '#c2410c'; }
+        else if (at === 'NOT_APPROVED') { letter = 'D'; bg = '#fecaca'; color = '#b91c1c'; }
+        else if (at === 'FOR_INFORMATION') { letter = 'E'; bg = '#fed7aa'; color = '#c2410c'; }
+        else { letter = '✓'; bg = '#dcfce7'; color = '#047857'; }
+      } else if (act === 'rejected') {
+        letter = '✗'; bg = '#fecaca'; color = '#b91c1c';
+      } else if (act === 'withdrawn') {
+        letter = '⌧'; bg = '#e5e7eb'; color = '#374151';
+      } else if (act === 'pending' || !act) {
+        letter = '⏳'; bg = '#fef9c3'; color = '#a16207';
+      }
+      return `<span style="display:inline-block;min-width:24px;padding:2px 6px;border-radius:4px;font-weight:700;background:${bg};color:${color};">${letter}</span>`;
+    };
+
+    // Build REV column headers
+    const revHeaderCells = revColumns.map((rev) => {
+      const c = revColors[rev % revColors.length];
+      return `<th style="background:${c.header};color:white;padding:0;border:1px solid ${c.border};">
+        <div style="padding:6px 8px;font-weight:700;font-size:13px;">Rev.${String(rev).padStart(2, '0')}</div>
+        <div style="display:flex;background:${c.light};font-size:10px;font-weight:400;">
+          <div style="flex:1;padding:3px 4px;border-left:1px solid ${c.border};">${t('reports.rev.submit')}</div>
+          <div style="flex:1;padding:3px 4px;border-left:1px solid ${c.border};">${t('reports.rev.reply')}</div>
+          <div style="flex:1;padding:3px 4px;border-left:1px solid ${c.border};">${t('reports.rev.action')}</div>
+        </div>
+      </th>`;
+    }).join('');
+
+    // Build body rows
+    const bodyRows = items.map((it: any) => {
+      const revs = it.revisions || [];
+      const revCells = revColumns.map((rev) => {
+        const r = revs[rev];
+        const c = revColors[rev % revColors.length];
+        if (!r || (!r.submitDate && !r.action)) {
+          return `<td style="background:${c.light};padding:0;border:1px solid ${c.border};">
+            <div style="display:flex;min-height:32px;font-size:10px;">
+              <div style="flex:1;padding:4px;border-left:1px solid ${c.border};text-align:center;color:#cbd5e1;">—</div>
+              <div style="flex:1;padding:4px;border-left:1px solid ${c.border};text-align:center;color:#cbd5e1;">—</div>
+              <div style="flex:1;padding:4px;border-left:1px solid ${c.border};text-align:center;color:#cbd5e1;">—</div>
+            </div>
+          </td>`;
+        }
+        return `<td style="background:${c.light};padding:0;border:1px solid ${c.border};">
+          <div style="display:flex;min-height:32px;font-size:10px;">
+            <div style="flex:1;padding:4px;border-left:1px solid ${c.border};text-align:center;">${fmtDateShort(r.submitDate)}</div>
+            <div style="flex:1;padding:4px;border-left:1px solid ${c.border};text-align:center;">${fmtDateShort(r.replyDate)}</div>
+            <div style="flex:1;padding:4px;border-left:1px solid ${c.border};text-align:center;">${getActionCell(r)}</div>
+          </div>
+        </td>`;
+      }).join('');
+
+      const consultantStatus = it.consultantStatus?.status;
+      const mohStatus = it.mohStatus?.status;
+      const statusEmoji = (s: string) => {
+        if (!s) return '—';
+        if (s === 'approved') return '<span style="color:#047857;">✓</span>';
+        if (s === 'pending') return '<span style="color:#a16207;">⏳</span>';
+        if (s === 'overdue') return '<span style="color:#b91c1c;">🔴</span>';
+        if (s === 'cancelled') return '<span style="color:#6b7280;">⌧</span>';
+        if (s === 'resubmit') return '<span style="color:#c2410c;">🔔</span>';
+        if (s === 'not_sent') return '—';
+        if (s === 'reviewed') return '<span style="color:#1d4ed8;">📋</span>';
+        return s;
+      };
+
+      return `<tr>
+        <td style="font-family:monospace;font-weight:700;padding:6px 8px;border:1px solid #cbd5e1;white-space:nowrap;">${it.reference || '—'}</td>
+        <td style="padding:6px 8px;border:1px solid #cbd5e1;max-width:200px;font-size:11px;">${(it.description || '—').replace(/</g, '&lt;')}</td>
+        ${revCells}
+        <td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:center;font-size:11px;">${statusEmoji(consultantStatus)}</td>
+        <td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:center;font-size:11px;">${statusEmoji(mohStatus)}</td>
+      </tr>`;
+    }).join('');
+
+    const printDate = new Date().toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US');
+    const isRtl = lang === 'ar';
+    const dirAttr = isRtl ? 'rtl' : 'ltr';
+    const textAlign = isRtl ? 'right' : 'left';
+
+    const printHtml = `<!DOCTYPE html>
+<html lang="${lang}" dir="${dirAttr}">
 <head>
 <meta charset="utf-8">
 <title>${t('reports.title')}</title>
 <style>
-  body { font-family: 'Cairo', 'Segoe UI', sans-serif; padding: 20px; color: #1e293b; }
-  h1 { color: #0f766e; margin-bottom: 8px; }
-  .meta { color: #64748b; font-size: 13px; margin-bottom: 20px; }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: ${lang === 'ar' ? 'right' : 'left'}; }
-  th { background: #f1f5f9; font-weight: 700; }
-  tr:nth-child(even) { background: #fafafa; }
-  .header-row { background: #ecfeff !important; font-weight: 700; }
-  @media print { body { padding: 0; } }
+  @page { size: A4 landscape; margin: 10mm; }
+  body { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; padding: 0; margin: 0; color: #1e293b; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 16px; background: linear-gradient(135deg, #059669, #0d9488); color: white; border-radius: 6px 6px 0 0; }
+  .header h1 { margin: 0; font-size: 22px; font-weight: 700; }
+  .header .subtitle { font-size: 12px; opacity: 0.9; margin-top: 4px; }
+  .header .date { font-size: 11px; opacity: 0.85; }
+  .filters { padding: 8px 16px; background: #f0fdfa; border-left: 4px solid #0d9488; margin: 0; font-size: 11px; color: #0f766e; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; background: white; }
+  th, td { border: 1px solid #cbd5e1; }
+  th { font-weight: 700; }
+  th.ref-col, td.ref-col { background: #f8fafc; }
+  th.desc-col, td.desc-col { background: #f8fafc; }
+  th.consultant-col { background: #d1fae5; color: #047857; }
+  th.moh-col { background: #ede9fe; color: #6b21a8; }
+  .footer { padding: 8px 16px; background: #f1f5f9; font-size: 10px; color: #64748b; border-radius: 0 0 6px 6px; display: flex; justify-content: space-between; }
+  @media print {
+    .no-print { display: none; }
+    body { padding: 0; }
+  }
+  .print-button { background: #0d9488; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 12px; margin: 8px; }
+  .print-button:hover { background: #0f766e; }
 </style>
 </head>
 <body>
-  <h1>${t('reports.title')}</h1>
-  <div class="meta">
-    ${t('common.mainCategory')}: ${filterCategory === 'all' ? t('common.all') : filterCategory} ·
-    ${t('common.discipline')}: ${filterDiscipline === 'all' ? t('common.all') : filterDiscipline} ·
-    ${t('reports.dateFrom')}: ${dateFrom || '—'} · ${t('reports.dateTo')}: ${dateTo || '—'} ·
-    ${items.length} ${t('common.results')}
+  <div class="header">
+    <div>
+      <h1>${t('reports.title')}</h1>
+      <div class="subtitle">${t('app.name')} · Sabah Al Salem South Health Center</div>
+    </div>
+    <div style="text-align:${isRtl ? 'left' : 'right'};">
+      <div class="date">${t('reports.dateFrom')}: ${dateFrom || '—'}</div>
+      <div class="date">${t('reports.dateTo')}: ${dateTo || '—'}</div>
+      <div class="date">${printDate}</div>
+    </div>
+  </div>
+  <div class="filters">
+    <strong>${t('common.mainCategory')}:</strong> ${filterCategory === 'all' ? t('common.all') : filterCategory} ·
+    <strong>${t('common.discipline')}:</strong> ${filterDiscipline === 'all' ? t('common.all') : filterDiscipline} ·
+    <strong>${t('common.type')}:</strong> ${filterType === 'all' ? t('common.all') : filterType} ·
+    <strong>${t('common.results')}:</strong> ${items.length}
   </div>
   <table>
     <thead>
-      <tr class="header-row">
-        <th>${t('common.reference')}</th>
-        <th>${t('common.description')}</th>
-        <th>${t('common.discipline')}</th>
-        <th>${t('common.type')}</th>
-        <th>${t('reports.rev.submit')}</th>
-        <th>${t('reports.rev.reply')}</th>
-        <th>${t('reports.rev.action')}</th>
+      <tr>
+        <th class="ref-col" style="padding:8px;text-align:${textAlign};">${t('common.reference')}</th>
+        <th class="desc-col" style="padding:8px;text-align:${textAlign};">${t('common.description')}</th>
+        ${revHeaderCells}
+        <th class="consultant-col" style="padding:8px;text-align:center;">${t('detail.consultant')}</th>
+        <th class="moh-col" style="padding:8px;text-align:center;">${t('detail.moh')}</th>
       </tr>
     </thead>
     <tbody>
-      ${items.map((it: any) => {
-        const latestRev = it.revisions && it.revisions.length > 0
-          ? it.revisions[it.revisions.length - 1]
-          : null;
-        return `<tr>
-          <td style="font-family: monospace; font-weight: 700;">${it.reference}</td>
-          <td>${(it.description || '').replace(/</g, '&lt;')}</td>
-          <td>${it.discipline || '—'}</td>
-          <td>${it.type || '—'}</td>
-          <td>${latestRev?.submitDate ? new Date(latestRev.submitDate).toLocaleDateString() : '—'}</td>
-          <td>${latestRev?.replyDate ? new Date(latestRev.replyDate).toLocaleDateString() : '—'}</td>
-          <td>${latestRev?.action || '—'}</td>
-        </tr>`;
-      }).join('')}
+      ${bodyRows || `<tr><td colspan="${3 + revColumns.length + 2}" style="padding:20px;text-align:center;color:#94a3b8;">${t('reports.empty')}</td></tr>`}
     </tbody>
   </table>
+  <div class="footer">
+    <div>${t('app.name')} — ${new Date().getFullYear()}</div>
+    <div>${items.length} ${t('common.results')} · Rev.0–Rev.${maxRevNumber}</div>
+  </div>
+  <div class="no-print" style="text-align:center;padding:12px;">
+    <button class="print-button" onclick="window.print()">🖨️ ${t('common.print')}</button>
+    <span style="font-size:11px;color:#64748b;margin-${isRtl ? 'right' : 'left'}:8px;">${t('msg.printHint') || 'Ctrl+P للطباعة مرة أخرى'}</span>
+  </div>
 </body>
 </html>`;
 
-    // Use Electron's printContent IPC if available (cleaner output)
+    // Use Electron's printContent IPC if available
     const electronAPI = (window as any).electronAPI;
     if (electronAPI && electronAPI.printContent) {
       try {
         const result = await electronAPI.printContent(printHtml);
         if (result && result.ok) {
-          toast({ title: t('msg.printed'), description: t('reports.title') });
+          toast({ title: t('msg.printOpened'), description: t('reports.title') });
           return;
         } else if (result && result.error) {
           console.warn('Electron print failed:', result.error);
           toast({ title: t('msg.printFailed'), description: result.error, variant: 'destructive' });
         }
       } catch (e: any) {
-        console.warn('Electron print IPC threw:', e);
-        toast({ title: t('msg.printFailed'), description: e.message, variant: 'destructive' });
+        const errMsg = (e && typeof e === 'object' && typeof e.message === 'string') ? e.message : String(e);
+        console.warn('Electron print IPC threw:', errMsg);
+        toast({ title: t('msg.printFailed'), description: errMsg, variant: 'destructive' });
       }
     }
     // Fallback: open new window and print (browser mode)
-    const printWin = window.open('', '_blank', 'width=1024,height=768');
+    const printWin = window.open('', '_blank', 'width=1200,height=800');
     if (printWin) {
       printWin.document.write(printHtml);
       printWin.document.close();
       printWin.focus();
       setTimeout(() => {
         try { printWin.print(); } catch (e) { console.error('Print failed:', e); }
-      }, 500);
+      }, 800);
       toast({ title: t('msg.printOpened') });
     } else {
-      // Last resort — print current page
       toast({ title: t('msg.popupsBlocked'), variant: 'destructive' });
       window.print();
     }
