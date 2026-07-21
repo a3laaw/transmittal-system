@@ -70,6 +70,7 @@ function createWindow() {
 
 app.whenReady().then(function() {
   // IPC: print content — write HTML to a temp file then load it (more reliable than data: URL)
+  // IMPORTANT: keep the window open so user can save as PDF or print multiple times
   ipcMain.handle('print-content', async function(event, html) {
     var os = require('os');
     var printWin = null;
@@ -85,30 +86,34 @@ app.whenReady().then(function() {
         show: true,
         width: 1024,
         height: 768,
-        title: 'Print Preview',
+        title: 'Print Preview — Nova EDMS',
         webPreferences: { nodeIntegration: false, contextIsolation: true }
       });
 
       await printWin.loadFile(tmpFile);
 
-      // Give the page a moment to render, then trigger print
+      // Give the page a moment to render, then trigger native print dialog
       await new Promise(function(r) { setTimeout(r, 400); });
 
-      // Open native print dialog
-      await printWin.webContents.print({
-        printBackground: true,
-        silent: false,  // show print dialog so user can pick printer
-      });
+      try {
+        await printWin.webContents.print({
+          printBackground: true,
+          silent: false,  // show print dialog so user can pick printer or "Save as PDF"
+        });
+      } catch (printErr) {
+        // User may have cancelled — that's fine, keep window open
+        console.log('[print-content] Print dialog closed:', printErr.message || printErr);
+      }
 
+      // Return ok — but DON'T close the window automatically.
+      // User can use Ctrl+P to print again, or close manually when done.
       return { ok: true };
     } catch (e) {
       console.error('[print-content] Error:', e.message);
       return { ok: false, error: e.message };
-    } finally {
-      // Clean up
-      try { if (printWin) printWin.close(); } catch (_) {}
-      try { if (tmpFile) fs.unlinkSync(tmpFile); } catch (_) {}
     }
+    // Note: tmpFile is intentionally NOT deleted — the window still references it.
+    // It will be cleaned up on next OS reboot, or when the user closes the app.
   });
 
   // IPC: choose save path

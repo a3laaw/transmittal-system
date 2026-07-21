@@ -133,39 +133,26 @@ export async function ensureMigrations(): Promise<void> {
       // SQLite stores unique constraints as indexes — find and drop the global one
       const indexes = await db.$queryRawUnsafe(`PRAGMA index_list("Transmittal")`) as any[];
       for (const idx of indexes) {
-        const idxName = idx.name as string;
-        // Drop the old global unique index on "reference"
-        if (idxName && idxName.toLowerCase().includes('reference') && idx.unique === 1) {
-          // Check if it's the single-column index (not composite)
-          const cols = await db.$queryRawUnsafe(`PRAGMA index_info("${idxName}")`) as any[];
-          if (cols.length === 1) {
-            console.log(`[migrations] Dropping global unique index: ${idxName}`);
-            await db.$executeRawUnsafe(`DROP INDEX IF EXISTS "${idxName}"`);
+        const idxName = String(idx.name || '');
+        const isUnique = Number(idx.unique) === 1;
+        // Drop the old global unique index on "reference" (single-column, NOT composite)
+        if (isUnique && idxName === 'Transmittal_reference_key') {
+          console.log(`[migrations] Dropping global unique index: ${idxName}`);
+          try {
+            await db.$executeRawUnsafe(`DROP INDEX IF EXISTS "Transmittal_reference_key"`);
+          } catch (dropErr) {
+            console.error('[migrations] Failed to drop index:', dropErr);
           }
         }
       }
       // Add composite unique index on (category, reference) if not exists
-      const compositeExists = indexes.some((idx: any) =>
-        idx.name === 'Transmittal_category_reference_key' ||
-        idx.name === 'sqlite_autoindex_Transmittal_2'
-      );
-      if (!compositeExists) {
-        // Check by trying to find any composite index on (category, reference)
-        let hasComposite = false;
-        for (const idx of indexes) {
-          if (idx.unique === 1) {
-            const cols = await db.$queryRawUnsafe(`PRAGMA index_info("${idx.name}")`) as any[];
-            const colNames = cols.map((c: any) => c.name).sort();
-            if (colNames.length === 2 && colNames.includes('category') && colNames.includes('reference')) {
-              hasComposite = true;
-              break;
-            }
-          }
-        }
-        if (!hasComposite) {
-          console.log('[migrations] Creating composite unique index on (category, reference)');
-          await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Transmittal_category_reference_key" ON "Transmittal"("category", "reference")`);
-        }
+      // Use CREATE IF NOT EXISTS so it's idempotent
+      try {
+        console.log('[migrations] Ensuring composite unique index on (category, reference)');
+        await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Transmittal_category_reference_key" ON "Transmittal"("category", "reference")`);
+      } catch (createErr) {
+        // If it fails because of duplicate (category, reference) rows, log but don't crash
+        console.error('[migrations] Could not create composite index:', createErr);
       }
     } catch (e) {
       console.error('[migrations] reference index migration failed:', e);

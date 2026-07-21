@@ -2121,8 +2121,9 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
       const catParam = selectedCategory ? `&category=${encodeURIComponent(selectedCategory)}` : '';
       const r = await fetch(`/api/transmittals/next-ref?discipline=${encodeURIComponent(d)}${catParam}`);
       if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        throw new Error(err.error || t('msg.loadNextRefFailed'));
+        const errBody = await r.json().catch(() => ({}));
+        const errMsg = (errBody && typeof errBody.error === 'string') ? errBody.error : t('msg.loadNextRefFailed');
+        throw new Error(errMsg);
       }
       const data = await r.json();
       setReference(data.nextReference);
@@ -2133,8 +2134,10 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
       });
     } catch (e: any) {
       setReference(''); setRefInfo(null);
-      if (e.message && e.message !== t('msg.loadNextRefFailed')) {
-        toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
+      // Safely extract message — never call e as a function
+      const errMsg = (e && typeof e === 'object' && typeof e.message === 'string') ? e.message : (typeof e === 'string' ? e : '');
+      if (errMsg && errMsg !== t('msg.loadNextRefFailed')) {
+        toast({ title: t('msg.error'), description: errMsg, variant: 'destructive' });
       }
     } finally { setLoadingRef(false); }
   };
@@ -2149,7 +2152,11 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reference, discipline, category, type: type || undefined, description: description || undefined, parentTransmittalId: parentTransmittalId || undefined }),
       });
-      if (!r.ok) { const err = await r.json(); throw new Error(err.error || t('msg.createFailed')); }
+      if (!r.ok) {
+        const errBody = await r.json().catch(() => ({}));
+        const errMsg = (errBody && typeof errBody.error === 'string') ? errBody.error : t('msg.createFailed');
+        throw new Error(errMsg);
+      }
       const created = await r.json();
       if (submitDate) {
         await fetch(`/api/transmittals/${created.id}/revisions`, {
@@ -2158,7 +2165,10 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
         });
       }
       onCreated(created);
-    } catch (e: any) { toast({ title: t('msg.error'), description: e.message, variant: 'destructive' }); }
+    } catch (e: any) {
+      const errMsg = (e && typeof e === 'object' && typeof e.message === 'string') ? e.message : (typeof e === 'string' ? e : t('msg.createFailed'));
+      toast({ title: t('msg.error'), description: errMsg, variant: 'destructive' });
+    }
     finally { setSaving(false); }
   };
 
