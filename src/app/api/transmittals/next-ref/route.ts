@@ -5,7 +5,7 @@ import { getDisciplinePrefix } from '@/lib/status';
 export const dynamic = 'force-dynamic';
 
 /**
- * GET /api/transmittals/next-ref?discipline=CIV
+ * GET /api/transmittals/next-ref?discipline=CIV&category=MIR
  *
  * Returns the next SEQUENTIAL reference number.
  *
@@ -14,6 +14,11 @@ export const dynamic = 'force-dynamic';
  *   MIR has its own, RFI has its own, etc.)
  * - Within a category, find the max number across ALL disciplines in that category
  * - Apply the selected discipline's prefix format
+ *
+ * CRITICAL: The `category` parameter MUST be passed from the client to support
+ * multi-category disciplines (e.g., CIV linked to both TRANSMITTAL and MIR).
+ * If only `discipline` is passed, the discipline's DEFAULT category is used,
+ * which is wrong when the user picks a non-default category.
  *
  * Example for TRANSMITTAL category:
  *   Existing: CIV-170, EL-147, PL-168 → max in TRANSMITTAL = 170
@@ -26,14 +31,39 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const discipline = (searchParams.get('discipline') || '').toUpperCase().trim();
+  // CRITICAL: Accept category from client to support multi-category disciplines
+  const categoryParam = (searchParams.get('category') || '').toUpperCase().trim();
 
   if (!discipline) {
     return NextResponse.json({ error: 'discipline is required' }, { status: 400 });
   }
 
-  // Look up the discipline to find its category
-  const disc = await db.discipline.findUnique({ where: { code: discipline } });
-  const category = disc?.categoryCode || 'TRANSMITTAL';
+  // Look up the discipline
+  const disc = await db.discipline.findUnique({
+    where: { code: discipline },
+    include: { categories: { select: { categoryCode: true } } },
+  });
+  const defaultCategory = disc?.categoryCode || 'TRANSMITTAL';
+
+  // Determine which category to use:
+  // 1. If user passed category, verify the discipline is linked to it (default OR multi-link)
+  // 2. Otherwise use the discipline's default category
+  let category = defaultCategory;
+  if (categoryParam) {
+    const allCategories = [
+      defaultCategory,
+      ...(disc?.categories?.map(c => c.categoryCode) || []),
+    ];
+    if (allCategories.includes(categoryParam)) {
+      category = categoryParam;
+    } else {
+      // Discipline not linked to this category — return error
+      return NextResponse.json({
+        error: `Discipline ${discipline} is not linked to category ${categoryParam}`,
+      }, { status: 400 });
+    }
+  }
+
   const prefix = disc?.prefix || getDisciplinePrefix(discipline);
 
   // Find all transmittals in this category

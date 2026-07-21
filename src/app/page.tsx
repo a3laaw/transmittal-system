@@ -2113,21 +2113,29 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
   const [loadingParents, setLoadingParents] = useState(false);
   const { toast } = useToast();
 
-  const fetchNextReference = async (d: string) => {
+  const fetchNextReference = async (d: string, selectedCategory?: string) => {
     if (!d) return;
     setLoadingRef(true);
     try {
-      const r = await fetch(`/api/transmittals/next-ref?discipline=${encodeURIComponent(d)}`);
-      if (!r.ok) throw new Error(t('msg.loadNextRefFailed'));
+      // Pass category so the API uses the correct sequence per category
+      const catParam = selectedCategory ? `&category=${encodeURIComponent(selectedCategory)}` : '';
+      const r = await fetch(`/api/transmittals/next-ref?discipline=${encodeURIComponent(d)}${catParam}`);
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || t('msg.loadNextRefFailed'));
+      }
       const data = await r.json();
       setReference(data.nextReference);
       setRefInfo({
-        lastGlobalMax: data.lastGlobalMax,
-        totalAllDisciplines: data.totalAllDisciplines,
-        recentAllDisciplines: data.recentAllDisciplines || [],
+        lastGlobalMax: data.lastMaxInCategory,
+        totalAllDisciplines: data.totalInCategory,
+        recentAllDisciplines: data.recentInCategory || [],
       });
-    } catch {
+    } catch (e: any) {
       setReference(''); setRefInfo(null);
+      if (e.message && e.message !== t('msg.loadNextRefFailed')) {
+        toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
+      }
     } finally { setLoadingRef(false); }
   };
 
@@ -2180,7 +2188,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>{t('field.subDisciplineReq')}</Label>
-              <Select value={discipline} onValueChange={(v) => { setDiscipline(v); fetchNextReference(v); }}>
+              <Select value={discipline} onValueChange={(v) => { setDiscipline(v); fetchNextReference(v, category); }}>
                 <SelectTrigger><SelectValue placeholder={t('new.selectDiscipline')} /></SelectTrigger>
                 <SelectContent>
                   {disciplines.filter(d => {
