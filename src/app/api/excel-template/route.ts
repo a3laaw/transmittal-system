@@ -74,10 +74,17 @@ export async function GET(req: NextRequest) {
   const description = searchParams.get('description') || '';
   const date = searchParams.get('date') || new Date().toISOString().slice(0, 10);
   const category = searchParams.get('category') || '';
+  const revParam = searchParams.get('rev');
 
   if (!reference) {
     return NextResponse.json({ error: 'المرجع مطلوب' }, { status: 400 });
   }
+
+  // Format rev number as "Rev.00", "Rev.01", "Rev.02", etc.
+  // If no rev specified, default to Rev.00
+  const revNumber = revParam !== null ? parseInt(revParam, 10) : 0;
+  const safeRev = isNaN(revNumber) || revNumber < 0 ? 0 : revNumber;
+  const revLabel = `Rev.${String(safeRev).padStart(2, '0')}`;
 
   // Find the template to use:
   // 1. If category is specified and has a custom template, use it
@@ -152,7 +159,7 @@ export async function GET(req: NextRequest) {
     const dateDisplay = fmtDate(date);
     let modifiedXml = sheetXml;
     modifiedXml = replaceCellValue(modifiedXml, 'G3', `Transmittal No:${reference}`);
-    modifiedXml = replaceCellValue(modifiedXml, 'I3', 'Rev.00');
+    modifiedXml = replaceCellValue(modifiedXml, 'I3', revLabel);
     modifiedXml = replaceCellValue(modifiedXml, 'G4', `Date :${dateDisplay}`);
 
     // Fill description into item rows (16-26), column E

@@ -441,11 +441,13 @@ export default function Home() {
     }
   };
 
-  const handleDownloadExcel = async (reference: string, description: string, category?: string) => {
+  const handleDownloadExcel = async (reference: string, description: string, category?: string, revNumber?: number) => {
     const today = new Date().toISOString().slice(0, 10);
-    toast({ title: t('msg.generatingExcel'), description: t('msg.willDownload', {ref: reference}) });
+    const revLabel = revNumber !== undefined ? `Rev.${String(revNumber).padStart(2, '0')}` : '';
+    toast({ title: t('msg.generatingExcel'), description: t('msg.willDownload', {ref: revLabel ? `${reference}-${revLabel}` : reference}) });
     const catParam = category ? `&category=${encodeURIComponent(category)}` : '';
-    const url = `/api/excel-template?reference=${encodeURIComponent(reference)}&description=${encodeURIComponent(description)}&date=${today}${catParam}&_=${Date.now()}`;
+    const revParam = revNumber !== undefined ? `&rev=${revNumber}` : '';
+    const url = `/api/excel-template?reference=${encodeURIComponent(reference)}&description=${encodeURIComponent(description)}&date=${today}${catParam}${revParam}&_=${Date.now()}`;
     try {
       const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) {
@@ -456,7 +458,7 @@ export default function Home() {
       const objUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = objUrl;
-      a.download = `Transmittal-${reference}.xlsx`;
+      a.download = revLabel ? `${reference}-${revLabel}.xlsx` : `Transmittal-${reference}.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -879,9 +881,13 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
   onRegisterMohReply: (id: string, reference: string) => void;
 }) {
   const { t, lang } = useI18n();
-  // Filter disciplines based on selected category (cascading)
+  // Filter disciplines based on selected category (cascading, INCLUDING linked categories)
   const availableDisciplines = filterCategory !== 'all'
-    ? disciplines.filter(d => (d.categoryCode || d.category || 'TRANSMITTAL') === filterCategory)
+    ? disciplines.filter(d => {
+        const defaultCat = d.categoryCode || d.category || 'TRANSMITTAL';
+        const allCats: string[] = (d as any).allCategories || [defaultCat];
+        return allCats.includes(filterCategory);
+      })
     : disciplines;
 
   return (
@@ -1065,12 +1071,14 @@ function ListView({ items, loading, search, onSearch, filterCategory, onFilterCa
 /* ============ DETAIL VIEW ============ */
 function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloadExcel, onSendToMoh, onCopy, onOpenDetail }: {
   detail: TransmittalDetail; loading: boolean; disciplines: Discipline[];
-  onBack: () => void; onRefresh: () => void; onDownloadExcel: (reference?: string, description?: string) => void; onSendToMoh: () => void;
+  onBack: () => void; onRefresh: () => void; onDownloadExcel: (reference?: string, description?: string, category?: string, revNumber?: number) => void; onSendToMoh: () => void;
   onCopy: () => void; onOpenDetail: (id: string) => void;
 }) {
   const { t, lang } = useI18n();
   const [showRevDialog, setShowRevDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingRev, setEditingRev] = useState<any | null>(null);
+  const [editingMohReview, setEditingMohReview] = useState<any | null>(null);
   const { toast } = useToast();
 
   const latestRevNumber = detail.revisions.length > 0 ? detail.revisions[detail.revisions.length - 1].revNumber : 0;
@@ -1299,7 +1307,27 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
         <Card className="border-0 shadow-sm"><CardContent className="p-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-semibold text-slate-800 flex items-center gap-2"><Hospital className="w-5 h-5 text-blue-700" /> {t('detail.mohFull')}</h3>
-            <Badge variant="outline" className={detail.mohStatus.color}>{detail.mohStatus.emoji} {t(detail.mohStatus.statusKey || 'status.' + detail.mohStatus.status, detail.mohStatus.daysOpen !== undefined ? {days: detail.mohStatus.daysOpen} : {})}</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className={detail.mohStatus.color}>{detail.mohStatus.emoji} {t(detail.mohStatus.statusKey || 'status.' + detail.mohStatus.status, detail.mohStatus.daysOpen !== undefined ? {days: detail.mohStatus.daysOpen} : {})}</Badge>
+              {detail.mohSubmitDate && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7"
+                  onClick={() => setEditingMohReview({
+                    party: 'MOH',
+                    submitDate: detail.mohSubmitDate,
+                    submitRev: detail.mohSubmitRev,
+                    reviewDate: detail.mohReviewDate,
+                    status: (detail as any).mohStatusRaw?.status || null,
+                    notes: (detail as any).mohNotes || '',
+                  })}
+                  title={t('dialog.editMohReview')}
+                >
+                  <Pencil className="w-3 h-3 text-amber-700" />
+                </Button>
+              )}
+            </div>
           </div>
           <dl className="space-y-1 text-sm">
             <div className="flex justify-between"><dt className="text-slate-500">{t('detail.sendToMoh')}</dt><dd>{fmtDate(detail.mohSubmitDate)}</dd></div>
@@ -1330,6 +1358,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                 <TableHead className="text-center">{t('field.action')}</TableHead>
                 <TableHead className="text-right">{t('common.notes')}</TableHead>
                 <TableHead className="text-center">{t('common.download')}</TableHead>
+                <TableHead className="text-center">{t('common.edit')}</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {detail.revisions.map((r) => {
@@ -1368,10 +1397,21 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                           size="sm"
                           variant="ghost"
                           className="h-7 gap-1 text-xs"
-                          onClick={() => onDownloadExcel(`${detail.reference}-REV.${r.revNumber}`, detail.description || '')}
-                          title={`${t('detail.downloadExcelForRev')} REV.${r.revNumber}`}
+                          onClick={() => onDownloadExcel(detail.reference, detail.description || '', detail.category, r.revNumber)}
+                          title={`${t('detail.downloadExcelForRev')} Rev.${String(r.revNumber).padStart(2, '0')}`}
                         >
-                          <FileDown className="w-3 h-3" /> REV.{r.revNumber}
+                          <FileDown className="w-3 h-3" /> Rev.{String(r.revNumber).padStart(2, '0')}
+                        </Button>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7"
+                          onClick={() => setEditingRev(r)}
+                          title={t('dialog.editRevision')}
+                        >
+                          <Pencil className="w-3 h-3 text-amber-700" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -1611,6 +1651,26 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
           onSaved={() => { setShowEditDialog(false); onRefresh(); }}
         />
       )}
+
+      {/* Edit Revision Dialog — edit submit/reply date, action, approval type, notes */}
+      {editingRev && (
+        <EditRevisionDialog
+          transmittalId={detail.id}
+          revision={editingRev}
+          onOpenChange={(v) => !v && setEditingRev(null)}
+          onSaved={() => { setEditingRev(null); onRefresh(); }}
+        />
+      )}
+
+      {/* Edit MOH Review Dialog — edit review date, status, notes */}
+      {editingMohReview && (
+        <EditMohReviewDialog
+          transmittalId={detail.id}
+          review={editingMohReview}
+          onOpenChange={(v) => !v && setEditingMohReview(null)}
+          onSaved={() => { setEditingMohReview(null); onRefresh(); }}
+        />
+      )}
     </div>
   );
 }
@@ -1698,6 +1758,242 @@ function EditTransmittalDialog({ transmittal, onOpenChange, onSaved }: {
             disabled={saving}
             className="bg-amber-700 hover:bg-amber-800 gap-1.5"
           >
+            {saving ? t('msg.saving') : <><Pencil className="w-4 h-4" /> {t('common.save')}</>}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ============ EDIT REVISION DIALOG ============ */
+function EditRevisionDialog({ transmittalId, revision, onOpenChange, onSaved }: {
+  transmittalId: string;
+  revision: { id: string; revNumber: number; submitDate: string | null; replyDate: string | null; action: string | null; approvalType: string | null; notes: string | null };
+  onOpenChange: (v: boolean) => void;
+  onSaved: () => void;
+}) {
+  const { t } = useI18n();
+  const { toast } = useToast();
+  const [submitDate, setSubmitDate] = useState(revision.submitDate ? revision.submitDate.slice(0, 10) : '');
+  const [replyDate, setReplyDate] = useState(revision.replyDate ? revision.replyDate.slice(0, 10) : '');
+  const [action, setAction] = useState(revision.action || '');
+  const [approvalType, setApprovalType] = useState(revision.approvalType || '');
+  const [notes, setNotes] = useState(revision.notes || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleActionChange = (v: string) => {
+    setAction(v);
+    if (v !== 'approved') setApprovalType('');
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // Update via revisions API — uses upsert with existing revNumber
+      const r = await fetch(`/api/transmittals/${transmittalId}/revisions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          revNumber: revision.revNumber,
+          submitDate: submitDate || null,
+          replyDate: replyDate || null,
+          action: action || null,
+          approvalType: action === 'approved' ? (approvalType || null) : null,
+          notes: notes || null,
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || t('msg.saveFailed'));
+      }
+
+      // If this is a consultant reply (has replyDate + action), also update the consultant review
+      if (replyDate && action) {
+        const actionToStatus: Record<string, string> = {
+          approved: (approvalType === 'NOT_APPROVED' ? 'Submit Next Rev' :
+                     approvalType === 'FOR_INFORMATION' ? 'Under Review' :
+                     approvalType === 'APPROVED_AS_NOTED_RESUBMIT' ? 'Submit Next Rev' : 'Approved'),
+          rejected: 'Submit Next Rev',
+          withdrawn: 'Cancelled',
+        };
+        const status = actionToStatus[action] || 'Under Review';
+        await fetch(`/api/transmittals/${transmittalId}/reviews`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ party: 'CONSULTANT', status, reviewDate: replyDate, notes: notes || null }),
+        });
+      }
+
+      toast({ title: t('msg.updated'), description: `Rev.${String(revision.revNumber).padStart(2, '0')}` });
+      onSaved();
+    } catch (e: any) {
+      toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={true} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="w-5 h-5 text-amber-700" />
+            {t('dialog.editRevision')} — Rev.{String(revision.revNumber).padStart(2, '0')}
+          </DialogTitle>
+          <DialogDescription>{t('dialog.editRevisionDesc')}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="bg-amber-50 border border-amber-200 rounded p-2 text-sm">
+            <strong>{t('common.revision')}:</strong> Rev.{String(revision.revNumber).padStart(2, '0')}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-sm">{t('field.submitDate')}</Label>
+              <Input type="date" value={submitDate} onChange={(e) => setSubmitDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">{t('field.replyDate')}</Label>
+              <Input type="date" value={replyDate} onChange={(e) => setReplyDate(e.target.value)} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('field.action')}</Label>
+            <Select value={action} onValueChange={handleActionChange}>
+              <SelectTrigger><SelectValue placeholder={t('field.selectAction')} /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="approved">✅ {t('status.approved_short')}</SelectItem>
+                <SelectItem value="rejected">❌ {t('status.rejected')}</SelectItem>
+                <SelectItem value="withdrawn">🚫 {t('status.cancelled_short')}</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-slate-500">{t('dialog.editActionHint')}</p>
+          </div>
+          {action === 'approved' && (
+            <div className="space-y-1.5 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+              <Label className="text-sm font-semibold text-emerald-800">{t('field.acceptTypeReq')}</Label>
+              <Select value={approvalType} onValueChange={setApprovalType}>
+                <SelectTrigger className="!w-full !h-auto !min-h-[36px] !whitespace-normal !break-words text-left [&_[data-slot=select-value]]:!line-clamp-none [&_[data-slot=select-value]]:!whitespace-normal [&_[data-slot=select-value]]:!break-words"><SelectValue placeholder={t('field.selectAcceptType')} className="whitespace-normal break-words leading-snug" /></SelectTrigger>
+                <SelectContent>
+                  {APPROVAL_TYPES.map(at => (
+                    <SelectItem key={at.code} value={at.code} className="whitespace-normal break-words leading-snug py-2">
+                      <span className="font-bold">({at.letter})</span> {at.label}
+                      <br />
+                      <span className="text-xs text-slate-500">{at.description}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('common.notes')}</Label>
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder={t('field.notesExtra')} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-amber-700 hover:bg-amber-800 gap-1.5">
+            {saving ? t('msg.saving') : <><Pencil className="w-4 h-4" /> {t('common.save')}</>}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ============ EDIT MOH REVIEW DIALOG ============ */
+function EditMohReviewDialog({ transmittalId, review, onOpenChange, onSaved }: {
+  transmittalId: string;
+  review: { party: string; submitDate: string | null; submitRev: number | null; reviewDate: string | null; status: string | null; notes: string };
+  onOpenChange: (v: boolean) => void;
+  onSaved: () => void;
+}) {
+  const { t } = useI18n();
+  const { toast } = useToast();
+  const [submitDate, setSubmitDate] = useState(review.submitDate ? review.submitDate.slice(0, 10) : '');
+  const [submitRev, setSubmitRev] = useState<string>(review.submitRev !== null ? String(review.submitRev) : '');
+  const [reviewDate, setReviewDate] = useState(review.reviewDate ? review.reviewDate.slice(0, 10) : '');
+  const [status, setStatus] = useState(review.status || '');
+  const [notes, setNotes] = useState(review.notes || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const r = await fetch(`/api/transmittals/${transmittalId}/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          party: 'MOH',
+          status: status || null,
+          submitDate: submitDate || null,
+          submitRev: submitRev !== '' ? Number(submitRev) : null,
+          reviewDate: reviewDate || null,
+          notes: notes || null,
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || t('msg.saveFailed'));
+      }
+      toast({ title: t('msg.updated'), description: t('detail.mohFull') });
+      onSaved();
+    } catch (e: any) {
+      toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={true} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="w-5 h-5 text-amber-700" />
+            {t('dialog.editMohReview')}
+          </DialogTitle>
+          <DialogDescription>{t('dialog.editMohReviewDesc')}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-sm">{t('detail.sendToMoh')}</Label>
+              <Input type="date" value={submitDate} onChange={(e) => setSubmitDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">{t('detail.sentRev')}</Label>
+              <Input type="number" min="0" value={submitRev} onChange={(e) => setSubmitRev(e.target.value)} className="font-mono" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-sm">{t('detail.mohReply')}</Label>
+              <Input type="date" value={reviewDate} onChange={(e) => setReviewDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">{t('field.statusReq')}</Label>
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger><SelectValue placeholder={t('field.selectStatus')} /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Approved">{`✅ ${t('status.approved_short')}`}</SelectItem>
+                  <SelectItem value="Rejected">❌ {t('status.rejected')}</SelectItem>
+                  <SelectItem value="Under Review">{`⏳ ${t('status.underReview')}`}</SelectItem>
+                  <SelectItem value="Cancelled">{`🚫 ${t('status.cancelled_short')}`}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">{t('common.notes')}</Label>
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder={t('field.mohNotes')} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-amber-700 hover:bg-amber-800 gap-1.5">
             {saving ? t('msg.saving') : <><Pencil className="w-4 h-4" /> {t('common.save')}</>}
           </Button>
         </DialogFooter>
@@ -1866,7 +2162,7 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
           </Select>
         </div>
 
-        {/* Step 2: Discipline (filtered by category) */}
+        {/* Step 2: Discipline (filtered by category, INCLUDING linked categories) */}
         {category && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -1874,10 +2170,21 @@ function NewTransmittalView({ disciplines, categories, onCreated, onDownloadTemp
               <Select value={discipline} onValueChange={(v) => { setDiscipline(v); fetchNextReference(v); }}>
                 <SelectTrigger><SelectValue placeholder={t('new.selectDiscipline')} /></SelectTrigger>
                 <SelectContent>
-                  {disciplines.filter(d => (d.categoryCode || d.category || 'TRANSMITTAL') === category).map(d => <SelectItem key={d.code} value={d.code}>{d.label} ({d.code})</SelectItem>)}
+                  {disciplines.filter(d => {
+                    // Check if discipline is linked to the selected category:
+                    // - via default categoryCode
+                    // - OR via allCategories (multi-category link)
+                    const defaultCat = d.categoryCode || d.category || 'TRANSMITTAL';
+                    const allCats: string[] = (d as any).allCategories || [defaultCat];
+                    return allCats.includes(category);
+                  }).map(d => <SelectItem key={d.code} value={d.code}>{d.label} ({d.code})</SelectItem>)}
                 </SelectContent>
               </Select>
-              {disciplines.filter(d => (d.categoryCode || d.category || 'TRANSMITTAL') === category).length === 0 && (
+              {disciplines.filter(d => {
+                const defaultCat = d.categoryCode || d.category || 'TRANSMITTAL';
+                const allCats: string[] = (d as any).allCategories || [defaultCat];
+                return allCats.includes(category);
+              }).length === 0 && (
                 <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
                   {t('settings.noDisciplinesInCategory')}</p>
               )}
@@ -2255,7 +2562,11 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
   };
 
   const availableDisciplines = filterCategory !== 'all'
-    ? disciplines.filter(d => (d.categoryCode || d.category || 'TRANSMITTAL') === filterCategory)
+    ? disciplines.filter(d => {
+        const defaultCat = d.categoryCode || d.category || 'TRANSMITTAL';
+        const allCats: string[] = (d as any).allCategories || [defaultCat];
+        return allCats.includes(filterCategory);
+      })
     : disciplines;
 
   // Compute the maximum rev number across all visible items.

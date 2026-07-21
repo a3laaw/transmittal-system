@@ -456,5 +456,11 @@
   "msg.importFailed": "فشل الاستيراد",
   "msg.loadReportFailed": "فشل تحميل التقرير",
   "msg.loadNextRefFailed": "فشل جلب الرقم التالي",
-  "msg.allowedFileTypes": "يُسمح فقط بالصور (PNG, JPG, GIF, WebP) و PDF و Word"
+  "msg.allowedFileTypes": "يُسمح فقط بالصور (PNG, JPG, GIF, WebP) و PDF و Word",
+  "dialog.editRevision": "تعديل المراجعة",
+  "dialog.editRevisionDesc": "تعديل بيانات المراجعة (تاريخ الإرسال، تاريخ الرد، الإجراء، الملاحظات)",
+  "dialog.editActionHint": "اتركه فارغاً لو لسه ما فيش رد من الاستشاري",
+  "dialog.editMohReview": "تعديل رد الوزارة",
+  "dialog.editMohReviewDesc": "تعديل بيانات رد الوزارة (تاريخ الإرسال، تاريخ الرد، الحالة، الملاحظات)",
+  "field.statusReq": "الحالة *"
 }

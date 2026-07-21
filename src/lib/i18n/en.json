@@ -456,5 +456,11 @@
   "msg.importFailed": "Import failed",
   "msg.loadReportFailed": "Failed to load report",
   "msg.loadNextRefFailed": "Failed to load next reference",
-  "msg.allowedFileTypes": "Only images (PNG, JPG, GIF, WebP) and PDF and Word are allowed"
+  "msg.allowedFileTypes": "Only images (PNG, JPG, GIF, WebP) and PDF and Word are allowed",
+  "dialog.editRevision": "Edit Revision",
+  "dialog.editRevisionDesc": "Edit revision data (submit date, reply date, action, notes)",
+  "dialog.editActionHint": "Leave empty if no consultant reply yet",
+  "dialog.editMohReview": "Edit MOH Review",
+  "dialog.editMohReviewDesc": "Edit MOH review data (submit date, review date, status, notes)",
+  "field.statusReq": "Status *"
 }

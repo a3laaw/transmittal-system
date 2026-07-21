@@ -182,6 +182,53 @@
 
 ---
 
+## v8.6 — تحسينات (Phase 4)
+
+### المشاكل المبلّغة:
+1. ❌ عند عمل ريفجن، الإكسل لازم يكتب Rev.00 / Rev.01 / Rev.02 (مش Rev.00 ثابت دايماً)
+2. ❌ التخصصات المتعددة الأقسام: لما تختار قسم رئيسي في "إنشاء جديد"، التخصصات اللي مربوطة بيه (عبر multi-category) مش بتظهر
+3. ❌ تعديل رد الاستشاري + رد الوزارة غير متوفر (لو حد عمل غلط، لازم يمسح ويعمل من جديد)
+
+### الفحص (Phase 4):
+
+**1. Excel Rev.XX** — `excel-template/route.ts` line 155 كان فيها `'Rev.00'` hardcoded
+- **الإصلاح**: 
+  - API يقبل `rev` parameter
+  - يحوله لـ `Rev.00`, `Rev.01`, `Rev.02`... بصيغة 2-digit
+  - `handleDownloadExcel` بيمرر `revNumber` للـ API
+  - زر التنزيل لكل REV في DetailView بيمرر `r.revNumber`
+  - اسم الملف بيبقى `REF-Rev.01.xlsx` بدل `Transmittal-REF-REV.1.xlsx`
+
+**2. التخصصات في جديد** — `NewTransmittalView` line 1877 كان بيفلتر بـ:
+```js
+(d.categoryCode || d.category || 'TRANSMITTAL') === category
+```
+ده بيفحص الـ default category فقط! لو تخصص "مدنية" مربوط بـ TRANSMITTAL (افتراضي) + MIR + RFI، اختيار MIR مش بيظهر التخصص ده.
+
+- **الإصلاح**: 
+  - استبدلت الفلتر بـ `d.allCategories?.includes(category)` (الـ API بيرجع `allCategories` من v7)
+  - نفذت نفس الإصلاح في:
+    - `NewTransmittalView` (إنشاء جديد)
+    - `ListView` (قائمة)
+    - `ReportsView` (تقارير)
+
+**3. تعديل رد الاستشاري + رد الوزارة** — مفيش edit للأسبق
+- **الإصلاح**:
+  - **EditRevisionDialog** جديد: يعدل على revision معينة (submitDate, replyDate, action, approvalType, notes)
+    - زر قلم بجانب كل REV في جدول المراجعات
+    - لو عدّلت الإجراء + تاريخ الرد → كمان بحدّث الـ consultant review
+  - **EditMohReviewDialog** جديد: يعدل على MOH review (submitDate, submitRev, reviewDate, status, notes)
+    - زر قلم في قسم MOH بجوار الحالة
+    - بيستخدم reviews API upsert
+
+### ملاحظات تقنية:
+- 464 مفتاح ترجمة (كانت 458)
+- 0 أخطاء TypeScript
+- Build نجح
+- المحافظة على النظام كامل: ما حذفتش أي ميزة قديمة
+
+---
+
 (v8.3 work log below)
 
 ### v8.3 — Completed
