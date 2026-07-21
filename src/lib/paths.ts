@@ -36,15 +36,44 @@ export function findExcelScript(): string {
 }
 
 /**
- * Find the Excel template file.
+ * Find the Excel template file for a given category.
+ * Each category has its own template file in public/templates/:
+ *   - TRANSMITTAL → TRANSIMITALS_template.xlsx
+ *   - MIR         → MIR_template.xlsx
+ *   - CHECKLIST   → CHECKLIST_template.xlsx  (also covers LETTERS/BOOKS)
+ *   - RFI         → falls back to TRANSIMITALS_template.xlsx
+ *
+ * If category-specific template doesn't exist, falls back to TRANSIMITALS_template.xlsx.
  */
-export function findExcelTemplate(): string {
+export function findExcelTemplate(category?: string): string {
+  // Determine which template file to use based on category
+  let templateFileName = 'TRANSIMITALS_template.xlsx';
+  if (category) {
+    const cat = category.toUpperCase();
+    if (cat === 'MIR') {
+      templateFileName = 'MIR_template.xlsx';
+    } else if (cat === 'CHECKLIST' || cat === 'LETTERS' || cat === 'BOOKS') {
+      templateFileName = 'CHECKLIST_template.xlsx';
+    }
+    // TRANSMITTAL, RFI, and anything else → default TRANSIMITALS_template.xlsx
+  }
+
   const candidates = [
-    path.join(PROJECT_ROOT, 'public', 'templates', 'TRANSIMITALS_template.xlsx'),
-    path.join(PROJECT_ROOT, '.next', 'standalone', 'public', 'templates', 'TRANSIMITALS_template.xlsx'),
+    path.join(PROJECT_ROOT, 'public', 'templates', templateFileName),
+    path.join(PROJECT_ROOT, '.next', 'standalone', 'public', 'templates', templateFileName),
   ];
   for (const c of candidates) {
     if (existsSync(c)) return c;
+  }
+  // Fallback to TRANSIMITALS_template.xlsx if the category-specific one is missing
+  if (templateFileName !== 'TRANSIMITALS_template.xlsx') {
+    const fallback = [
+      path.join(PROJECT_ROOT, 'public', 'templates', 'TRANSIMITALS_template.xlsx'),
+      path.join(PROJECT_ROOT, '.next', 'standalone', 'public', 'templates', 'TRANSIMITALS_template.xlsx'),
+    ];
+    for (const c of fallback) {
+      if (existsSync(c)) return c;
+    }
   }
   return candidates[0];
 }

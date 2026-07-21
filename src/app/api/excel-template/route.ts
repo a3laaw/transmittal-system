@@ -87,19 +87,20 @@ export async function GET(req: NextRequest) {
   const revLabel = `Rev.${String(safeRev).padStart(2, '0')}`;
 
   // Find the template to use:
-  // 1. If category is specified and has a custom template, use it
-  // 2. Otherwise, fall back to the default TRANSIMITALS_template.xlsx
-  let templatePath = findExcelTemplate();
+  // 1. If category is specified and has a custom uploaded template (templatePath), use it
+  // 2. Otherwise, use the default category-specific template file (MIR_template.xlsx, CHECKLIST_template.xlsx, etc.)
+  // 3. Final fallback: TRANSIMITALS_template.xlsx
+  let templatePath = findExcelTemplate(category);
   let templateType = 'xlsx'; // default
 
   if (category) {
     try {
-      const cat = await db.category.findUnique({ 
-        where: { code: category }, 
-        select: { templatePath: true, templateType: true } 
+      const cat = await db.category.findUnique({
+        where: { code: category },
+        select: { templatePath: true, templateType: true }
       });
       if (cat?.templatePath) {
-        // Find the template file (any extension)
+        // Find the template file (any extension) in the custom upload dir
         const storageRoot = getStorageRoot();
         const templatesDir = path.join(storageRoot, 'templates');
         if (existsSync(templatesDir)) {
@@ -109,7 +110,7 @@ export async function GET(req: NextRequest) {
           if (templateFile) {
             templatePath = path.join(templatesDir, templateFile);
             templateType = cat.templateType || path.extname(templateFile).replace('.', '');
-            console.log('[excel-template] Using custom template for category:', category, 'type:', templateType);
+            console.log('[excel-template] Using custom uploaded template for category:', category, 'type:', templateType);
           }
         }
       }
@@ -119,7 +120,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (!existsSync(templatePath)) {
-    return NextResponse.json({ error: `القالب غير موجود` }, { status: 500 });
+    return NextResponse.json({ error: `القالب غير موجود: ${templatePath}` }, { status: 500 });
   }
 
   try {
@@ -155,24 +156,78 @@ export async function GET(req: NextRequest) {
     // Read the sheet XML
     const sheetXml = await zip.file('xl/worksheets/sheet1.xml')!.async('string');
 
-    // Replace header cell values
+    // Replace header cell values.
+    // Different templates have different cell layouts, so we use pattern-based
+    // replacement on the sharedStrings.xml (which holds all text values).
     const dateDisplay = fmtDate(date);
     let modifiedXml = sheetXml;
+
+    // Read shared strings to find and replace header values
+    let sharedStringsXml = '';
+    try {
+      sharedStringsXml = await zip.file('xl/sharedStrings.xml')!.async('string');
+    } catch {
+      // Some templates may not have sharedStrings — fall back to direct cell replacement
+    }
+
+    if (sharedStringsXml) {
+      // Pattern-based replacement: find any string containing the pattern and replace.
+      // This works across TRANSMITTAL, MIR, and CHECKLIST templates.
+
+      // 1. Replace reference number (e.g., "Transmittal No:-119" → "Transmittal No:CIV-001")
+      //    Also handles "MIR No.         " → "MIR No. CIV-001" and "CHECK LIST No." → "CHECK LIST No. CIV-001"
+      sharedStringsXml = sharedStringsXml.replace(
+        /(<t[^>]*>)\s*(Transmittal No[.:]*\s*-?)([^<]*)(<\/t>)/gi,
+        (_, pre, label, _old, post) => `${pre}${label}${reference}${post}`
+      );
+      sharedStringsXml = sharedStringsXml.replace(
+        /(<t[^>]*>)\s*(MIR No[\.:]*\s*)([^<]*)(<\/t>)/gi,
+        (_, pre, label, _old, post) => `${pre}${label}${reference}${post}`
+      );
+      sharedStringsXml = sharedStringsXml.replace(
+        /(<t[^>]*>)\s*(CHECK LIST No[\.:]*\s*)([^<]*)(<\/t>)/gi,
+        (_, pre, label, _old, post) => `${pre}${label}${reference}${post}`
+      );
+
+      // 2. Replace Rev.XX value (e.g., "Rev.00" → "Rev.01")
+      //    Match exact "Rev.XX" pattern (2 digits)
+      sharedStringsXml = sharedStringsXml.replace(
+        /(<t[^>]*>)\s*(Rev\.\d{2})\s*(<\/t>)/gi,
+        (_, pre, _old, post) => `${pre}${revLabel}${post}`
+      );
+
+      // 3. Replace Date (e.g., "Date :10/06/2026" → "Date :21/07/2026")
+      //    Match "Date :" followed by DD/MM/YYYY
+      sharedStringsXml = sharedStringsXml.replace(
+        /(<t[^>]*>)(\s*Date\s*:?\s*)(\d{1,2}\/\d{1,2}\/\d{4})([^<]*)(<\/t>)/gi,
+        (_, pre, label, _old, suffix, post) => `${pre}${label}${dateDisplay}${suffix}${post}`
+      );
+      // Also handle "DATE        " (just the label, no value) — leave as is, just match if there's a date value nearby
+
+      // Write modified sharedStrings back
+      zip.file('xl/sharedStrings.xml', sharedStringsXml);
+    }
+
+    // Also do direct cell replacements for the known TRANSIMITALS template layout (G3/I3/G4)
+    // This is a fallback in case sharedStrings approach doesn't catch everything
     modifiedXml = replaceCellValue(modifiedXml, 'G3', `Transmittal No:${reference}`);
     modifiedXml = replaceCellValue(modifiedXml, 'I3', revLabel);
     modifiedXml = replaceCellValue(modifiedXml, 'G4', `Date :${dateDisplay}`);
 
-    // Fill description into item rows (16-26), column E
-    if (description) {
-      const parts = description
-        .split(/\s*[&/]\s*|\n|,(?=\s)/)
-        .map(p => p.trim())
-        .filter(Boolean);
-      const maxRows = 11;
-      parts.slice(0, maxRows).forEach((part, i) => {
-        const row = 16 + i;
-        modifiedXml = replaceCellValue(modifiedXml, `E${row}`, part);
-      });
+    // Fill description into item rows (16-26), column E — only for TRANSMITTAL template
+    const templateFileName = path.basename(templatePath).toUpperCase();
+    if (templateFileName.includes('TRANSIMITALS') || templateFileName.includes('TRANSMITTAL')) {
+      if (description) {
+        const parts = description
+          .split(/\s*[&/]\s*|\n|,(?=\s)/)
+          .map(p => p.trim())
+          .filter(Boolean);
+        const maxRows = 11;
+        parts.slice(0, maxRows).forEach((part, i) => {
+          const row = 16 + i;
+          modifiedXml = replaceCellValue(modifiedXml, `E${row}`, part);
+        });
+      }
     }
 
     // Write modified sheet XML back to the ZIP
@@ -180,7 +235,7 @@ export async function GET(req: NextRequest) {
 
     // Also update the sheet name in workbook.xml
     const workbookXml = await zip.file('xl/workbook.xml')!.async('string');
-    const sheetName = reference.replace(/[^\w\-]/g, '').slice(0, 31) || 'Transmittal';
+    const sheetName = reference.replace(/[^\w\-]/g, '').slice(0, 31) || 'Document';
     const modifiedWorkbook = workbookXml.replace(
       /<sheet[^>]*name="[^"]*"[^>]*sheetId="1"[^>]*\/>/,
       (match) => match.replace(/name="[^"]*"/, `name="${sheetName}"`)
@@ -194,7 +249,7 @@ export async function GET(req: NextRequest) {
       compressionOptions: { level: 6 },
     });
 
-    console.log('[excel-template] Generated Excel:', outBuf.length, 'bytes, sheet:', sheetName);
+    console.log('[excel-template] Generated Excel:', outBuf.length, 'bytes, sheet:', sheetName, 'template:', templateFileName);
 
     const filename = `Transmittal-${reference}.xlsx`;
     return new NextResponse(new Uint8Array(outBuf), {
