@@ -26,7 +26,7 @@ function fmtAction(a: string | null | undefined): string {
   const s = a.toLowerCase().trim();
   if (s === 'approved') return 'معتمد';
   if (s === 'rejected') return 'مرفوض';
-  if (s === 'withdrawn') return 'مسحوب';
+  if (s === 'cancelled' || s === 'withdrawn') return 'ملغى';
   if (s === 'pending') return 'بانتظار';
   return s;
 }
@@ -53,7 +53,7 @@ function getActionFill(action: string | null | undefined, approvalType: string |
     return 'FFC6EFCE';
   }
   if (a === 'rejected') return 'FFFFC7CE';
-  if (a === 'withdrawn') return 'FFE7E6E6';
+  if (a === 'cancelled' || a === 'withdrawn') return 'FFE7E6E6';
   if (a === 'pending') return 'FFFFEB9C';
   return null;
 }

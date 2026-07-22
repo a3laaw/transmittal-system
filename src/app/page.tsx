@@ -2636,7 +2636,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
 
       return `<tr>
         <td style="font-family:monospace;font-weight:700;padding:6px 8px;border:1px solid #cbd5e1;white-space:nowrap;">${it.reference || '—'}</td>
-        <td style="padding:6px 8px;border:1px solid #cbd5e1;max-width:200px;font-size:11px;">${(it.description || '—').replace(/</g, '&lt;')}</td>
+        <td style="padding:6px 8px;border:1px solid #cbd5e1;max-width:280px;font-size:11px;vertical-align:top;word-break:break-word;white-space:pre-wrap;line-height:1.4;">${(it.description || '—').replace(/</g, '&lt;')}</td>
         ${revCells}
         <td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:center;font-size:11px;">${statusEmoji(consultantStatus)}</td>
         <td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:center;font-size:11px;">${statusEmoji(mohStatus)}</td>
@@ -2933,8 +2933,8 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
                       <TableCell className="font-mono font-semibold whitespace-nowrap sticky right-0 bg-white z-10 border-l-2 border-slate-300">
                         {item.reference || '—'}
                       </TableCell>
-                      <TableCell className="text-sm text-slate-700 max-w-[200px] truncate border-l-2 border-slate-300">
-                        {item.description || '—'}
+                      <TableCell className="text-sm text-slate-700 max-w-[250px] border-l-2 border-slate-300 align-top">
+                        <div className="whitespace-pre-wrap break-words leading-snug py-1">{item.description || '—'}</div>
                       </TableCell>
                       {revColumns.map((rev, revIdx) => {
                         const r = item.revisions[rev];
