@@ -1395,18 +1395,18 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                   let actionColor: string;
                   const act = (r.action || '').toLowerCase().trim();
                   if (act === 'approved') {
-                    if (r.approvalType === 'NOT_APPROVED') { actionLabel = `(D) ${getApprovalTypeLabel('NOT_APPROVED')} — ${t('status.rejected_d')}`; actionColor = 'text-red-700'; }
-                    else if (r.approvalType === 'FOR_INFORMATION') { actionLabel = `(E) ${getApprovalTypeLabel('FOR_INFORMATION')} — ${t('status.info_e')}`; actionColor = 'text-orange-700'; }
-                    else if (r.approvalType === 'APPROVED_AS_NOTED_RESUBMIT') { actionLabel = `(C) ${getApprovalTypeLabel('APPROVED_AS_NOTED_RESUBMIT')} — ${t('status.approved_c')}`; actionColor = 'text-orange-700'; }
-                    else if (r.approvalType === 'APPROVED_AS_NOTED') { actionLabel = `(B) ${getApprovalTypeLabel('APPROVED_AS_NOTED')} — ${t('status.approved_b')}`; actionColor = 'text-emerald-700'; }
-                    else if (r.approvalType === 'APPROVED') { actionLabel = `(A) ${getApprovalTypeLabel('APPROVED')} — ${t('status.approved_a')}`; actionColor = 'text-emerald-700'; }
-                    else { actionLabel = `✅ ${t('status.approved')}`; actionColor = 'text-emerald-700'; }
+                    if (r.approvalType === 'NOT_APPROVED') { actionLabel = `${getApprovalTypeLetter('NOT_APPROVED')} - ${getApprovalTypeLabel('NOT_APPROVED')}`; actionColor = 'text-red-700'; }
+                    else if (r.approvalType === 'FOR_INFORMATION') { actionLabel = `${getApprovalTypeLetter('FOR_INFORMATION')} - ${getApprovalTypeLabel('FOR_INFORMATION')}`; actionColor = 'text-orange-700'; }
+                    else if (r.approvalType === 'APPROVED_AS_NOTED_RESUBMIT') { actionLabel = `${getApprovalTypeLetter('APPROVED_AS_NOTED_RESUBMIT')} - ${getApprovalTypeLabel('APPROVED_AS_NOTED_RESUBMIT')}`; actionColor = 'text-orange-700'; }
+                    else if (r.approvalType === 'APPROVED_AS_NOTED') { actionLabel = `${getApprovalTypeLetter('APPROVED_AS_NOTED')} - ${getApprovalTypeLabel('APPROVED_AS_NOTED')}`; actionColor = 'text-emerald-700'; }
+                    else if (r.approvalType === 'APPROVED') { actionLabel = `${getApprovalTypeLetter('APPROVED')} - ${getApprovalTypeLabel('APPROVED')}`; actionColor = 'text-emerald-700'; }
+                    else { actionLabel = t('status.approved_short'); actionColor = 'text-emerald-700'; }
                   } else if (act === 'rejected') {
-                    actionLabel = `❌ ${t('status.resubmit')}`; actionColor = 'text-red-700';
+                    actionLabel = t('status.rejected'); actionColor = 'text-red-700';
                   } else if (act === 'withdrawn') {
-                    actionLabel = `🚫 ${t('status.cancelled')}`; actionColor = 'text-gray-600';
+                    actionLabel = t('status.cancelled_short'); actionColor = 'text-gray-600';
                   } else if (act === 'pending') {
-                    actionLabel = `⏳ ${t('status.pending_reply')}`; actionColor = 'text-yellow-700';
+                    actionLabel = t('status.pending_reply'); actionColor = 'text-yellow-700';
                   } else {
                     actionLabel = r.action || '—'; actionColor = 'text-yellow-700';
                   }
@@ -2562,25 +2562,25 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
         return '<span style="color:#cbd5e1;">—</span>';
       }
       const act = (r.action || '').toLowerCase().trim();
-      let letter = '—';
+      let label = '—';
       let bg = '';
       let color = '#64748b';
       if (act === 'approved') {
         const at = r.approvalType;
-        if (at === 'APPROVED') { letter = 'A'; bg = '#dcfce7'; color = '#047857'; }
-        else if (at === 'APPROVED_AS_NOTED') { letter = 'B'; bg = '#dcfce7'; color = '#047857'; }
-        else if (at === 'APPROVED_AS_NOTED_RESUBMIT') { letter = 'C'; bg = '#fed7aa'; color = '#c2410c'; }
-        else if (at === 'NOT_APPROVED') { letter = 'D'; bg = '#fecaca'; color = '#b91c1c'; }
-        else if (at === 'FOR_INFORMATION') { letter = 'E'; bg = '#fed7aa'; color = '#c2410c'; }
-        else { letter = '✓'; bg = '#dcfce7'; color = '#047857'; }
+        if (at === 'APPROVED') { label = 'A - APPROVED'; bg = '#dcfce7'; color = '#047857'; }
+        else if (at === 'APPROVED_AS_NOTED') { label = 'B - APPROVED AS NOTED'; bg = '#dcfce7'; color = '#047857'; }
+        else if (at === 'APPROVED_AS_NOTED_RESUBMIT') { label = 'C - APPROVED AS NOTED & RESUBMIT'; bg = '#fed7aa'; color = '#c2410c'; }
+        else if (at === 'NOT_APPROVED') { label = 'D - NOT APPROVED'; bg = '#fecaca'; color = '#b91c1c'; }
+        else if (at === 'FOR_INFORMATION') { label = 'E - FOR INFORMATION'; bg = '#fed7aa'; color = '#c2410c'; }
+        else { label = lang === 'ar' ? 'مقبول' : 'Approved'; bg = '#dcfce7'; color = '#047857'; }
       } else if (act === 'rejected') {
-        letter = '✗'; bg = '#fecaca'; color = '#b91c1c';
+        label = lang === 'ar' ? 'مرفوض' : 'Rejected'; bg = '#fecaca'; color = '#b91c1c';
       } else if (act === 'withdrawn') {
-        letter = '⌧'; bg = '#e5e7eb'; color = '#374151';
+        label = lang === 'ar' ? 'إلغاء' : 'Cancelled'; bg = '#e5e7eb'; color = '#374151';
       } else if (act === 'pending' || !act) {
-        letter = '⏳'; bg = '#fef9c3'; color = '#a16207';
+        label = lang === 'ar' ? 'بانتظار الرد' : 'Pending'; bg = '#fef9c3'; color = '#a16207';
       }
-      return `<span style="display:inline-block;min-width:24px;padding:2px 6px;border-radius:4px;font-weight:700;background:${bg};color:${color};">${letter}</span>`;
+      return `<span style="display:inline-block;padding:2px 6px;border-radius:4px;font-weight:700;background:${bg};color:${color};font-size:10px;white-space:nowrap;">${label}</span>`;
     };
 
     // Build REV column headers
@@ -2778,13 +2778,15 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
     if (s === 'approved') {
       if (approvalType) {
         const letter = getApprovalTypeLetter(approvalType);
-        return letter || '✅';
+        const label = getApprovalTypeLabel(approvalType);
+        // Show "A - APPROVED" instead of just "A"
+        return letter ? `${letter} - ${label}` : label;
       }
-      return '✅'; // old data without approvalType — just show checkmark
+      return t('status.approved_short');
     }
-    if (s === 'rejected') return '❌';
-    if (s === 'withdrawn') return '🚫';
-    if (s === 'pending') return '⏳'; // backward compat with old imported data
+    if (s === 'rejected') return t('status.rejected');
+    if (s === 'withdrawn') return t('status.cancelled_short');
+    if (s === 'pending') return t('status.pending_reply');
     return a;
   };
 
