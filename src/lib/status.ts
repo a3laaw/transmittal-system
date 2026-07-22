@@ -83,7 +83,7 @@ export function computeConsultantStatus(
     return { status: 'approved', statusKey: 'status.approved', label: 'معتمد', color: 'bg-green-100 text-green-700 border-green-300', emoji: '✅' };
   }
 
-  if (action === 'withdrawn') {
+  if (action === 'cancelled' || action === 'withdrawn') {
     return { status: 'cancelled', statusKey: 'status.cancelled', label: 'ملغى', color: 'bg-gray-100 text-gray-700 border-gray-300', emoji: '🚫' };
   }
 

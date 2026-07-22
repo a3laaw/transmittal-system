@@ -402,7 +402,7 @@ export default function Home() {
                    approvalType === 'FOR_INFORMATION' ? 'Under Review' :
                    approvalType === 'APPROVED_AS_NOTED_RESUBMIT' ? 'Submit Next Rev' : 'Approved'),
         rejected: 'Submit Next Rev',
-        withdrawn: 'Cancelled',
+        cancelled: 'Cancelled',
       };
       const status = actionToStatus[action] || 'Under Review';
       await fetch(`/api/transmittals/${id}/reviews`, {
@@ -1403,7 +1403,7 @@ function DetailView({ detail, loading, disciplines, onBack, onRefresh, onDownloa
                     else { actionLabel = t('status.approved_short'); actionColor = 'text-emerald-700'; }
                   } else if (act === 'rejected') {
                     actionLabel = t('status.rejected'); actionColor = 'text-red-700';
-                  } else if (act === 'withdrawn') {
+                  } else if (act === 'cancelled' || act === 'withdrawn') {
                     actionLabel = t('status.cancelled_short'); actionColor = 'text-gray-600';
                   } else if (act === 'pending') {
                     actionLabel = t('status.pending_reply'); actionColor = 'text-yellow-700';
@@ -1844,7 +1844,7 @@ function EditRevisionDialog({ transmittalId, revision, onOpenChange, onSaved }: 
                      approvalType === 'FOR_INFORMATION' ? 'Under Review' :
                      approvalType === 'APPROVED_AS_NOTED_RESUBMIT' ? 'Submit Next Rev' : 'Approved'),
           rejected: 'Submit Next Rev',
-          withdrawn: 'Cancelled',
+          cancelled: 'Cancelled',
         };
         const status = actionToStatus[action] || 'Under Review';
         await fetch(`/api/transmittals/${transmittalId}/reviews`, {
@@ -1894,7 +1894,7 @@ function EditRevisionDialog({ transmittalId, revision, onOpenChange, onSaved }: 
               <SelectContent>
                 <SelectItem value="approved">✅ {t('status.approved_short')}</SelectItem>
                 <SelectItem value="rejected">❌ {t('status.rejected')}</SelectItem>
-                <SelectItem value="withdrawn">🚫 {t('status.cancelled_short')}</SelectItem>
+                <SelectItem value="cancelled">🚫 {t('status.cancelled_short')}</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-slate-500">{t('dialog.editActionHint')}</p>
@@ -2575,23 +2575,23 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
         else { label = lang === 'ar' ? 'مقبول' : 'Approved'; bg = '#dcfce7'; color = '#047857'; }
       } else if (act === 'rejected') {
         label = lang === 'ar' ? 'مرفوض' : 'Rejected'; bg = '#fecaca'; color = '#b91c1c';
-      } else if (act === 'withdrawn') {
+      } else if (act === 'cancelled' || act === 'withdrawn') {
         label = lang === 'ar' ? 'إلغاء' : 'Cancelled'; bg = '#e5e7eb'; color = '#374151';
       } else if (act === 'pending' || !act) {
         label = lang === 'ar' ? 'بانتظار الرد' : 'Pending'; bg = '#fef9c3'; color = '#a16207';
       }
-      return `<span style="display:inline-block;padding:2px 6px;border-radius:4px;font-weight:700;background:${bg};color:${color};font-size:10px;white-space:nowrap;">${label}</span>`;
+      return `<span style="display:inline-block;padding:2px 6px;border-radius:4px;font-weight:700;background:${bg};color:${color};font-size:10px;word-break:break-word;line-height:1.2;">${label}</span>`;
     };
 
     // Build REV column headers
     const revHeaderCells = revColumns.map((rev) => {
       const c = revColors[rev % revColors.length];
-      return `<th style="background:${c.header};color:white;padding:0;border:1px solid ${c.border};">
+      return `<th style="background:${c.header};color:white;padding:0;border:1px solid ${c.border};min-width:320px;">
         <div style="padding:6px 8px;font-weight:700;font-size:13px;">Rev.${String(rev).padStart(2, '0')}</div>
         <div style="display:flex;background:${c.light};font-size:10px;font-weight:400;">
-          <div style="flex:1;padding:3px 4px;border-left:1px solid ${c.border};">${t('reports.rev.submit')}</div>
-          <div style="flex:1;padding:3px 4px;border-left:1px solid ${c.border};">${t('reports.rev.reply')}</div>
-          <div style="flex:1;padding:3px 4px;border-left:1px solid ${c.border};">${t('reports.rev.action')}</div>
+          <div style="flex:1;padding:3px 4px;border-left:1px solid ${c.border};text-align:center;">${t('reports.rev.submit')}</div>
+          <div style="flex:1;padding:3px 4px;border-left:1px solid ${c.border};text-align:center;">${t('reports.rev.reply')}</div>
+          <div style="flex:1.5;padding:3px 4px;border-left:1px solid ${c.border};text-align:center;">${t('reports.rev.action')}</div>
         </div>
       </th>`;
     }).join('');
@@ -2607,7 +2607,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
             <div style="display:flex;min-height:32px;font-size:10px;">
               <div style="flex:1;padding:4px;border-left:1px solid ${c.border};text-align:center;color:#cbd5e1;">—</div>
               <div style="flex:1;padding:4px;border-left:1px solid ${c.border};text-align:center;color:#cbd5e1;">—</div>
-              <div style="flex:1;padding:4px;border-left:1px solid ${c.border};text-align:center;color:#cbd5e1;">—</div>
+              <div style="flex:1.5;padding:4px;border-left:1px solid ${c.border};text-align:center;color:#cbd5e1;">—</div>
             </div>
           </td>`;
         }
@@ -2615,7 +2615,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
           <div style="display:flex;min-height:32px;font-size:10px;">
             <div style="flex:1;padding:4px;border-left:1px solid ${c.border};text-align:center;">${fmtDateShort(r.submitDate)}</div>
             <div style="flex:1;padding:4px;border-left:1px solid ${c.border};text-align:center;">${fmtDateShort(r.replyDate)}</div>
-            <div style="flex:1;padding:4px;border-left:1px solid ${c.border};text-align:center;">${getActionCell(r)}</div>
+            <div style="flex:1.5;padding:4px;border-left:1px solid ${c.border};text-align:center;">${getActionCell(r)}</div>
           </div>
         </td>`;
       }).join('');
@@ -2785,7 +2785,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
       return t('status.approved_short');
     }
     if (s === 'rejected') return t('status.rejected');
-    if (s === 'withdrawn') return t('status.cancelled_short');
+    if (s === 'cancelled' || s === 'withdrawn') return t('status.cancelled_short');
     if (s === 'pending') return t('status.pending_reply');
     return a;
   };
@@ -2800,7 +2800,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
       return 'text-emerald-700 bg-emerald-50';
     }
     if (s === 'rejected') return 'text-red-700 bg-red-50';
-    if (s === 'withdrawn') return 'text-gray-700 bg-gray-100';
+    if (s === 'cancelled' || s === 'withdrawn') return 'text-gray-700 bg-gray-100';
     if (s === 'pending') return 'text-yellow-700 bg-yellow-50'; // backward compat
     return 'text-slate-700';
   };
@@ -2911,14 +2911,14 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
                       return (
                         <TableHead
                           key={rev}
-                          className={`text-center min-w-[260px] p-0 border-l-4 ${revIdx === 0 ? 'border-l-2 border-slate-400' : `border-l-4 ${c.borderL}`}`}
+                          className={`text-center min-w-[320px] p-0 border-l-4 ${revIdx === 0 ? 'border-l-2 border-slate-400' : `border-l-4 ${c.borderL}`}`}
                         >
                           {/* REV group header — colored band on top, distinct color per rev */}
                           <div className={`${c.header} text-white py-1.5 px-2 font-bold text-sm`}>REV.{rev}</div>
                           <div className={`flex text-xs font-normal mt-0 ${c.light}`}>
-                            <div className={`flex-1 py-1 border-l ${c.border}`}>{t('reports.rev.submit')}</div>
-                            <div className={`flex-1 py-1 border-l ${c.border}`}>{t('reports.rev.reply')}</div>
-                            <div className={`flex-1 py-1 border-l ${c.border}`}>{t('common.action')}</div>
+                            <div className={`flex-1 py-1 border-l ${c.border} text-center`}>{t('reports.rev.submit')}</div>
+                            <div className={`flex-1 py-1 border-l ${c.border} text-center`}>{t('reports.rev.reply')}</div>
+                            <div className={`flex-[1.5] py-1 border-l ${c.border} text-center`}>{t('common.action')}</div>
                           </div>
                         </TableHead>
                       );
@@ -2955,7 +2955,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
                               <div className={`flex text-xs min-h-[44px] items-center ${c.bg}`}>
                                 <div className={`flex-1 p-2 border-l ${c.border} text-center text-slate-300`}>—</div>
                                 <div className={`flex-1 p-2 border-l ${c.border} text-center text-slate-300`}>—</div>
-                                <div className={`flex-1 p-2 border-l ${c.border} text-center text-slate-300`}>—</div>
+                                <div className={`flex-[1.5] p-2 border-l ${c.border} text-center text-slate-300`}>—</div>
                               </div>
                             </TableCell>
                           );
@@ -2980,7 +2980,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
                                   <div className="font-medium text-slate-700">{fmtDate(r.replyDate)}</div>
                                 ) : <span className="text-slate-300">—</span>}
                               </div>
-                              <div className={`flex-1 p-2 border-l ${c.border} text-center font-bold ${actionColor(r.action, r.approvalType)}`}>
+                              <div className={`flex-[1.5] p-2 border-l ${c.border} text-center font-bold ${actionColor(r.action, r.approvalType)} break-words leading-tight`}>
                                 {actionLabel(r.action, r.approvalType)}
                               </div>
                             </div>
@@ -4217,7 +4217,7 @@ function ConsultantReplyDialog({ target, onClose, onConfirm }: {
                 <SelectContent>
                   <SelectItem value="approved">✅ {t('status.approved_short')}</SelectItem>
                   <SelectItem value="rejected">❌ {t('status.rejected')}</SelectItem>
-                  <SelectItem value="withdrawn">🚫 {t('status.cancelled_short')}</SelectItem>
+                  <SelectItem value="cancelled">🚫 {t('status.cancelled_short')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
