@@ -2684,7 +2684,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
   .filters { padding: 8px 16px; background: #f0fdfa; border-left: 4px solid #0d9488; margin: 0; font-size: 11px; color: #0f766e; }
   /* table-layout: fixed forces columns to respect specified widths */
   table { width: 100%; border-collapse: collapse; font-size: 11px; background: white; table-layout: fixed; }
-  th, td { border: 1px solid #cbd5e1; overflow: hidden; }
+  th, td { border: 1px solid #cbd5e1; }
   th { font-weight: 700; }
   th.ref-col, td.ref-col { background: #f8fafc; width: 100px; }
   th.desc-col, td.desc-col { background: #f8fafc; }
@@ -2696,6 +2696,9 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
     body { padding: 0; }
     /* In print, use A3 if available, otherwise A4 */
     @page { size: A3 landscape; margin: 8mm; }
+    /* Prevent rows from breaking across pages */
+    tr { page-break-inside: avoid; }
+    thead { display: table-header-group; }
   }
   .print-button { background: #0d9488; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 12px; margin: 8px; }
   .print-button:hover { background: #0f766e; }

@@ -82,10 +82,11 @@ app.whenReady().then(function() {
       fs.writeFileSync(tmpFile, html, 'utf-8');
 
       // Show the window so user can see preview + the print dialog appears
+      // Use larger window so all content renders before printing
       printWin = new BrowserWindow({
         show: true,
-        width: 1024,
-        height: 768,
+        width: 1600,
+        height: 1200,
         title: 'Print Preview — Nova EDMS',
         webPreferences: { nodeIntegration: false, contextIsolation: true }
       });
