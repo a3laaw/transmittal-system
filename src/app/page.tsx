@@ -2620,26 +2620,46 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
         </td>`;
       }).join('');
 
-      const consultantStatus = it.consultantStatus?.status;
-      const mohStatus = it.mohStatus?.status;
-      const statusEmoji = (s: string) => {
-        if (!s) return '—';
-        if (s === 'approved') return '<span style="color:#047857;">✓</span>';
-        if (s === 'pending') return '<span style="color:#a16207;">⏳</span>';
-        if (s === 'overdue') return '<span style="color:#b91c1c;">🔴</span>';
-        if (s === 'cancelled') return '<span style="color:#6b7280;">⌧</span>';
-        if (s === 'resubmit') return '<span style="color:#c2410c;">🔔</span>';
-        if (s === 'not_sent') return '—';
-        if (s === 'reviewed') return '<span style="color:#1d4ed8;">📋</span>';
-        return s;
-      };
+      // For Consultant column: show the LAST revision's action (not computed status)
+      const revKeys = Object.keys(it.revisions || {}).map(k => parseInt(k, 10)).filter(k => !isNaN(k)).sort((a, b) => a - b);
+      const lastRevKey = revKeys.length > 0 ? revKeys[revKeys.length - 1] : -1;
+      const lastRev = lastRevKey >= 0 ? it.revisions[lastRevKey] : null;
+      const consultantCell = getActionCell(lastRev);
+
+      // For MOH column: show the MOH review status + date (not just emoji)
+      let mohCell = '—';
+      if (it.mohStatus || it.mohReviewDate || it.mohSubmitDate) {
+        const mohStatusRaw = it.mohStatus; // e.g. "Approved", "Rejected", "Under Review", "Cancelled", null
+        const mohReviewDate = it.mohReviewDate ? fmtDateShort(it.mohReviewDate) : null;
+        const mohSubmitDate = it.mohSubmitDate ? fmtDateShort(it.mohSubmitDate) : null;
+        let mohLabel = '—';
+        let mohBg = '';
+        let mohColor = '#64748b';
+        if (mohStatusRaw === 'Approved' || mohStatusRaw === '✅ Approved') {
+          mohLabel = lang === 'ar' ? 'معتمد' : 'Approved'; mohBg = '#dcfce7'; mohColor = '#047857';
+        } else if (mohStatusRaw === 'Rejected' || mohStatusRaw === '❌ Rejected') {
+          mohLabel = lang === 'ar' ? 'مرفوض' : 'Rejected'; mohBg = '#fecaca'; mohColor = '#b91c1c';
+        } else if (mohStatusRaw === 'Cancelled' || mohStatusRaw === '🚫 Cancelled') {
+          mohLabel = lang === 'ar' ? 'ملغى' : 'Cancelled'; mohBg = '#e5e7eb'; mohColor = '#374151';
+        } else if (mohStatusRaw === 'Under Review' || mohStatusRaw === '⏳ Under Review') {
+          mohLabel = lang === 'ar' ? 'قيد المراجعة' : 'Under Review'; mohBg = '#fef9c3'; mohColor = '#a16207';
+        } else if (mohSubmitDate && !mohReviewDate) {
+          // Sent to MOH but no reply yet
+          mohLabel = lang === 'ar' ? 'بانتظار الرد' : 'Awaiting Reply'; mohBg = '#fef9c3'; mohColor = '#a16207';
+        } else if (mohSubmitDate) {
+          mohLabel = lang === 'ar' ? 'تمت المراجعة' : 'Reviewed'; mohBg = '#dbeafe'; mohColor = '#1d4ed8';
+        }
+        // Build the cell content: status badge + review date
+        const dateStr = mohReviewDate || mohSubmitDate || '';
+        mohCell = `<span style="display:inline-block;padding:2px 6px;border-radius:4px;font-weight:700;background:${mohBg};color:${mohColor};font-size:10px;word-break:break-word;line-height:1.2;">${mohLabel}</span>${dateStr ? `<div style="font-size:9px;color:#64748b;margin-top:2px;">${mohReviewDate ? (lang === 'ar' ? 'رد: ' : 'Reply: ') : (lang === 'ar' ? 'إرسال: ' : 'Sent: ')}${dateStr}</div>` : ''}`;
+      }
 
       return `<tr>
         <td style="font-family:monospace;font-weight:700;padding:6px 8px;border:1px solid #cbd5e1;white-space:nowrap;">${it.reference || '—'}</td>
         <td style="padding:6px 8px;border:1px solid #cbd5e1;max-width:280px;font-size:11px;vertical-align:top;word-break:break-word;white-space:pre-wrap;line-height:1.4;">${(it.description || '—').replace(/</g, '&lt;')}</td>
         ${revCells}
-        <td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:center;font-size:11px;">${statusEmoji(consultantStatus)}</td>
-        <td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:center;font-size:11px;">${statusEmoji(mohStatus)}</td>
+        <td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:center;font-size:11px;vertical-align:top;">${consultantCell}</td>
+        <td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:center;font-size:11px;vertical-align:top;">${mohCell}</td>
       </tr>`;
     }).join('');
 
@@ -2965,14 +2985,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
                             <div className={`flex text-xs min-h-[44px] ${c.bg}`}>
                               <div className={`flex-1 p-2 border-l ${c.border} text-center`}>
                                 {r.submitDate ? (
-                                  <div>
-                                    <div className="font-medium text-slate-700">{fmtDate(r.submitDate)}</div>
-                                    {r.daysOpen !== null && r.daysOpen !== undefined && (
-                                      <div className={`text-[10px] mt-0.5 font-semibold ${r.daysOpen > 30 ? 'text-red-700' : r.daysOpen > 14 ? 'text-yellow-700' : 'text-emerald-700'}`}>
-                                        {r.daysOpen}ي
-                                      </div>
-                                    )}
-                                  </div>
+                                  <div className="font-medium text-slate-700">{fmtDate(r.submitDate)}</div>
                                 ) : <span className="text-slate-300">—</span>}
                               </div>
                               <div className={`flex-1 p-2 border-l ${c.border} text-center`}>
