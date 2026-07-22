@@ -126,6 +126,15 @@ export async function ensureMigrations(): Promise<void> {
       if (!(await colExists(t, c))) await db.$executeRawUnsafe(`ALTER TABLE "${t}" ADD COLUMN "${c}" TEXT`);
     }
 
+    // Migration: convert old 'withdrawn' action values to 'cancelled'
+    // This runs on every startup — safe and idempotent
+    try {
+      const updated = await db.$executeRawUnsafe(`UPDATE "Revision" SET action = 'cancelled' WHERE action = 'withdrawn'`);
+      if (updated > 0) console.log(`[migrations] Converted ${updated} revisions from 'withdrawn' to 'cancelled'`);
+    } catch (e) {
+      // Non-fatal — table may not exist yet on first run
+    }
+
     // Migration: drop the global unique index on Transmittal.reference (if exists)
     // and add a composite unique index on (category, reference) instead.
     // This allows CIV-001 in TRANSMITTAL and CIV-001 in MIR to coexist.

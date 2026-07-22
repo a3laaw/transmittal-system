@@ -37,7 +37,7 @@ function parseAction(v: any): [string, string] {
   if (s.includes('for information') || s.includes('more info')) return ['approved', 'FOR_INFORMATION'];
   if (s === 'approved' || s === 'approve' || s.includes('approved')) return ['approved', 'APPROVED'];
   if (s.includes('reject')) return ['rejected', ''];
-  if (s.includes('withdrawn') || s.includes('withdraw')) return ['withdrawn', ''];
+  if (s.includes('withdrawn') || s.includes('withdraw') || s.includes('cancelled') || s.includes('cancel')) return ['cancelled', ''];
   if (s.includes('pending')) return ['', ''];
   return [s, ''];
 }

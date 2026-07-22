@@ -2674,27 +2674,40 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
 <meta charset="utf-8">
 <title>${t('reports.title')}</title>
 <style>
-  @page { size: A4 landscape; margin: 10mm; }
+  /* A3 landscape for wide reports, falls back to A4 landscape */
+  @page { size: A3 landscape; margin: 8mm; }
   body { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; padding: 0; margin: 0; color: #1e293b; }
   .header { display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 16px; background: linear-gradient(135deg, #059669, #0d9488); color: white; border-radius: 6px 6px 0 0; }
   .header h1 { margin: 0; font-size: 22px; font-weight: 700; }
   .header .subtitle { font-size: 12px; opacity: 0.9; margin-top: 4px; }
   .header .date { font-size: 11px; opacity: 0.85; }
   .filters { padding: 8px 16px; background: #f0fdfa; border-left: 4px solid #0d9488; margin: 0; font-size: 11px; color: #0f766e; }
-  table { width: 100%; border-collapse: collapse; font-size: 11px; background: white; }
-  th, td { border: 1px solid #cbd5e1; }
+  /* table-layout: fixed forces columns to respect specified widths */
+  table { width: 100%; border-collapse: collapse; font-size: 11px; background: white; table-layout: fixed; }
+  th, td { border: 1px solid #cbd5e1; overflow: hidden; }
   th { font-weight: 700; }
-  th.ref-col, td.ref-col { background: #f8fafc; }
+  th.ref-col, td.ref-col { background: #f8fafc; width: 100px; }
   th.desc-col, td.desc-col { background: #f8fafc; }
-  th.consultant-col { background: #d1fae5; color: #047857; }
-  th.moh-col { background: #ede9fe; color: #6b21a8; }
+  th.consultant-col { background: #d1fae5; color: #047857; width: 110px; }
+  th.moh-col { background: #ede9fe; color: #6b21a8; width: 110px; }
   .footer { padding: 8px 16px; background: #f1f5f9; font-size: 10px; color: #64748b; border-radius: 0 0 6px 6px; display: flex; justify-content: space-between; }
   @media print {
     .no-print { display: none; }
     body { padding: 0; }
+    /* In print, use A3 if available, otherwise A4 */
+    @page { size: A3 landscape; margin: 8mm; }
   }
   .print-button { background: #0d9488; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 12px; margin: 8px; }
   .print-button:hover { background: #0f766e; }
+  /* Description cell: allow wrapping but with reasonable min-height */
+  td.desc-cell {
+    font-size: 11px;
+    vertical-align: top;
+    word-break: break-word;
+    white-space: pre-wrap;
+    line-height: 1.5;
+    padding: 6px 8px;
+  }
 </style>
 </head>
 <body>
@@ -2735,7 +2748,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
   </div>
   <div class="no-print" style="text-align:center;padding:12px;">
     <button class="print-button" onclick="window.print()">🖨️ ${t('common.print')}</button>
-    <span style="font-size:11px;color:#64748b;margin-${isRtl ? 'right' : 'left'}:8px;">${t('msg.printHint') || 'Ctrl+P للطباعة مرة أخرى'}</span>
+    <span style="font-size:11px;color:#64748b;margin-${isRtl ? 'right' : 'left'}:8px;">${t('msg.printHint') || 'Ctrl+P للطباعة · اختر A3 في إعدادات الطابعة لعرض أفضل'}</span>
   </div>
 </body>
 </html>`;
