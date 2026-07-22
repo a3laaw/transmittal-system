@@ -472,5 +472,7 @@
   "field.shortCode": "Short Code",
   "field.shortCodeHint": "Internal code to distinguish categories (e.g., TR, MR, RF, LT) — not written to Excel",
   "common.optional": "optional",
-  "app.docUnit": "Document"
+  "app.docUnit": "Document",
+  "list.sortByRefNum": "Reference (Numeric)",
+  "list.sortOrder": "Sort Order"
 }

@@ -472,5 +472,7 @@
   "field.shortCode": "الكود المختصر",
   "field.shortCodeHint": "كود داخلي للتمييز بين الأقسام (مثل: TR, MR, RF, LT) — لا يُكتب في ملف Excel",
   "common.optional": "اختياري",
-  "app.docUnit": "مستند"
+  "app.docUnit": "مستند",
+  "list.sortByRefNum": "المرجع (رقمي)",
+  "list.sortOrder": "اتجاه الترتيب"
 }

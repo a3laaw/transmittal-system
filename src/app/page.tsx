@@ -2463,6 +2463,8 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
   const [filterType, setFilterType] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [sortBy, setSortBy] = useState<'reference_num' | 'reference' | 'date' | 'discipline'>('reference_num');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [types, setTypes] = useState<string[]>([]);
   const { toast } = useToast();
 
@@ -2483,13 +2485,37 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
       const r = await fetch(`/api/reports/timeline?${params}`);
       if (!r.ok) throw new Error(t('msg.loadReportFailed'));
       const data = await r.json();
-      setItems(data.items);
+
+      // Sort items based on user selection
+      const sorted = [...(data.items || [])];
+      const extractNum = (ref: string): number => {
+        const m = ref.match(/\d+/g);
+        return m && m.length > 0 ? parseInt(m[m.length - 1], 10) : 0;
+      };
+      sorted.sort((a, b) => {
+        let cmp = 0;
+        if (sortBy === 'reference_num') {
+          cmp = extractNum(a.reference || '') - extractNum(b.reference || '');
+        } else if (sortBy === 'reference') {
+          cmp = (a.reference || '').localeCompare(b.reference || '');
+        } else if (sortBy === 'date') {
+          const da = new Date(a.lastSubmitDate || a.createdAt || 0).getTime();
+          const db = new Date(b.lastSubmitDate || b.createdAt || 0).getTime();
+          cmp = da - db;
+        } else if (sortBy === 'discipline') {
+          cmp = (a.discipline || '').localeCompare(b.discipline || '');
+          if (cmp === 0) cmp = extractNum(a.reference || '') - extractNum(b.reference || '');
+        }
+        return sortOrder === 'asc' ? cmp : -cmp;
+      });
+
+      setItems(sorted);
     } catch (e: any) {
       toast({ title: t('msg.error'), description: e.message, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
-  }, [filterCategory, filterDiscipline, search, filterType, dateFrom, dateTo, toast]);
+  }, [filterCategory, filterDiscipline, search, filterType, dateFrom, dateTo, sortBy, sortOrder, toast]);
 
   useEffect(() => {
     fetchReport();
@@ -2862,7 +2888,7 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
 
       {/* Filters */}
       <Card className="border-0 shadow-sm"><CardContent className="p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-8 gap-3">
           <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
             <Label className="text-xs">{t('common.search')}</Label>
             <div className="relative">
@@ -2907,6 +2933,29 @@ function ReportsView({ disciplines, categories, onOpenDetail }: {
           <div className="space-y-1.5">
             <Label className="text-xs">{t('reports.dateTo')}</Label>
             <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t('list.sortBy')}</Label>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="reference_num">{t('list.sortByRefNum')}</SelectItem>
+                <SelectItem value="reference">{t('list.sortByRef')}</SelectItem>
+                <SelectItem value="date">{t('list.sortByDate')}</SelectItem>
+                <SelectItem value="discipline">{t('list.sortByDiscipline')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t('list.sortOrder')}</Label>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full justify-center"
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+            >
+              {sortOrder === 'asc' ? `↑ ${t('list.sortAsc')}` : `↓ ${t('list.sortDesc')}`}
+            </Button>
           </div>
         </div>
       </CardContent></Card>
